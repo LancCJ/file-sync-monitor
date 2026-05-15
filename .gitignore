@@ -1,0 +1,31 @@
+# Swift / SPM
+.build/
+Package.resolved
+.swiftpm/xcode/package.xcworkspace/xcuserdata
+.swiftpm/xcode/xcuserdata
+
+# macOS
+.DS_Store
+*.xcworkspace/xcuserdata
+*.xcodeproj/xcuserdata
+*.xcodeproj/project.xcworkspace/xcuserdata
+
+# IDE
+.idea/
+.vscode/
+
+# App sandbox / runtime
+*.entitlements
+*.provisionprofile
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
+*.swp
+*.swo
+*~
+
+# Sisyphus
+.sisyphus/
