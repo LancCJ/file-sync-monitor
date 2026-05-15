@@ -1,0 +1,103 @@
+{
+  "": {
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/master.swiftdeps"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/FileSyncMonitorApp.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileSyncMonitorApp.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileSyncMonitorApp.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileSyncMonitorApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileSyncMonitorApp.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileSyncMonitorApp.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Models/FileEvent.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileEvent.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileEvent.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileEvent~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileEvent.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileEvent.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/ExportService.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ExportService.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ExportService.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ExportService~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ExportService.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ExportService.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/FileMonitorService.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileMonitorService.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileMonitorService.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileMonitorService~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileMonitorService.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/FileMonitorService.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/IMASyncService.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/IMASyncService.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/IMASyncService.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/IMASyncService~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/IMASyncService.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/IMASyncService.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/NotificationManager.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/NotificationManager.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/NotificationManager.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/NotificationManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/NotificationManager.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/NotificationManager.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/PersistenceController.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/PersistenceController.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/PersistenceController.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/PersistenceController~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/PersistenceController.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/PersistenceController.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/StoreManager.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/StoreManager.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/StoreManager.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/StoreManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/StoreManager.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/StoreManager.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/MainView.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MainView.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MainView.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MainView~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MainView.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MainView.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/MenuBarManager.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MenuBarManager.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MenuBarManager.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MenuBarManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MenuBarManager.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/MenuBarManager.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/ReportsView.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ReportsView.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ReportsView.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ReportsView~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ReportsView.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/ReportsView.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/SettingsView.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/SettingsView.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/SettingsView.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/SettingsView~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/SettingsView.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/SettingsView.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/Theme.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/Theme.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/Theme.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/Theme~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/Theme.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/Theme.dia"
+  },
+  "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/DerivedSources/resource_bundle_accessor.swift": {
+    "dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/resource_bundle_accessor.d",
+    "object": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/resource_bundle_accessor.swift.o",
+    "swiftmodule": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/resource_bundle_accessor~partial.swiftmodule",
+    "swift-dependencies": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/resource_bundle_accessor.swiftdeps",
+    "diagnostics": "/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/resource_bundle_accessor.dia"
+  }
+}

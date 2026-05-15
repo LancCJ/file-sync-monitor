@@ -1,0 +1,14 @@
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/FileSyncMonitorApp.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Models/FileEvent.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/ExportService.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/FileMonitorService.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/IMASyncService.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/NotificationManager.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/PersistenceController.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/Services/StoreManager.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/MainView.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/MenuBarManager.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/ReportsView.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/SettingsView.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/Sources/FileSyncMonitor/UI/Theme.swift
+/Users/chenjian/Documents/codes/file-sync-monitor/.build/arm64-apple-macosx/debug/FileSyncMonitor.build/DerivedSources/resource_bundle_accessor.swift
