@@ -3,159 +3,154 @@ import SwiftUI
 struct HelpView: View {
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 48) {
+            VStack(alignment: .leading, spacing: 40) {
                 // Hero Header
                 VStack(alignment: .leading, spacing: 16) {
                     LocalizedText("帮助与关于")
-                        .font(.system(size: 40, weight: .black))
+                        .font(.system(size: 44, weight: .black))
                         .foregroundStyle(Color.appInk)
                     
                     LocalizedText("解锁 FileSyncMonitor 的全部潜力，让您的工作流与 IMA 云端无缝合一。")
-                        .font(.system(size: 16))
+                        .font(.system(size: 18))
                         .foregroundStyle(Color.appMuted)
                 }
-                .padding(.top, 72)
+                .padding(.top, 64)
+                .padding(.horizontal, 40)
 
-                // 1. Intelligent Monitoring
-                VStack(alignment: .leading, spacing: 24) {
-                    HelpImageCard(resourceName: "help-monitoring")
+                // Bento Grid Layout
+                HStack(alignment: .top, spacing: 24) {
+                    // Left Column
+                    VStack(spacing: 24) {
+                        FeatureCard(
+                            title: "实时智能监控", 
+                            icon: "bolt.shield.fill", 
+                            color: .appAmber, 
+                            imageName: "help-monitoring",
+                            items: [
+                                ("全天候变动捕获", "利用高性能 FSEvents 技术，秒级感知任何文件的新增、修改或重命名。"),
+                                ("智能过滤引擎", "内置专业级忽略规则，自动屏蔽缓存与系统杂质，让您的监控列表始终保持纯净。")
+                            ]
+                        )
+                        
+                        FeatureCard(
+                            title: "精品化交互体验", 
+                            icon: "sparkles", 
+                            color: .appMint, 
+                            imageName: "help-experience",
+                            items: [
+                                ("极致视觉反馈", "每一处按钮与卡片都经过精心调校，支持细腻的悬停动效与平滑的状态转换。"),
+                                ("秒级记录分析", "支持秒级精度的时间轴回溯，并提供专业级 CSV/JSON 报表导出。")
+                            ]
+                        )
+                    }
                     
-                    HelpSection(title: "实时智能监控", icon: "bolt.shield.fill", color: .appAmber) {
-                        HelpItem(title: "全天候变动捕获", description: "利用高性能 FSEvents 技术，秒级感知任何文件的新增、修改或重命名。")
-                        HelpItem(title: "智能过滤引擎", description: "内置专业级忽略规则，自动屏蔽缓存与系统杂质，让您的监控列表始终保持纯净。")
+                    // Right Column
+                    VStack(spacing: 24) {
+                        FeatureCard(
+                            title: "IMA 双向同步", 
+                            icon: "arrow.left.arrow.right.circle.fill", 
+                            color: .appViolet, 
+                            imageName: "help-sync",
+                            items: [
+                                ("双向拉取尝试", "点击「从云端拉取更新」，即可智能识别并下载知识库中的新文件到本地。"),
+                                ("自动化推送流程", "开启自动同步后，应用会在您保存文件 30 秒后自动完成云端备份。"),
+                                ("智能状态合并", "系统会自动合并同一文件的多次连续操作。例如「新建后编辑」仍记为新建，「多次编辑」仅保留最新修改，从而大幅减少同步冗余。")
+                            ]
+                        )
                     }
                 }
-
-                // 2. Bidirectional Cloud Sync
-                VStack(alignment: .leading, spacing: 24) {
-                    HelpImageCard(resourceName: "help-sync")
-                    
-                    HelpSection(title: "IMA 双向同步", icon: "arrow.left.arrow.right.circle.fill", color: .appViolet) {
-                        HelpItem(title: "双向拉取尝试", description: "点击「从云端拉取更新」，即可智能识别并下载知识库中的新文件到本地。")
-                        HelpItem(title: "自动化推送流程", description: "开启自动同步后，应用会在您保存文件 30 秒后自动完成云端备份。")
-                    }
-                }
-
-                // 3. Interaction Design
-                VStack(alignment: .leading, spacing: 24) {
-                    HelpImageCard(resourceName: "help-experience")
-                    
-                    HelpSection(title: "精品化交互体验", icon: "sparkles", color: .appMint) {
-                        HelpItem(title: "极致视觉反馈", description: "每一处按钮与卡片都经过精心调校，支持细腻的悬停动效与平滑的状态转换。")
-                        HelpItem(title: "秒级记录分析", description: "支持秒级精度的时间轴回溯，并提供专业级 CSV/JSON 报表导出。")
-                    }
-                }
+                .padding(.horizontal, 40)
 
                 // About Section
-                VStack(spacing: 32) {
-                    Divider()
-                    
-                    HStack(spacing: 24) {
-                        AppBrandIcon(size: 100, cornerRadius: 22)
-                        
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("FileSyncMonitor")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundStyle(Color.appInk)
-                            
-                            Text("Version 1.1.0 Professional")
-                                .font(.system(size: 14, weight: .medium))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(Color.appMint.opacity(0.1))
-                                .foregroundStyle(Color.appMint)
-                                .clipShape(Capsule())
-                            
-                            Text("Build 20260516.Release")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.appMuted)
-                            
-                            Text("© 2026 Antigravity & IMA Design Sync.")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.appMuted.opacity(0.8))
-                        }
-                        Spacer()
-                    }
-                }
-                .padding(.top, 24)
+                AboutCard()
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 80)
             }
-            .frame(width: 760, alignment: .leading)
-            .padding(.horizontal, 40)
-            .padding(.bottom, 120)
+            .frame(maxWidth: 1100, alignment: .center)
             .frame(maxWidth: .infinity)
         }
         .background(IMAClientSurfaceBackground())
     }
 }
 
-struct HelpImageCard: View {
-    let resourceName: String
-    @State private var isHovered = false
+// MARK: - Components
+
+struct FeatureCard: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let imageName: String
+    let items: [(title: String, desc: String)]
     
+    @State private var isHovered = false
+
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 0) {
+            // Image Banner
             if let nsImage = loadImage() {
                 Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(height: 320)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.appLine.opacity(0.5), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0.045), radius: isHovered ? 18 : 12, x: 0, y: 8)
+                    .frame(height: 180)
+                    .clipped()
             } else {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.appControl)
-                    .frame(height: 320)
+                Rectangle()
+                    .fill(LinearGradient(colors: [color.opacity(0.8), color.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(height: 180)
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 60))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                    )
             }
+
+            // Content Area
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(color.opacity(0.15))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(color)
+                    }
+                    LocalizedText(title)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Color.appInk)
+                }
+
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(items, id: \.title) { item in
+                        HelpItem(title: item.title, description: item.desc)
+                    }
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.appSurface)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.appLine.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0.03), radius: isHovered ? 24 : 12, x: 0, y: isHovered ? 12 : 4)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
         .onHover { isHovered = $0 }
-        .animation(.snappy, value: isHovered)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isHovered)
     }
 
     private func loadImage() -> NSImage? {
-        let resourceURL = Bundle.module.url(forResource: resourceName, withExtension: "png")
+        let resourceURL = Bundle.module.url(forResource: imageName, withExtension: "png")
             ?? Bundle.module.url(
-                forResource: URL(fileURLWithPath: resourceName).lastPathComponent,
+                forResource: URL(fileURLWithPath: imageName).lastPathComponent,
                 withExtension: "png"
             )
 
-        guard let url = resourceURL else {
-            return nil
-        }
+        guard let url = resourceURL else { return nil }
         return NSImage(contentsOf: url)
-    }
-}
-
-struct HelpSection<Content: View>: View {
-    let title: String
-    let icon: String
-    let color: Color
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(color.opacity(0.12))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(color)
-                }
-                LocalizedText(title)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Color.appInk)
-            }
-            
-            VStack(alignment: .leading, spacing: 24) {
-                content
-            }
-            .padding(.leading, 44)
-        }
     }
 }
 
@@ -173,5 +168,67 @@ struct HelpItem: View {
                 .foregroundStyle(Color.appMuted)
                 .lineSpacing(6)
         }
+    }
+}
+
+struct AboutCard: View {
+    @State private var isHovered = false
+    
+    var body: some View {
+        HStack(spacing: 32) {
+            AppBrandIcon(size: 90, cornerRadius: 20)
+                .shadow(color: Color.appMint.opacity(0.2), radius: 15, x: 0, y: 8)
+            
+            VStack(alignment: .leading, spacing: 10) {
+                Text("FileSyncMonitor")
+                    .font(.system(size: 32, weight: .heavy))
+                    .foregroundStyle(Color.appInk)
+                
+                HStack(spacing: 12) {
+                    Text("Version 1.1.0 Professional")
+                        .font(.system(size: 13, weight: .bold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.appMint.opacity(0.12))
+                        .foregroundStyle(Color.appMint)
+                        .clipShape(Capsule())
+                    
+                    Text("Build 20260516.Release")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(Color.appMuted)
+                }
+                
+                HStack(spacing: 4) {
+                    Text("© 2026 Antigravity & IMA Design Sync.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.appMuted)
+                    
+                    Text("•")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.appMuted.opacity(0.5))
+                        .padding(.horizontal, 4)
+                        
+                    LocalizedText("作者：")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.appMuted)
+                    Link("LancCJ", destination: URL(string: "https://github.com/LancCJ")!)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color.appMint)
+                }
+                .padding(.top, 8)
+            }
+            Spacer()
+        }
+        .padding(36)
+        .background(Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.appLine.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0.03), radius: isHovered ? 24 : 12, x: 0, y: isHovered ? 12 : 4)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .onHover { isHovered = $0 }
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isHovered)
     }
 }

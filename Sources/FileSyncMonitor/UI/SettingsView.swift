@@ -47,25 +47,15 @@ struct SettingsView: View {
 
                 IMASettingsGroup(title: "界面") {
                     IMASettingsRow(title: "语言", subtitle: "手动指定界面语言或跟随系统") {
-                        Menu {
-                            ForEach(AppLanguage.allCases, id: \.self) { lang in
-                                Button {
-                                    appLanguage = lang
-                                    MenuBarManager.shared.refreshMenu()
-                                } label: {
-                                    HStack {
-                                        Text(lang.displayTitle)
-                                        if appLanguage == lang {
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            AppMenuValue(text: appLanguage.displayTitle)
-                        }
-                        .buttonStyle(.plain)
+                        AppDropdownMenu(
+                            selection: $appLanguage,
+                            options: AppLanguage.allCases.map { ($0, $0.displayTitle) },
+                            label: AppMenuValue(text: appLanguage.displayTitle)
+                        )
                         .frame(width: 120)
+                        .onChange(of: appLanguage) { _ in
+                            MenuBarManager.shared.refreshMenu()
+                        }
                     }
 
                     IMASettingsRow(title: "外观模式", subtitle: "切换浅色、深色或跟随系统设置") {
@@ -180,15 +170,17 @@ struct SettingsView: View {
                     }
 
                     IMASettingsRow(title: "已同步记录保留", subtitle: "未同步记录不会自动清理") {
-                        Menu {
-                            Button("30 天".appLocalized) { retentionDays = 30 }
-                            Button("90 天".appLocalized) { retentionDays = 90 }
-                            Button("365 天".appLocalized) { retentionDays = 365 }
-                            Button("永久".appLocalized) { retentionDays = 0 }
-                        } label: {
-                            AppMenuValue(text: retentionText)
-                        }
-                        .buttonStyle(.plain)
+                        AppDropdownMenu(
+                            selection: $retentionDays,
+                            options: [
+                                (30, "30 天".appLocalized),
+                                (90, "90 天".appLocalized),
+                                (365, "365 天".appLocalized),
+                                (0, "永久".appLocalized)
+                            ],
+                            label: AppMenuValue(text: retentionText)
+                        )
+                        .frame(width: 110)
                     }
                 }
 
@@ -337,18 +329,16 @@ struct MonitoredPathRow: View {
                 Spacer()
                 
                 HStack(spacing: 4) {
-                    Picker("", selection: Binding(
-                        get: { FileMonitorService.shared.getKnowledgeBaseId(for: path) },
-                        set: { FileMonitorService.shared.setKnowledgeBaseId($0, for: path) }
-                    )) {
-                        Text("默认 (新建笔记)".appLocalized).tag("")
-                        ForEach(FileMonitorService.shared.availableKnowledgeBases) { kb in
-                            Text(kb.name).tag(kb.id)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 130)
-                    .labelsHidden()
+                    AppDropdownMenu(
+                        selection: Binding(
+                            get: { FileMonitorService.shared.getKnowledgeBaseId(for: path) },
+                            set: { FileMonitorService.shared.setKnowledgeBaseId($0, for: path) }
+                        ),
+                        options: [("", "默认 (新建笔记)".appLocalized)] + FileMonitorService.shared.availableKnowledgeBases.map { ($0.id, $0.name) },
+                        label: AppMenuValue(text: FileMonitorService.shared.availableKnowledgeBases.first { $0.id == FileMonitorService.shared.getKnowledgeBaseId(for: path) }?.name ?? "默认 (新建笔记)".appLocalized),
+                        maxHeight: 300
+                    )
+                    .frame(width: 180)
                     
                     Button(action: {
                         Task {

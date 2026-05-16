@@ -16,6 +16,7 @@ struct MainView: View {
     @State private var typeFilter: EventTypeFilter = .all
     @State private var isSyncing = false
     @State private var isShowingQuitConfirmation = false
+    @State private var isShowingBatchDeleteConfirmation = false
 
     enum SidebarItem: String, CaseIterable, Identifiable {
         case home, pendingSync, allEvents, reports, settings, help
@@ -119,11 +120,28 @@ struct MainView: View {
                                 events: events,
                                 pendingEvents: pendingEvents,
                                 addDirectory: addDirectory,
-                                showPending: { selectedSidebarItem = .pendingSync },
-                                showAllRecords: { selectedSidebarItem = .allEvents },
-                                showReports: { selectedSidebarItem = .reports },
+                                showPending: { 
+                                    print("[Debug] Navigating to Pending Sync")
+                                    withAnimation(.snappy(duration: 0.22)) {
+                                        selectedSidebarItem = .pendingSync 
+                                    }
+                                },
+                                showAllRecords: { 
+                                    print("[Debug] Navigating to All Records")
+                                    withAnimation(.snappy(duration: 0.22)) {
+                                        selectedSidebarItem = .allEvents 
+                                    }
+                                },
+                                showReports: { 
+                                    print("[Debug] Navigating to Reports")
+                                    withAnimation(.snappy(duration: 0.22)) {
+                                        selectedSidebarItem = .reports 
+                                    }
+                                },
                                 markAllPendingSynced: markAllPendingSynced,
-                                syncAllToIMA: syncAllToIMA
+                                syncAllToIMA: syncAllToIMA,
+                                deleteEvent: deleteEvent,
+                                isSyncing: isSyncing
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         case .pendingSync, .allEvents:
@@ -136,6 +154,10 @@ struct MainView: View {
                                 typeFilter: $typeFilter,
                                 markAllPendingSynced: markAllPendingSynced,
                                 syncAllToIMA: syncAllToIMA,
+                                deleteAllFilteredEvents: deleteAllFilteredEvents,
+                                upload: upload,
+                                markSynced: markSynced,
+                                deleteEvent: deleteEvent,
                                 isSyncing: isSyncing,
                                 layout: layout
                             )
@@ -150,6 +172,7 @@ struct MainView: View {
                                 markSynced: markSynced,
                                 upload: upload,
                                 reveal: reveal,
+                                deleteEvent: deleteEvent,
                                 export: export,
                                 layout: layout
                             )
@@ -171,6 +194,18 @@ struct MainView: View {
                     QuitConfirmationOverlay(
                         cancel: { isShowingQuitConfirmation = false },
                         quit: { NSApp.terminate(nil) }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                }
+
+                if isShowingBatchDeleteConfirmation {
+                    BatchDeleteConfirmationOverlay(
+                        count: filteredEvents.count,
+                        cancel: { isShowingBatchDeleteConfirmation = false },
+                        confirm: {
+                            performBatchDelete()
+                            isShowingBatchDeleteConfirmation = false
+                        }
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
@@ -258,6 +293,7 @@ struct IMARailView: View {
     let pendingCount: Int
     let layout: MainLayoutMetrics
     let requestQuit: () -> Void
+    @Environment(\.colorScheme) var scheme
 
     var body: some View {
         VStack(spacing: 18) {
@@ -304,13 +340,14 @@ struct IMARailView: View {
         .background(
             LinearGradient(
                 colors: [
-                    Color(red: 238 / 255, green: 244 / 255, blue: 240 / 255),
-                    Color(red: 230 / 255, green: 238 / 255, blue: 233 / 255)
+                    Color(light: Color(red: 238 / 255, green: 244 / 255, blue: 240 / 255), dark: Color(red: 24 / 255, green: 26 / 255, blue: 28 / 255)),
+                    Color(light: Color(red: 230 / 255, green: 238 / 255, blue: 233 / 255), dark: Color(red: 18 / 255, green: 20 / 255, blue: 22 / 255))
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
         )
+        .id(scheme)
     }
 }
 
@@ -387,6 +424,65 @@ struct QuitConfirmationOverlay: View {
     }
 }
 
+struct BatchDeleteConfirmationOverlay: View {
+    let count: Int
+    let cancel: () -> Void
+    let confirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.appInk.opacity(0.16)
+                .ignoresSafeArea()
+                .onTapGesture(perform: cancel)
+
+            VStack(spacing: 18) {
+                AppBrandIcon(size: 54, cornerRadius: 14)
+
+                VStack(spacing: 8) {
+                    LocalizedText("确认批量删除记录？")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color.appInk)
+
+                    Text(String(format: "即将删除当前显示的 %d 条记录。该操作不可恢复，且不会影响实际文件。".appLocalized, count))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.appMuted)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+
+                HStack(spacing: 10) {
+                    Button(action: cancel) {
+                        LocalizedText("取消")
+                    }
+                    .buttonStyle(QuietButtonStyle())
+
+                    Button(action: confirm) {
+                        Label {
+                            LocalizedText("确认删除")
+                        } icon: {
+                            Image(systemName: "trash")
+                        }
+                    }
+                    .buttonStyle(PillButtonStyle(isPrimary: true))
+                    .tint(.appRose)
+                }
+            }
+            .padding(24)
+            .frame(width: 380)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.appSurface.opacity(0.98))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.appLine.opacity(0.78), lineWidth: 1)
+                    )
+            )
+            .shadow(color: Color.appInk.opacity(0.16), radius: 24, x: 0, y: 16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 struct IMARailButton: View {
     let item: MainView.SidebarItem
     let isSelected: Bool
@@ -400,11 +496,11 @@ struct IMARailButton: View {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: item.icon)
                     .font(.system(size: 18, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(Color.appInk)
+                    .foregroundStyle(isSelected ? Color.appInk : Color.appMuted.opacity(0.8))
                     .frame(width: 40, height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isSelected ? Color.appSurface.opacity(0.95) : (isHovered ? Color.appSurface.opacity(0.5) : Color.clear))
+                            .fill(isSelected ? Color.appSurface.opacity(0.95) : (isHovered ? Color.appSurface.opacity(0.2) : Color.clear))
                     )
 
                 if badgeCount > 0 {
@@ -436,6 +532,8 @@ struct FileSyncHomeView: View {
     let showReports: () -> Void
     let markAllPendingSynced: () -> Void
     let syncAllToIMA: () -> Void
+    let deleteEvent: (FileEvent) -> Void
+    let isSyncing: Bool
 
     private var monitoredCount: Int {
         FileMonitorService.shared.monitoredPaths.count
@@ -446,130 +544,138 @@ struct FileSyncHomeView: View {
     }
 
     var body: some View {
-        ScrollView {
+        VStack(alignment: .leading, spacing: 0) {
+            // 1. Header Area: 固定在顶部，提供品牌状态与全局操作
             VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top, spacing: 20) {
-                    HStack(alignment: .top, spacing: 16) {
-                        AppBrandIcon(size: 66, cornerRadius: 16)
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("FileSync")
-                                .font(.system(size: 44, weight: .black))
-                                .foregroundStyle(Color.appInk)
-                            Text("monitor")
-                                .font(.system(size: 12, weight: .medium))
-                                .tracking(8)
-                                .foregroundStyle(Color.appInk.opacity(0.68))
-                            LocalizedText(homeMessage)
-                                .font(.system(size: 14))
-                                .foregroundStyle(Color.appMuted)
-                                .padding(.top, 4)
-                        }
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        LocalizedText("欢迎使用")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.appMint)
+                        
+                        LocalizedText(homeMessage)
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(Color.appInk)
                     }
-
+                    
                     Spacer()
-
+                    
                     StatusPill(
                         text: pendingEvents.isEmpty ? "已同步" : String(format: "个待处理_format".appLocalized, pendingEvents.count),
                         symbol: pendingEvents.isEmpty ? "checkmark" : "clock",
                         color: pendingEvents.isEmpty ? .appMint : .appAmber
                     )
-                    .padding(.top, 8)
                 }
-
+                
                 HStack(spacing: 12) {
-                    HomeMetricCard(title: "待同步", value: pendingEvents.count, icon: "clock", color: pendingEvents.isEmpty ? .appMint : .appAmber)
-                    HomeMetricCard(title: "全部记录", value: events.count, icon: "doc.text", color: .appInk)
-                    HomeMetricCard(title: "监控目录", value: monitoredCount, icon: "folder", color: .appMint)
-                }
-
-                HStack(spacing: 10) {
                     Button(action: addDirectory) {
-                        Label {
-                            LocalizedText("添加目录")
-                        } icon: {
+                        HStack(spacing: 8) {
                             Image(systemName: "plus")
+                            LocalizedText("添加目录")
                         }
                     }
                     .buttonStyle(PillButtonStyle(isPrimary: true))
-
-                    Button(action: showPending) {
-                        Label {
-                            LocalizedText("处理待同步")
-                        } icon: {
-                            Image(systemName: "clock")
-                        }
-                    }
-                    .buttonStyle(QuietButtonStyle())
-                    .disabled(pendingEvents.isEmpty)
-
-                    Button(action: showAllRecords) {
-                        Label {
-                            LocalizedText("查看全部记录")
-                        } icon: {
-                            Image(systemName: "doc.text")
-                        }
-                    }
-                    .buttonStyle(QuietButtonStyle())
-
-                    Button(action: showReports) {
-                        Label {
-                            LocalizedText("查看报告")
-                        } icon: {
-                            Image(systemName: "chart.bar")
-                        }
-                    }
-                    .buttonStyle(QuietButtonStyle())
-
-                    Spacer()
-
-                    HomeSyncModeControl(isAutoSync: $autoSync)
-
+                    
                     Button(action: syncAllToIMA) {
-                        Label {
-                            LocalizedText("全部同步")
-                        } icon: {
-                            Image(systemName: "cloud.fill")
+                        HStack(spacing: 8) {
+                            if isSyncing {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .brightness(0.5)
+                            } else {
+                                Image(systemName: pendingEvents.isEmpty ? "cloud.badge.checkmark" : "cloud.fill")
+                            }
+                            LocalizedText(pendingEvents.isEmpty ? "暂无可同步" : "全部同步")
                         }
                     }
-                    .buttonStyle(PillButtonStyle(isPrimary: true))
-                    .disabled(pendingEvents.isEmpty)
+                    .buttonStyle(PillButtonStyle(isPrimary: !pendingEvents.isEmpty))
+                    .disabled(pendingEvents.isEmpty || isSyncing)
+                    
+                    Spacer()
+                    
+                    HomeSyncModeControl(isAutoSync: $autoSync)
                 }
-                .help("批量标记完成已移到待同步页，首页只保留同步主操作。".appLocalized)
+            }
+            .padding(.horizontal, 48)
+            .padding(.top, 48)
+            .padding(.bottom, 40) // 与主内容区拉开距离
 
-                HStack(alignment: .top, spacing: 18) {
+            // 2. Main Content Area: 左右分栏，核心展示区
+            HStack(alignment: .top, spacing: 28) {
+                // 左栏：变动流
+                VStack(alignment: .leading, spacing: 24) {
                     SimplePanel(title: "最近记录", subtitle: events.isEmpty ? "添加监控目录后，文件变动会显示在这里。" : "最近捕获到的文件变动。") {
-                        if recentEvents.isEmpty {
-                            EmptyStateView(icon: "tray", title: "暂无记录", subtitle: "开始监控后，这里会显示最新文件变动。")
-                                .frame(height: 170)
-                        } else {
-                            VStack(spacing: 0) {
-                                ForEach(recentEvents) { event in
-                                    HomeRecentEventRow(event: event)
-                                    if event.id != recentEvents.last?.id {
-                                        Divider()
+                        Group {
+                            if recentEvents.isEmpty {
+                                EmptyStateView(icon: "tray", title: "暂无记录", subtitle: "开始监控后，这里会显示最新文件变动。")
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else {
+                                ScrollView {
+                                    VStack(spacing: 0) {
+                                        ForEach(recentEvents) { event in
+                                            HomeRecentEventRow(event: event, deleteAction: { deleteEvent(event) })
+                                            if event.id != recentEvents.last?.id {
+                                                Divider()
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .frame(maxHeight: .infinity) // 撑开中间区域
+                    
+                    // 底部快速跳转
+                    HStack(spacing: 12) {
+                        Button(action: showPending) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "clock")
+                                LocalizedText("处理待同步")
+                            }
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                        
+                        Button(action: showAllRecords) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc.text")
+                                LocalizedText("查看全部记录")
+                            }
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                        
+                        Button(action: showReports) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "chart.bar")
+                                LocalizedText("查看报告")
+                            }
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                    }
+                }
 
-                    SimplePanel(title: "当前状态", subtitle: "快速了解监控与同步状态。") {
+                // 右栏：统计看板
+                VStack(spacing: 20) {
+                    VStack(spacing: 12) {
+                        HomeMetricCard(title: "待同步", value: pendingEvents.count, icon: "clock", color: pendingEvents.isEmpty ? .appMint : .appAmber)
+                        HomeMetricCard(title: "全部记录", value: events.count, icon: "doc.text", color: .appInk)
+                        HomeMetricCard(title: "监控目录", value: monitoredCount, icon: "folder", color: .appMint)
+                    }
+                    
+                    SimplePanel(title: "状态摘要", subtitle: nil) {
                         VStack(spacing: 0) {
-                            HomeStatusRow(title: "同步队列", value: pendingEvents.isEmpty ? "没有待同步文件" : "个文件待处理_count:\(pendingEvents.count)", color: pendingEvents.isEmpty ? .appMint : .appAmber)
-                            HomeStatusRow(title: "同步模式", value: autoSync ? "自动同步" : "手动同步", color: autoSync ? .appMint : .appInk)
-                            HomeStatusRow(title: "监控目录", value: monitoredCount == 0 ? "尚未添加" : "个目录_count:\(monitoredCount)")
-                            HomeStatusRow(title: "记录总数", value: "条_count:\(events.count)")
+                            HomeStatusRow(title: "同步队列", value: pendingEvents.isEmpty ? "空" : "个文件_count:\(pendingEvents.count)", color: pendingEvents.isEmpty ? .appMint : .appAmber)
+                            HomeStatusRow(title: "当前模式", value: autoSync ? "自动" : "手动", color: autoSync ? .appMint : .appInk)
+                            HomeStatusRow(title: "监控路径", value: "个_count:\(monitoredCount)")
                         }
                     }
-                    .frame(width: 280)
                 }
+                .frame(width: 270) // 适中的宽度
             }
-            .frame(maxWidth: 980, alignment: .leading)
-            .padding(.horizontal, 64)
-            .padding(.vertical, 58)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 48)
+            .padding(.bottom, 32) // 减小底部边距
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(IMAClientSurfaceBackground())
     }
 
@@ -646,15 +752,16 @@ struct HomeSyncModeControl: View {
 
 struct HomeRecentEventRow: View {
     let event: FileEvent
+    var deleteAction: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             AppIconBadge(symbol: EventVisuals.symbol(for: event.type), color: EventVisuals.color(for: event.type), size: 28)
+            
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.fileName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.appInk)
-                    .lineLimit(1)
                 Text(event.path)
                     .font(.system(size: 11))
                     .foregroundStyle(Color.appMuted)
@@ -701,17 +808,12 @@ struct HomeStatusRow: View {
     }
 
     private var localizedValue: String {
-        if value.hasPrefix("个文件待处理_count:"),
-           let count = Int(value.replacingOccurrences(of: "个文件待处理_count:", with: "")) {
-            return String(format: "个文件待处理_format".appLocalized, count)
-        }
-        if value.hasPrefix("个目录_count:"),
-           let count = Int(value.replacingOccurrences(of: "个目录_count:", with: "")) {
-            return String(format: "个目录_format".appLocalized, count)
-        }
-        if value.hasPrefix("条_count:"),
-           let count = Int(value.replacingOccurrences(of: "条_count:", with: "")) {
-            return String(format: "条_format".appLocalized, count)
+        if value.contains("_count:") {
+            let parts = value.components(separatedBy: "_count:")
+            if parts.count == 2, let count = Int(parts[1]) {
+                let key = parts[0] + "_format"
+                return String(format: key.appLocalized, count)
+            }
         }
         return value.appLocalized
     }
@@ -726,8 +828,13 @@ struct IMASecondarySidebar: View {
     @Binding var typeFilter: MainView.EventTypeFilter
     let markAllPendingSynced: () -> Void
     let syncAllToIMA: () -> Void
+    let deleteAllFilteredEvents: () -> Void
+    let upload: (FileEvent) -> Void
+    let markSynced: (FileEvent) -> Void
+    let deleteEvent: (FileEvent) -> Void
     let isSyncing: Bool
     let layout: MainLayoutMetrics
+    @Environment(\.colorScheme) var scheme
 
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
     @State private var viewMode: EventListViewMode = .list
@@ -743,20 +850,15 @@ struct IMASecondarySidebar: View {
                 HStack {
                     LocalizedText(mode.titleKey)
                         .font(.system(size: 16, weight: .bold))
-                    Spacer()
+                    
                     Text("\(events.count)")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
-                }
+                        .padding(.horizontal, 6)
+                        .background(Capsule().fill(Color.appMuted.opacity(0.1)))
 
-                SmoothSearchField(text: $searchText, placeholder: "搜索文件或路径")
-
-                HStack(spacing: 8) {
-                    AppSegmentedControl(
-                        options: MainView.EventTypeFilter.allCases.map { ($0, $0.titleKey) },
-                        selection: $typeFilter
-                    )
-
+                    Spacer()
+                    
                     // 视图模式切换
                     HStack(spacing: 2) {
                         ForEach([EventListViewMode.list, .tree], id: \.self) { m in
@@ -770,7 +872,7 @@ struct IMASecondarySidebar: View {
                                         RoundedRectangle(cornerRadius: 5, style: .continuous)
                                             .fill(viewMode == m ? Color.appInk : Color.clear)
                                     )
-                                    .foregroundStyle(viewMode == m ? .white : Color.appMuted)
+                                    .foregroundStyle(viewMode == m ? Color.appCanvas : Color.appMuted)
                             }
                             .buttonStyle(.plain)
                             .help(m.rawValue.appLocalized)
@@ -785,7 +887,26 @@ struct IMASecondarySidebar: View {
                                     .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
                             )
                     )
+                    
+                    if !events.isEmpty {
+                        Button(action: deleteAllFilteredEvents) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.appRose)
+                                .frame(width: 24, height: 24)
+                                .background(Circle().fill(Color.appRose.opacity(0.1)))
+                        }
+                        .buttonStyle(.plain)
+                        .help("批量删除当前视图记录".appLocalized)
+                    }
                 }
+
+                SmoothSearchField(text: $searchText, placeholder: "搜索文件或路径")
+
+                AppSegmentedControl(
+                    options: MainView.EventTypeFilter.allCases.map { ($0, $0.titleKey) },
+                    selection: $typeFilter
+                )
                 .frame(maxWidth: .infinity)
 
                 if mode == .pendingSync {
@@ -862,10 +983,12 @@ struct IMASecondarySidebar: View {
                         ForEach(events) { event in
                             IMAEventListRow(
                                 event: event,
-                                isSelected: selectedEventID == event.id
-                            ) {
-                                selectedEventID = event.id
-                            }
+                                isSelected: selectedEventID == event.id,
+                                action: { selectedEventID = event.id },
+                                deleteAction: { deleteEvent(event) },
+                                markSyncedAction: { markSynced(event) },
+                                uploadAction: { upload(event) }
+                            )
                         }
                     }
                     .padding(8)
@@ -881,13 +1004,14 @@ struct IMASecondarySidebar: View {
         .background(
             LinearGradient(
                 colors: [
-                    Color(red: 250 / 255, green: 253 / 255, blue: 251 / 255),
-                    Color(red: 244 / 255, green: 251 / 255, blue: 247 / 255)
+                    Color(light: Color(red: 250 / 255, green: 253 / 255, blue: 251 / 255), dark: Color(red: 24 / 255, green: 26 / 255, blue: 28 / 255)),
+                    Color(light: Color(red: 244 / 255, green: 251 / 255, blue: 247 / 255), dark: Color(red: 18 / 255, green: 20 / 255, blue: 22 / 255))
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
         )
+        .id(scheme)
     }
 }
 
@@ -895,6 +1019,9 @@ struct IMAEventListRow: View {
     let event: FileEvent
     let isSelected: Bool
     let action: () -> Void
+    var deleteAction: (() -> Void)? = nil
+    var markSyncedAction: (() -> Void)? = nil
+    var uploadAction: (() -> Void)? = nil
 
     var body: some View {
         Button(action: action) {
@@ -953,6 +1080,30 @@ struct IMAEventListRow: View {
             .imaHover()
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if !event.isSynced {
+                Button {
+                    uploadAction?()
+                } label: {
+                    Label("同步到 IMA".appLocalized, systemImage: "icloud.and.arrow.up")
+                }
+            }
+            
+            Button {
+                markSyncedAction?()
+            } label: {
+                Label(event.isSynced ? "重新标记待同步".appLocalized : "标记为已完成".appLocalized, 
+                      systemImage: event.isSynced ? "arrow.uturn.backward" : "checkmark.circle")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive) {
+                deleteAction?()
+            } label: {
+                Label("删除记录".appLocalized, systemImage: "trash")
+            }
+        }
     }
 }
 
@@ -970,6 +1121,7 @@ struct EventDetailView: View {
     let markSynced: (FileEvent) -> Void
     let upload: (FileEvent) -> Void
     let reveal: (FileEvent) -> Void
+    let deleteEvent: (FileEvent) -> Void
     let export: (ExportService.ExportFormat) -> Void
     let layout: MainLayoutMetrics
 
@@ -1060,6 +1212,15 @@ struct EventDetailView: View {
                                 .buttonStyle(QuietButtonStyle())
 
                                 Spacer()
+
+                                Button(role: .destructive, action: { deleteEvent(event) }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "trash")
+                                        LocalizedText("删除记录")
+                                    }
+                                }
+                                .buttonStyle(QuietButtonStyle())
+                                .tint(.appRose)
                             }
                         }
                         .frame(maxWidth: 720, alignment: .leading)
@@ -1109,6 +1270,7 @@ extension MainView {
     }
 
     private func syncAllToIMA() {
+        print("[Debug] syncAllToIMA called. Pending count: \(pendingEvents.count)")
         let targets = pendingEvents
         guard !targets.isEmpty else { return }
         
@@ -1130,6 +1292,22 @@ extension MainView {
                     print("Batch sync failed for \(event.fileName): \(error)")
                 }
             }
+        }
+    }
+
+    private func deleteEvent(_ event: FileEvent) {
+        let alert = NSAlert()
+        alert.messageText = "确认删除记录？".appLocalized
+        alert.informativeText = "该操作不可恢复，仅删除 App 内的变动记录，不会影响实际文件。".appLocalized
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "删除".appLocalized)
+        alert.addButton(withTitle: "取消".appLocalized)
+        
+        if alert.runModal() == .alertFirstButtonReturn {
+            modelContext.delete(event)
+            try? modelContext.save()
+            selectedEventID = nil
+            MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
         }
     }
 
@@ -1164,6 +1342,22 @@ extension MainView {
                 self.upload(event)
             }
         }
+    }
+
+    private func deleteAllFilteredEvents() {
+        guard !filteredEvents.isEmpty else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            isShowingBatchDeleteConfirmation = true
+        }
+    }
+
+    private func performBatchDelete() {
+        for event in filteredEvents {
+            modelContext.delete(event)
+        }
+        try? modelContext.save()
+        selectedEventID = nil
+        MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
     }
 }
 
@@ -1313,17 +1507,21 @@ struct IMASelectEventState: View {
 
 struct SimplePanel<Content: View>: View {
     let title: String
-    let subtitle: String
+    let subtitle: String?
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             VStack(alignment: .leading, spacing: 4) {
                 LocalizedText(title)
-                    .font(.system(size: 14, weight: .semibold))
-                LocalizedText(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.appInk)
+                
+                if let subtitle {
+                    LocalizedText(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.appMuted)
+                }
             }
             content
         }
@@ -1384,22 +1582,10 @@ struct IMARailLanguageButton: View {
     @State private var isHovered = false
 
     var body: some View {
-        Menu {
-            ForEach(AppLanguage.allCases, id: \.self) { lang in
-                Button {
-                    appLanguage = lang
-                    MenuBarManager.shared.refreshMenu()
-                } label: {
-                    HStack {
-                        Text(lang.displayTitle)
-                        if appLanguage == lang {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            VStack(spacing: 1) {
+        AppDropdownMenu(
+            selection: $appLanguage,
+            options: AppLanguage.allCases.map { ($0, $0.displayTitle) },
+            label: VStack(spacing: 1) {
                 Image(systemName: "globe")
                     .font(.system(size: 17, weight: .medium))
                 Text(appLanguage == .en ? "EN" : (appLanguage == .zhHant ? "繁" : "简"))
@@ -1410,13 +1596,15 @@ struct IMARailLanguageButton: View {
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(isHovered ? Color.appSurface.opacity(0.9) : Color.clear)
-            )
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
+            ),
+            arrowEdge: .trailing
+        )
         .onHover { isHovered = $0 }
         .help("切换语言".appLocalized)
         .id(appLanguage)
+        .onChange(of: appLanguage) { _ in
+            MenuBarManager.shared.refreshMenu()
+        }
     }
 }
 
