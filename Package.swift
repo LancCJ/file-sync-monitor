@@ -13,12 +13,11 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "FileSyncMonitor",
-            dependencies: [],
             path: "Sources/FileSyncMonitor",
+            exclude: ["Info.plist", "FileSyncMonitor.entitlements"],
             resources: [
                 .process("Resources")
-            ],
-            exclude: ["Info.plist", "FileSyncMonitor.entitlements"]
+            ]
         )
     ]
 )

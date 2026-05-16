@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FileSyncMonitor Interface Redesign Preview</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --panel-soft: #f8f9fb;
+      --line: #dfe3ea;
+      --line-soft: #edf0f4;
+      --text: #1b1f27;
+      --muted: #687385;
+      --faint: #9aa3b2;
+      --blue: #0052d9;
+      --blue-soft: #eaf2ff;
+      --green: #138a63;
+      --green-soft: #e8f7f1;
+      --amber: #b86e17;
+      --amber-soft: #fff4df;
+      --red: #c73f50;
+      --red-soft: #fff0f2;
+      --violet: #7357c7;
+      --violet-soft: #f1edff;
+      --shadow: 0 18px 50px rgba(29, 38, 56, .14);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        linear-gradient(135deg, rgba(0, 82, 217, .09), transparent 34%),
+        linear-gradient(225deg, rgba(19, 138, 99, .08), transparent 38%),
+        var(--bg);
+    }
+
+    .stage {
+      width: 1440px;
+      margin: 0 auto;
+      padding: 42px;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+
+    .titlebar h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+
+    .titlebar p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .design-badge {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .72);
+      backdrop-filter: blur(18px);
+    }
+
+    .window {
+      overflow: hidden;
+      height: 850px;
+      display: grid;
+      grid-template-columns: 248px 1fr;
+      border: 1px solid rgba(126, 137, 154, .34);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar {
+      padding: 18px 16px;
+      border-right: 1px solid var(--line);
+      background: rgba(248, 249, 251, .92);
+    }
+
+    .traffic {
+      display: flex;
+      gap: 8px;
+      height: 24px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.red { background: #ff5f57; }
+    .dot.yellow { background: #febc2e; }
+    .dot.green { background: #28c840; }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 6px 4px 20px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .brand-mark, .iconbox {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      color: #fff;
+      background: var(--blue);
+      font-weight: 800;
+    }
+
+    .brand strong { display: block; font-size: 14px; }
+    .brand span { color: var(--muted); font-size: 12px; }
+
+    .sidebar-section {
+      margin-top: 18px;
+    }
+
+    .sidebar-label {
+      margin: 0 8px 8px;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .navitem {
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 9px;
+      border-radius: 8px;
+      margin-bottom: 5px;
+      color: var(--muted);
+    }
+
+    .navitem.active {
+      color: #fff;
+      background: var(--blue);
+    }
+
+    .navitem b {
+      display: block;
+      font-size: 13px;
+      color: inherit;
+    }
+
+    .navitem small {
+      display: block;
+      margin-top: 1px;
+      color: currentColor;
+      opacity: .72;
+      font-size: 11px;
+    }
+
+    .navicon {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: rgba(0, 82, 217, .09);
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .active .navicon {
+      color: #fff;
+      background: rgba(255, 255, 255, .16);
+    }
+
+    .count {
+      min-width: 22px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: var(--red);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .sidebar-card {
+      margin-top: 22px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .sidebar-card .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .sidebar-card strong {
+      font-size: 18px;
+      color: var(--text);
+    }
+
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-width: 0;
+      background: var(--panel);
+    }
+
+    .toolbar {
+      padding: 24px 28px 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #fff, #fbfcfe);
+    }
+
+    .toolbar-top, .filters {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .toolbar-top {
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+
+    .toolbar h2 {
+      margin: 0 0 4px;
+      font-size: 25px;
+      letter-spacing: 0;
+    }
+
+    .toolbar p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .metric-strip {
+      display: flex;
+      gap: 10px;
+    }
+
+    .metric {
+      min-width: 82px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .metric b {
+      display: block;
+      font-size: 19px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .input, .segment, .button {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .input {
+      width: 290px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 11px;
+      color: var(--muted);
+    }
+
+    .segment {
+      display: flex;
+      overflow: hidden;
+      padding: 2px;
+    }
+
+    .segment span {
+      min-width: 58px;
+      padding: 7px 11px;
+      border-radius: 6px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .segment .selected {
+      color: #fff;
+      background: var(--blue);
+    }
+
+    .button {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1fr 304px;
+      gap: 18px;
+      padding: 22px 28px 28px;
+      min-height: 0;
+      background: #fbfcfe;
+    }
+
+    .event-list, .right-rail, .panel {
+      min-width: 0;
+    }
+
+    .event-list {
+      display: grid;
+      gap: 9px;
+      align-content: start;
+    }
+
+    .event-row {
+      display: grid;
+      grid-template-columns: 38px 1fr 82px 76px 72px;
+      gap: 13px;
+      align-items: center;
+      min-height: 68px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .event-row.featured {
+      border-color: rgba(0, 82, 217, .32);
+      box-shadow: 0 8px 26px rgba(0, 82, 217, .09);
+    }
+
+    .type {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      font-weight: 900;
+    }
+
+    .type.blue { color: var(--blue); background: var(--blue-soft); }
+    .type.green { color: var(--green); background: var(--green-soft); }
+    .type.amber { color: var(--amber); background: var(--amber-soft); }
+    .type.red { color: var(--red); background: var(--red-soft); }
+
+    .file b {
+      display: block;
+      margin-bottom: 4px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 13px;
+    }
+
+    .file span {
+      display: block;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .time {
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .pill {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .pill.pending { color: var(--amber); background: var(--amber-soft); }
+    .pill.done { color: var(--green); background: var(--green-soft); }
+    .pill.deleted { color: var(--red); background: var(--red-soft); }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 7px;
+    }
+
+    .action {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--muted);
+      background: #fff;
+      font-weight: 800;
+    }
+
+    .right-rail {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .panel {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .panel h3 {
+      margin: 0 0 4px;
+      font-size: 14px;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .sync-score {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 14px;
+      align-items: center;
+      margin-top: 14px;
+    }
+
+    .ring {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        conic-gradient(var(--green) 0 74%, var(--amber) 74% 91%, var(--line-soft) 91% 100%);
+    }
+
+    .ring span {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #fff;
+      font-weight: 900;
+      font-size: 16px;
+    }
+
+    .quick {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .quick button {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      color: var(--text);
+      font-weight: 700;
+      text-align: left;
+      padding: 0 11px;
+    }
+
+    .timeline {
+      margin-top: 14px;
+      display: grid;
+      gap: 11px;
+    }
+
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 8px 1fr auto;
+      gap: 9px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .timeline-row i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--blue);
+    }
+
+    .preview-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 18px;
+      margin-top: 24px;
+    }
+
+    .mini {
+      overflow: hidden;
+      height: 290px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(29, 38, 56, .08);
+    }
+
+    .mini-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .mini-head b { font-size: 14px; }
+    .mini-body { padding: 16px; }
+
+    .bars {
+      display: grid;
+      gap: 13px;
+      margin-top: 18px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 54px 1fr 30px;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .track {
+      height: 8px;
+      border-radius: 6px;
+      background: var(--line-soft);
+    }
+
+    .fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--blue);
+    }
+
+    .setting-row {
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      gap: 11px;
+      align-items: center;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .setting-row:last-child { border-bottom: 0; }
+
+    .setting-row b {
+      display: block;
+      font-size: 13px;
+    }
+
+    .setting-row span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .toggle {
+      width: 38px;
+      height: 22px;
+      border-radius: 22px;
+      background: var(--blue);
+      padding: 3px;
+    }
+
+    .toggle:after {
+      content: "";
+      display: block;
+      width: 16px;
+      height: 16px;
+      margin-left: 16px;
+      border-radius: 50%;
+      background: #fff;
+    }
+
+    .menubar {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .9);
+    }
+
+    .menu-row {
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      gap: 9px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .menu-row.highlight { background: var(--blue-soft); color: var(--blue); }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <header class="titlebar">
+      <div>
+        <h1>FileSyncMonitor 全新界面预览</h1>
+        <p>设计方向：同步指挥台、信息密度清晰、macOS 原生工具感、面向长期后台运行。</p>
+      </div>
+      <div class="design-badge">Preview 01 · Dashboard / Reports / Settings / Menu Bar</div>
+    </header>
+
+    <section class="window">
+      <aside class="sidebar">
+        <div class="traffic">
+          <i class="dot red"></i>
+          <i class="dot yellow"></i>
+          <i class="dot green"></i>
+        </div>
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div>
+            <strong>FileSyncMonitor</strong>
+            <span>同步监控工作台</span>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <p class="sidebar-label">Monitor</p>
+          <div class="navitem active">
+            <div class="navicon">A</div>
+            <div><b>活动记录</b><small>所有文件变动</small></div>
+          </div>
+          <div class="navitem">
+            <div class="navicon">P</div>
+            <div><b>待处理</b><small>需要确认同步</small></div>
+            <span class="count">12</span>
+          </div>
+          <div class="navitem">
+            <div class="navicon">T</div>
+            <div><b>层级视图</b><small>按路径归组</small></div>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <p class="sidebar-label">Workspace</p>
+          <div class="navitem">
+            <div class="navicon">R</div>
+            <div><b>报告</b><small>统计与导出</small></div>
+          </div>
+          <div class="navitem">
+            <div class="navicon">C</div>
+            <div><b>云端同步</b><small>IMA 知识库</small></div>
+          </div>
+          <div class="navitem">
+            <div class="navicon">G</div>
+            <div><b>设置</b><small>目录与偏好</small></div>
+          </div>
+        </div>
+
+        <div class="sidebar-card">
+          <p class="sidebar-label" style="margin:0 0 10px">Today</p>
+          <div class="row"><span>新增记录</span><strong>38</strong></div>
+          <div class="row"><span>待处理</span><strong style="color:var(--amber)">12</strong></div>
+          <div class="row"><span>监控目录</span><strong>4</strong></div>
+        </div>
+      </aside>
+
+      <section class="main">
+        <header class="toolbar">
+          <div class="toolbar-top">
+            <div>
+              <h2>活动记录</h2>
+              <p>按时间流查看所有目录变动，快速确认、上传或导出。</p>
+            </div>
+            <div class="metric-strip">
+              <div class="metric"><b>247</b><span>全部</span></div>
+              <div class="metric"><b style="color:var(--amber)">12</b><span>待处理</span></div>
+              <div class="metric"><b style="color:var(--green)">235</b><span>已同步</span></div>
+            </div>
+          </div>
+
+          <div class="filters">
+            <div class="input">⌕ 搜索路径或文件名</div>
+            <div class="segment">
+              <span class="selected">全部</span>
+              <span>新增</span>
+              <span>修改</span>
+              <span>删除</span>
+            </div>
+            <div class="segment">
+              <span class="selected">列表</span>
+              <span>层级</span>
+            </div>
+            <div style="flex:1"></div>
+            <button class="button">↧ CSV</button>
+            <button class="button">↧ JSON</button>
+          </div>
+        </header>
+
+        <section class="content">
+          <div class="event-list">
+            <article class="event-row featured">
+              <div class="type blue">M</div>
+              <div class="file">
+                <b>proposal-final.docx</b>
+                <span>/Users/chenjian/Documents/Projects/IMA/proposal-final.docx</span>
+              </div>
+              <div class="time">今天 14:28</div>
+              <span class="pill pending">待处理</span>
+              <div class="actions"><span class="action">✓</span><span class="action">↥</span></div>
+            </article>
+            <article class="event-row">
+              <div class="type green">+</div>
+              <div class="file">
+                <b>meeting-notes.md</b>
+                <span>/Users/chenjian/Documents/Notes/meeting-notes.md</span>
+              </div>
+              <div class="time">今天 13:05</div>
+              <span class="pill pending">待处理</span>
+              <div class="actions"><span class="action">✓</span><span class="action">↥</span></div>
+            </article>
+            <article class="event-row">
+              <div class="type amber">R</div>
+              <div class="file">
+                <b>research-v2.pdf</b>
+                <span>/Users/chenjian/Documents/Archive/research-v2.pdf</span>
+              </div>
+              <div class="time">今天 11:46</div>
+              <span class="pill done">已同步</span>
+              <div class="actions"><span class="action">↩</span><span class="action">↥</span></div>
+            </article>
+            <article class="event-row">
+              <div class="type red">−</div>
+              <div class="file">
+                <b>draft-old.txt</b>
+                <span>/Users/chenjian/Documents/Drafts/draft-old.txt</span>
+              </div>
+              <div class="time">昨天 19:34</div>
+              <span class="pill deleted">删除</span>
+              <div class="actions"><span class="action">✓</span><span class="action">↥</span></div>
+            </article>
+            <article class="event-row">
+              <div class="type blue">M</div>
+              <div class="file">
+                <b>design.md</b>
+                <span>/Users/chenjian/Documents/codes/file-sync-monitor/docs/design.md</span>
+              </div>
+              <div class="time">昨天 18:10</div>
+              <span class="pill done">已同步</span>
+              <div class="actions"><span class="action">↩</span><span class="action">↥</span></div>
+            </article>
+          </div>
+
+          <aside class="right-rail">
+            <section class="panel">
+              <h3>同步健康度</h3>
+              <p>衡量当前记录中已确认同步的比例。</p>
+              <div class="sync-score">
+                <div class="ring"><span>91%</span></div>
+                <div>
+                  <p><b style="color:var(--green)">235</b> 条已同步</p>
+                  <p><b style="color:var(--amber)">12</b> 条待处理</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h3>快速操作</h3>
+              <p>常用动作集中在右侧，减少菜单跳转。</p>
+              <div class="quick">
+                <button>全部标记为已同步</button>
+                <button>添加监控目录</button>
+                <button>打开 IMA 连接测试</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h3>今天的时间线</h3>
+              <div class="timeline">
+                <div class="timeline-row"><i></i><span>Documents 有 18 次修改</span><b>14:00</b></div>
+                <div class="timeline-row"><i style="background:var(--green)"></i><span>新增 7 个文档</span><b>11:30</b></div>
+                <div class="timeline-row"><i style="background:var(--amber)"></i><span>IMA 上传失败 1 次</span><b>09:12</b></div>
+              </div>
+            </section>
+          </aside>
+        </section>
+      </section>
+    </section>
+
+    <section class="preview-strip">
+      <article class="mini">
+        <div class="mini-head"><b>报告中心</b><span class="pill pending">近 7 天</span></div>
+        <div class="mini-body">
+          <div class="metric-strip">
+            <div class="metric"><b>118</b><span>记录</span></div>
+            <div class="metric"><b style="color:var(--amber)">12</b><span>待处理</span></div>
+            <div class="metric"><b style="color:var(--green)">106</b><span>已同步</span></div>
+          </div>
+          <div class="bars">
+            <div class="bar-row"><span>新增</span><div class="track"><div class="fill" style="width:42%;background:var(--green)"></div></div><b>32</b></div>
+            <div class="bar-row"><span>修改</span><div class="track"><div class="fill" style="width:84%"></div></div><b>64</b></div>
+            <div class="bar-row"><span>删除</span><div class="track"><div class="fill" style="width:16%;background:var(--red)"></div></div><b>12</b></div>
+            <div class="bar-row"><span>重命名</span><div class="track"><div class="fill" style="width:26%;background:var(--amber)"></div></div><b>20</b></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="mini">
+        <div class="mini-head"><b>设置</b><span>偏好与目录</span></div>
+        <div class="mini-body">
+          <div class="setting-row">
+            <div class="type blue">A</div>
+            <div><b>外观</b><span>跟随系统</span></div>
+            <strong>⌄</strong>
+          </div>
+          <div class="setting-row">
+            <div class="type amber">N</div>
+            <div><b>系统通知</b><span>检测到新变动时提醒</span></div>
+            <div class="toggle"></div>
+          </div>
+          <div class="setting-row">
+            <div class="type green">F</div>
+            <div><b>监控目录</b><span>4 个目录正在运行</span></div>
+            <strong>+</strong>
+          </div>
+          <div class="setting-row">
+            <div class="type blue">K</div>
+            <div><b>IMA API</b><span>Client ID 与 API Key</span></div>
+            <span class="pill done">可用</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="mini">
+        <div class="mini-head"><b>菜单栏弹出层</b><span class="count">12</span></div>
+        <div class="mini-body">
+          <div class="menubar">
+            <div class="menu-row highlight"><span>●</span><b>12 条记录待处理</b><span>同步</span></div>
+            <div class="menu-row"><span>+</span><span>meeting-notes.md</span><span>13:05</span></div>
+            <div class="menu-row"><span>M</span><span>proposal-final.docx</span><span>14:28</span></div>
+            <div class="menu-row"><span>R</span><span>research-v2.pdf</span><span>11:46</span></div>
+            <div class="menu-row"><span>⌂</span><b>打开活动记录</b><span>⌘M</span></div>
+            <div class="menu-row"><span>↧</span><span>导出当前记录</span><span></span></div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

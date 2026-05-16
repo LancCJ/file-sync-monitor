@@ -7,15 +7,17 @@ struct SettingsView: View {
     @AppStorage("notifyOnChanges") private var notifyOnChanges = true
     @AppStorage("retentionDays") private var retentionDays = 365
     @AppStorage("defaultExportFormat") private var defaultExportFormat = "csv"
-    @AppStorage("imaClientId") private var clientId = ""
-    @AppStorage("imaApiKey") private var apiKey = ""
     @AppStorage("enableDefaultIgnoreRules") private var enableDefaultIgnoreRules = true
     @AppStorage("customIgnoredFileNames") private var customIgnoredFileNames = ""
     @AppStorage("customIgnoredExtensions") private var customIgnoredExtensions = ""
     @AppStorage("customIgnoredDirectoryNames") private var customIgnoredDirectoryNames = ""
 
+    @AppStorage("imaClientId") private var clientId = ""
+    @AppStorage("imaApiKey") private var apiKey = ""
+
     @State private var isTestingIMA = false
     @State private var imaStatus: IMAStatus = .idle
+    @State private var isShowingLogs = false
 
     enum AppearanceMode: String, CaseIterable {
         case system, light, dark
@@ -51,14 +53,7 @@ struct SettingsView: View {
                         }
                     } else {
                         ForEach(FileMonitorService.shared.monitoredPaths, id: \.self) { path in
-                            IMASettingsRow(title: URL(fileURLWithPath: path).lastPathComponent, subtitle: path) {
-                                Button(role: .destructive) {
-                                    FileMonitorService.shared.removeDirectory(at: path)
-                                } label: {
-                                    Image(systemName: "minus.circle")
-                                }
-                                .buttonStyle(.plain)
-                            }
+                            MonitoredPathRow(path: path, onRemove: removeDirectory)
                         }
                         IMASettingsRow(title: "添加更多目录", subtitle: "继续监控其他文件夹") {
                             Button(action: addDirectory) {
@@ -106,9 +101,17 @@ struct SettingsView: View {
                 IMASettingsGroup(title: "IMA 云端") {
                     IMASettingsTextRow(title: "Client ID", subtitle: "IMA OpenAPI Client ID", text: $clientId)
                     IMASettingsTextRow(title: "API Key", subtitle: "IMA OpenAPI API Key", text: $apiKey, isSecure: true)
-                    IMASettingsRow(title: "连接测试", subtitle: imaStatusDetail) {
-                        HStack(spacing: 10) {
+                    IMASettingsRow(title: "连接状态", subtitle: imaStatusDetail, isSelectable: true) {
+                        HStack(spacing: 12) {
                             StatusPill(text: imaStatusTitle, symbol: imaStatusIcon, color: imaStatusColor)
+                            
+                            Button(action: { isShowingLogs = true }) {
+                                Image(systemName: "list.bullet.rectangle.portrait")
+                                    .font(.system(size: 14))
+                            }
+                            .buttonStyle(QuietButtonStyle())
+                            .help("查看请求日志")
+                            
                             Button(action: testIMAConnection) {
                                 if isTestingIMA {
                                     ProgressView().controlSize(.small)
@@ -172,6 +175,16 @@ struct SettingsView: View {
         }
         .background(IMAClientSurfaceBackground())
         .background(WindowFocusActivator())
+        .sheet(isPresented: $isShowingLogs) {
+            IMALogView()
+        }
+        .onAppear {
+            // 已自动通过 AppStorage 加载
+        }
+        .onChange(of: enableDefaultIgnoreRules) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
+        .onChange(of: customIgnoredFileNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
+        .onChange(of: customIgnoredExtensions) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
+        .onChange(of: customIgnoredDirectoryNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
     }
 
     private var retentionText: String {
@@ -228,19 +241,18 @@ struct SettingsView: View {
         }
     }
 
+    private func removeDirectory(_ path: String) {
+        FileMonitorService.shared.removeDirectory(at: path)
+    }
+
     private func testIMAConnection() {
         isTestingIMA = true
         imaStatus = .idle
         Task {
-            let trimmedClientId = clientId.trimmingCharacters(in: .whitespacesAndNewlines)
-            let trimmedApiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-            IMASyncService.shared.clientId = trimmedClientId
-            IMASyncService.shared.apiKey = trimmedApiKey
             do {
-                _ = try await IMASyncService.shared.getKnowledgeBases()
+                let kbs = try await IMASyncService.shared.getKnowledgeBases()
                 await MainActor.run {
-                    clientId = trimmedClientId
-                    apiKey = trimmedApiKey
+                    FileMonitorService.shared.availableKnowledgeBases = kbs
                     imaStatus = .connected
                     isTestingIMA = false
                 }
@@ -258,6 +270,65 @@ struct SettingsView: View {
         customIgnoredFileNames = ""
         customIgnoredExtensions = ""
         customIgnoredDirectoryNames = ""
+    }
+}
+
+struct MonitoredPathRow: View {
+    let path: String
+    let onRemove: (String) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            IMASettingsRow(title: URL(fileURLWithPath: path).lastPathComponent, subtitle: path) {
+                Button(action: { onRemove(path) }) {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            // 知识库绑定 Picker & 刷新按钮
+            HStack(spacing: 8) {
+                Text("同步至知识库")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.appMuted)
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Picker("", selection: Binding(
+                        get: { FileMonitorService.shared.getKnowledgeBaseId(for: path) ?? "" },
+                        set: { FileMonitorService.shared.setKnowledgeBaseId($0, for: path) }
+                    )) {
+                        Text("默认 (新建笔记)").tag("")
+                        ForEach(FileMonitorService.shared.availableKnowledgeBases) { kb in
+                            Text(kb.name).tag(kb.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 130)
+                    .labelsHidden()
+                    
+                    Button(action: {
+                        Task {
+                            await FileMonitorService.shared.fetchKnowledgeBases()
+                        }
+                    }) {
+                        Image(systemName: "arrow.clockwise.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.appAccent)
+                    }
+                    .buttonStyle(.plain)
+                    .help("刷新云端知识库列表")
+                }
+                .padding(.leading, 8)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(Color.appCanvas.opacity(0.42))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .padding(.bottom, 8)
     }
 }
 
@@ -307,6 +378,7 @@ struct IMASettingsGroup<Content: View>: View {
 struct IMASettingsRow<Accessory: View>: View {
     let title: String
     let subtitle: String
+    var isSelectable: Bool = false
     @ViewBuilder let accessory: Accessory
 
     var body: some View {
@@ -317,11 +389,17 @@ struct IMASettingsRow<Accessory: View>: View {
                     .foregroundStyle(Color.appInk)
                     .lineLimit(1)
                 if !subtitle.isEmpty {
-                    Text(subtitle)
+                    let text = Text(subtitle)
                         .font(.system(size: 12))
                         .foregroundStyle(Color.appMuted)
-                        .lineLimit(1)
+                        .lineLimit(isSelectable ? 4 : 1)
                         .truncationMode(.middle)
+                    
+                    if isSelectable {
+                        text.textSelection(.enabled)
+                    } else {
+                        text.textSelection(.disabled)
+                    }
                 }
             }
             Spacer()

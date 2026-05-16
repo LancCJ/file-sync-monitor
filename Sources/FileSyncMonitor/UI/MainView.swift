@@ -11,6 +11,7 @@ struct MainView: View {
     @State private var selectedEventID: UUID?
     @State private var searchText = ""
     @State private var typeFilter: EventTypeFilter = .all
+    @State private var isSyncing = false
 
     enum SidebarItem: String, CaseIterable, Identifiable {
         case home, pendingSync, allEvents, reports, settings, help
@@ -105,7 +106,8 @@ struct MainView: View {
                             showPending: { selectedSidebarItem = .pendingSync },
                             showAllRecords: { selectedSidebarItem = .allEvents },
                             showReports: { selectedSidebarItem = .reports },
-                            markAllPendingSynced: markAllPendingSynced
+                            markAllPendingSynced: markAllPendingSynced,
+                            syncAllToIMA: syncAllToIMA
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     case .pendingSync, .allEvents:
@@ -117,6 +119,8 @@ struct MainView: View {
                             searchText: $searchText,
                             typeFilter: $typeFilter,
                             markAllPendingSynced: markAllPendingSynced,
+                            syncAllToIMA: syncAllToIMA,
+                            isSyncing: isSyncing,
                             layout: layout
                         )
 
@@ -124,8 +128,13 @@ struct MainView: View {
                             event: selectedEvent,
                             mode: selectedSidebarItem,
                             visibleEvents: filteredEvents,
+                            isSyncing: isSyncing,
                             showAllRecords: { selectedSidebarItem = .allEvents },
                             addDirectory: addDirectory,
+                            markSynced: markSynced,
+                            upload: upload,
+                            reveal: reveal,
+                            export: export,
                             layout: layout
                         )
                     case .reports:
@@ -343,6 +352,7 @@ struct FileSyncHomeView: View {
     let showAllRecords: () -> Void
     let showReports: () -> Void
     let markAllPendingSynced: () -> Void
+    let syncAllToIMA: () -> Void
 
     private var monitoredCount: Int {
         FileMonitorService.shared.monitoredPaths.count
@@ -409,6 +419,12 @@ struct FileSyncHomeView: View {
                     .buttonStyle(QuietButtonStyle())
 
                     Spacer()
+
+                    Button(action: syncAllToIMA) {
+                        Label("全部同步", systemImage: "cloud.fill")
+                    }
+                    .buttonStyle(QuietButtonStyle())
+                    .disabled(pendingEvents.isEmpty)
 
                     Button(action: markAllPendingSynced) {
                         Label("全部完成", systemImage: "checkmark")
@@ -548,6 +564,8 @@ struct IMASecondarySidebar: View {
     @Binding var searchText: String
     @Binding var typeFilter: MainView.EventTypeFilter
     let markAllPendingSynced: () -> Void
+    let syncAllToIMA: () -> Void
+    let isSyncing: Bool
     let layout: MainLayoutMetrics
 
     var body: some View {
@@ -571,12 +589,28 @@ struct IMASecondarySidebar: View {
                 .frame(maxWidth: .infinity)
 
                 if mode == .pendingSync {
-                    Button(action: markAllPendingSynced) {
-                        Label("全部完成", systemImage: "checkmark")
+                    VStack(spacing: 8) {
+                        Button(action: syncAllToIMA) {
+                            HStack {
+                                if isSyncing {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: "cloud.fill")
+                                }
+                                Text("全部同步至 IMA")
+                            }
                             .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PillButtonStyle(isPrimary: true))
+                        .disabled(pendingCount == 0 || isSyncing)
+
+                        Button(action: markAllPendingSynced) {
+                            Label("全部标记完成", systemImage: "checkmark")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                        .disabled(pendingCount == 0 || isSyncing)
                     }
-                    .buttonStyle(PillButtonStyle(isPrimary: true))
-                    .disabled(pendingCount == 0)
                 }
             }
             .padding(.horizontal, 14)
@@ -685,17 +719,19 @@ struct IMAEventListRow: View {
 
 struct EventDetailView: View {
     @Environment(\.modelContext) private var modelContext
-    @AppStorage("imaClientId") private var clientId = ""
-    @AppStorage("imaApiKey") private var apiKey = ""
 
     let event: FileEvent?
     let mode: MainView.SidebarItem
     let visibleEvents: [FileEvent]
+    let isSyncing: Bool
+    
     let showAllRecords: () -> Void
     let addDirectory: () -> Void
+    let markSynced: (FileEvent) -> Void
+    let upload: (FileEvent) -> Void
+    let reveal: (FileEvent) -> Void
+    let export: (ExportService.ExportFormat) -> Void
     let layout: MainLayoutMetrics
-
-    @State private var isSyncing = false
 
     var body: some View {
         ZStack {
@@ -791,7 +827,9 @@ struct EventDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
 
+extension MainView {
     private func markSynced(_ event: FileEvent) {
         event.isSynced.toggle()
         try? modelContext.save()
@@ -803,14 +841,40 @@ struct EventDetailView: View {
         Task {
             defer { isSyncing = false }
             do {
-                IMASyncService.shared.clientId = clientId
-                IMASyncService.shared.apiKey = apiKey
-                _ = try await IMASyncService.shared.importDoc(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: "default")
-                event.isSynced = true
-                try? modelContext.save()
-                MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
+                let kbId = FileMonitorService.shared.getKnowledgeBaseId(for: event.path)
+                try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
+                
+                await MainActor.run {
+                    event.isSynced = true
+                    try? modelContext.save()
+                    MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
+                }
             } catch {
                 print("IMA Sync failed: \(error)")
+            }
+        }
+    }
+
+    private func syncAllToIMA() {
+        let targets = pendingEvents
+        guard !targets.isEmpty else { return }
+        
+        isSyncing = true
+        Task {
+            defer { isSyncing = false }
+            for event in targets {
+                do {
+                    let kbId = FileMonitorService.shared.getKnowledgeBaseId(for: event.path)
+                    try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
+                    
+                    await MainActor.run {
+                        event.isSynced = true
+                        try? modelContext.save()
+                        MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
+                    }
+                } catch {
+                    print("Batch sync failed for \(event.fileName): \(error)")
+                }
             }
         }
     }
@@ -820,8 +884,9 @@ struct EventDetailView: View {
     }
 
     private func export(format: ExportService.ExportFormat) {
+        // 使用 filteredEvents 进行导出
         do {
-            let data = try ExportService.shared.export(events: visibleEvents, format: format)
+            let data = try ExportService.shared.export(events: filteredEvents, format: format)
             let panel = NSSavePanel()
             panel.allowedContentTypes = [format == .csv ? .commaSeparatedText : .json]
             panel.nameFieldStringValue = "FileSync_\(Int(Date().timeIntervalSince1970)).\(format == .csv ? "csv" : "json")"

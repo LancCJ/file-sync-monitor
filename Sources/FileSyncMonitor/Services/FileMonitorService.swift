@@ -22,8 +22,14 @@ final class FileMonitorService {
     /// 当前正在监控的目录路径
     private(set) var monitoredPaths: [String] = []
     
+    private let mappingKey = "pathKnowledgeBaseMapping"
+    private let availableKBsKey = "availableKnowledgeBases"
+    
     /// 追踪已授权的安全作用域 URL 对象
     private var securityScopedURLs: [String: URL] = [:]
+    
+    /// 缓存的忽略规则
+    private var cachedIgnoreRules: IgnoreRules?
     
     private init() {
         loadBookmarks()
@@ -71,7 +77,9 @@ final class FileMonitorService {
             }
             
             if url.startAccessingSecurityScopedResource() {
-                monitoredPaths.append(url.path)
+                var paths = monitoredPaths
+                paths.append(url.path)
+                monitoredPaths = paths
                 securityScopedURLs[url.path] = url
                 restartMonitoring()
             }
@@ -81,11 +89,18 @@ final class FileMonitorService {
     }
     
     func removeDirectory(at path: String) {
-        if let url = securityScopedURLs.removeValue(forKey: path) {
-            url.stopAccessingSecurityScopedResource()
-        }
+        var paths = monitoredPaths
+        paths.removeAll { $0 == path }
+        monitoredPaths = paths
         
-        monitoredPaths.removeAll { $0 == path }
+        // 同时移除映射关系
+        var mapping = pathKnowledgeBaseMapping
+        mapping.removeValue(forKey: path)
+        pathKnowledgeBaseMapping = mapping
+        
+        stopMonitoring()
+        securityScopedURLs[path]?.stopAccessingSecurityScopedResource()
+        securityScopedURLs.removeValue(forKey: path)
         
         // 更新存储
         var remainingBookmarks: [Data] = []
@@ -121,6 +136,60 @@ final class FileMonitorService {
         }
     }
     
+    var pathKnowledgeBaseMapping: [String: String] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: mappingKey) else { return [:] }
+            return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: mappingKey)
+            }
+        }
+    }
+    
+    var availableKnowledgeBases: [KnowledgeBase] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: availableKBsKey) else { return [] }
+            return (try? JSONDecoder().decode([KnowledgeBase].self, from: data)) ?? []
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: availableKBsKey)
+            }
+        }
+    }
+    
+    @MainActor
+    func fetchKnowledgeBases() async {
+        do {
+            let kbs = try await IMASyncService.shared.getKnowledgeBases()
+            self.availableKnowledgeBases = kbs
+        } catch {
+            print("Failed to fetch knowledge bases: \(error)")
+        }
+    }
+
+    func setKnowledgeBaseId(_ id: String, for path: String) {
+        var mapping = pathKnowledgeBaseMapping
+        mapping[path] = id
+        pathKnowledgeBaseMapping = mapping
+    }
+    
+    func getKnowledgeBaseId(for filePath: String) -> String {
+        let mapping = pathKnowledgeBaseMapping
+        
+        // 寻找最长匹配的监控目录（即所属的最深层监控根目录）
+        let sortedPaths = monitoredPaths.sorted { $0.count > $1.count }
+        for rootPath in sortedPaths {
+            if filePath.hasPrefix(rootPath) {
+                return mapping[rootPath] ?? "default"
+            }
+        }
+        
+        return "default"
+    }
+
     /// 开始监控指定目录
     func startMonitoring(paths: [String], onEvent: @escaping ([FileEvent]) -> Void) {
         stopMonitoring()
@@ -201,15 +270,21 @@ final class FileMonitorService {
         }
     }
 
-    private func shouldIgnoreEvent(path: String, isDirectory: Bool) -> Bool {
-        let rules = IgnoreRules.load(
+    func refreshIgnoreRules() {
+        cachedIgnoreRules = IgnoreRules.load(
             userDefaults: .standard,
             enableDefaultKey: enableDefaultIgnoreRulesKey,
             customFileNamesKey: customIgnoredFileNamesKey,
             customExtensionsKey: customIgnoredExtensionsKey,
             customDirectoryNamesKey: customIgnoredDirectoryNamesKey
         )
-        return rules.matches(path: path, isDirectory: isDirectory)
+    }
+
+    private func shouldIgnoreEvent(path: String, isDirectory: Bool) -> Bool {
+        if cachedIgnoreRules == nil {
+            refreshIgnoreRules()
+        }
+        return cachedIgnoreRules?.matches(path: path, isDirectory: isDirectory) ?? false
     }
 }
 
