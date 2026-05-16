@@ -10,13 +10,14 @@ final class IMASyncService {
     private init() {}
 
     /// 同步文件到指定目标（知识库或笔记）
-    func syncFile(fileURL: URL, knowledgeBaseId: String?) async throws {
+    @discardableResult
+    func syncFile(fileURL: URL, knowledgeBaseId: String?) async throws -> String {
         if let kbId = knowledgeBaseId, !kbId.isEmpty && kbId != "default" {
             // 如果指定了具体知识库 ID，走 Wiki 上传流
-            try await uploadToWiki(fileURL: fileURL, knowledgeBaseId: kbId)
+            return try await uploadToWiki(fileURL: fileURL, knowledgeBaseId: kbId)
         } else {
-            // 默认走笔记导入流 (注意：笔记导入暂时保留简单实现)
-            _ = try await importDoc(fileURL: fileURL, knowledgeBaseId: "default")
+            // 默认走笔记导入流
+            return try await importDoc(fileURL: fileURL, knowledgeBaseId: "default")
         }
     }
 
@@ -39,8 +40,74 @@ final class IMASyncService {
         return response.data?.items ?? []
     }
 
+    /// 获取知识库内容列表
+    func getKnowledgeList(knowledgeBaseId: String, folderId: String? = nil, cursor: String = "") async throws -> (items: [KnowledgeInfo], isEnd: Bool, nextCursor: String) {
+        let body: [String: Any] = [
+            "knowledge_base_id": knowledgeBaseId,
+            "folder_id": folderId ?? "",
+            "cursor": cursor,
+            "limit": 50
+        ]
+        
+        let response: IMAResponse<KnowledgeListPayload> = try await postJson(
+            path: "openapi/wiki/v1/get_knowledge_list",
+            body: body
+        )
+        try validate(response)
+        
+        return (
+            items: response.data?.knowledgeList ?? [],
+            isEnd: response.data?.isEnd ?? true,
+            nextCursor: response.data?.nextCursor ?? ""
+        )
+    }
+
+    /// 获取媒体信息（包含下载地址）
+    func getMediaInfo(mediaId: String) async throws -> MediaInfoPayload {
+        let response: IMAResponse<MediaInfoPayload> = try await postJson(
+            path: "openapi/wiki/v1/get_media_info",
+            body: ["media_id": mediaId]
+        )
+        try validate(response)
+        guard let data = response.data else { throw IMASyncError.apiError("未获取到媒体详情") }
+        return data
+    }
+
+    /// 从云端下载文件
+    func downloadFile(mediaId: String, to destinationURL: URL) async throws {
+        let info = try await getMediaInfo(mediaId: mediaId)
+        guard let urlInfo = info.urlInfo, let downloadURL = URL(string: urlInfo.url) else {
+            throw IMASyncError.apiError("该媒体类型暂不支持导出或无法获取下载链接")
+        }
+        
+        var request = URLRequest(url: downloadURL)
+        request.httpMethod = "GET"
+        if let headers = urlInfo.headers {
+            for (key, value) in headers {
+                request.addValue(value, forHTTPHeaderField: key)
+            }
+        }
+        
+        let logId = IMALogService.shared.logRequest(method: "DOWNLOAD", url: downloadURL.absoluteString, headers: request.allHTTPHeaderFields, body: "Downloading file...")
+        let (tempURL, response) = try await URLSession.shared.download(for: request)
+        
+        if let httpResponse = response as? HTTPURLResponse {
+            IMALogService.shared.logResponse(id: logId, code: httpResponse.statusCode, body: "Download Finished", requestId: nil)
+            if !(200...299).contains(httpResponse.statusCode) {
+                throw IMASyncError.apiError("文件下载失败: HTTP \(httpResponse.statusCode)")
+            }
+        }
+        
+        // 移动到目标位置
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        try FileManager.default.moveItem(at: tempURL, to: destinationURL)
+    }
+
     /// 知识库模块：上传文件 (Wiki Flow)
-    func uploadToWiki(fileURL: URL, knowledgeBaseId: String) async throws {
+    @discardableResult
+    func uploadToWiki(fileURL: URL, knowledgeBaseId: String) async throws -> String {
         let fileName = fileURL.lastPathComponent
         let fileSize = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         let fileExt = fileURL.pathExtension.lowercased()
@@ -93,6 +160,8 @@ final class IMASyncService {
         )
         try validate(addResp)
         IMALogService.shared.logResponse(id: step3LogId, code: 200, body: "关联成功！同步完成。", requestId: addResp.requestId)
+        
+        return payload.mediaId
     }
 
     private func uploadToCOS(fileURL: URL, payload: CreateMediaPayload, contentType: String, fileSize: Int) async throws {
@@ -424,6 +493,46 @@ struct COSCredential: Decodable {
         case startTime = "start_time"
         case expiredTime = "expired_time"
     }
+}
+
+struct KnowledgeListPayload: Decodable {
+    let knowledgeList: [KnowledgeInfo]
+    let isEnd: Bool
+    let nextCursor: String
+    
+    enum CodingKeys: String, CodingKey {
+        case knowledgeList = "knowledge_list"
+        case isEnd = "is_end"
+        case nextCursor = "next_cursor"
+    }
+}
+
+struct KnowledgeInfo: Codable, Identifiable, Hashable {
+    var id: String { mediaId }
+    let mediaId: String
+    let title: String
+    let parentFolderId: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case mediaId = "media_id"
+        case title
+        case parentFolderId = "parent_folder_id"
+    }
+}
+
+struct MediaInfoPayload: Decodable {
+    let mediaType: Int
+    let urlInfo: URLInfo?
+    
+    enum CodingKeys: String, CodingKey {
+        case mediaType = "media_type"
+        case urlInfo = "url_info"
+    }
+}
+
+struct URLInfo: Decodable {
+    let url: String
+    let headers: [String: String]?
 }
 
 struct EmptyPayload: Decodable {}

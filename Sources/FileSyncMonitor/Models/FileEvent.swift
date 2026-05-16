@@ -11,6 +11,7 @@ final class FileEvent {
     var isSynced: Bool
     var hasNotified: Bool
     var isDirectory: Bool
+    var remoteId: String? // IMA 远程 ID (media_id 或 doc_id)
     
     // 归档标记，用于树状展示时的逻辑
     var fileName: String {
@@ -24,7 +25,8 @@ final class FileEvent {
          timestamp: Date = Date(), 
          isSynced: Bool = false, 
          hasNotified: Bool = false,
-         isDirectory: Bool = false) {
+         isDirectory: Bool = false,
+         remoteId: String? = nil) {
         self.id = id
         self.path = path
         self.oldPath = oldPath
@@ -33,5 +35,6 @@ final class FileEvent {
         self.isSynced = isSynced
         self.hasNotified = hasNotified
         self.isDirectory = isDirectory
+        self.remoteId = remoteId
     }
 }

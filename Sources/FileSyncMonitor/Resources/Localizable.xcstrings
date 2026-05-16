@@ -1,38 +1,430 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
-    "所有记录" : {
-      "extractionState" : "manual",
+    "首页" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All Records"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "所有记录"
-          }
-        }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Home" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "首頁" } }
       }
     },
     "待同步" : {
-      "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pending Sync"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待同步"
-          }
-        }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pending Sync" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "待同步" } }
+      }
+    },
+    "全部记录" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All Records" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "全部記錄" } }
+      }
+    },
+    "报告" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reports" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "報告" } }
+      }
+    },
+    "设置" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "設置" } }
+      }
+    },
+    "帮助" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Help" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "幫助" } }
+      }
+    },
+    "帮助与关于" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Help & About" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "幫助與关于" } }
+      }
+    },
+    "解锁 FileSyncMonitor 的全部潜力，让您的工作流与 IMA 云端无缝合一。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unlock the full potential of FileSyncMonitor and seamlessly integrate your workflow with IMA Cloud." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "解鎖 FileSyncMonitor 的全部潛力，讓您的工作流與 IMA 雲端無縫合一。" } }
+      }
+    },
+    "实时智能监控" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Intelligent Monitoring" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "實時智能監控" } }
+      }
+    },
+    "全天候变动捕获" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "24/7 Change Capture" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "全天候變動捕獲" } }
+      }
+    },
+    "利用高性能 FSEvents 技术，秒级感知任何文件的新增、修改或重命名。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Using high-performance FSEvents technology to sense any file creation, modification, or renaming in seconds." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "利用高性能 FSEvents 技術，秒級感知任何文件的新增、修改或重命名。" } }
+      }
+    },
+    "智能过滤引擎" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Smart Filter Engine" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "智能過濾引擎" } }
+      }
+    },
+    "内置专业级忽略规则，自动屏蔽缓存与系统杂质，让您的监控列表始终保持纯净。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Built-in professional-grade ignore rules automatically block cache and system noise, keeping your monitor list clean." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "內置專業級忽略規則，自動屏蔽緩存与系統雜質，讓您的監控列表始終保持純潔。" } }
+      }
+    },
+    "IMA 双向同步" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "IMA Bidirectional Sync" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "IMA 雙向同步" } }
+      }
+    },
+    "双向拉取尝试" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Bidirectional Pull" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "雙向拉取嘗試" } }
+      }
+    },
+    "点击「从云端拉取更新」，即可智能识别并下载知识库中的新文件到本地。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Click 'Pull from Cloud' to intelligently identify and download new files from the knowledge base to local." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "點擊「從雲端拉取更新」，即可智能識別並下載知識庫中的新文件到本地。" } }
+      }
+    },
+    "自动化推送流程" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automated Push Flow" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "自動化推送流程" } }
+      }
+    },
+    "开启自动同步后，应用会在您保存文件 30 秒后自动完成云端备份。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "With auto-sync enabled, the app will automatically back up to the cloud 30 seconds after you save a file." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "開啟自動同步後，應用會在您保存文件 30 秒後自動完成雲端備份。" } }
+      }
+    },
+    "精品化交互体验" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Premium UX Design" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "精品化交互體驗" } }
+      }
+    },
+    "极致视觉反馈" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Visual Feedback" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "極致視覺回馈" } }
+      }
+    },
+    "每一处按钮与卡片都经过精心调校，支持细腻的悬停动效与平滑的状态转换。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Every button and card is carefully tuned, supporting subtle hover effects and smooth state transitions." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "每一處按鈕与卡片都經過精心調校，支持細膩的懸停動效与平滑的狀態轉換。" } }
+      }
+    },
+    "秒级记录分析" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Second-Level Analytics" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "秒級記錄分析" } }
+      }
+    },
+    "支持秒级精度的时间轴回溯，并提供专业级 CSV/JSON 报表导出。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Supports second-level precision timeline backtracking and provides professional CSV/JSON report export." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "支持秒級精度的時間軸回溯，並提供專業級 CSV/JSON 報表導出。" } }
+      }
+    },
+    "搜索文件或路径" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search files or paths" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "搜尋檔案或路徑" } }
+      }
+    },
+    "全部同步至 IMA" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sync All to IMA" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "全部同步至 IMA" } }
+      }
+    },
+    "从云端拉取更新" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pull from Cloud" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "從雲端拉取更新" } }
+      }
+    },
+    "全部标记完成" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mark All Done" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "全部標記完成" } }
+      }
+    },
+    "监控目录" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Monitored Directories" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "監控目錄" } }
+      }
+    },
+    "忽略规则" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ignore Rules" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "忽略規則" } }
+      }
+    },
+    "IMA 云端" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "IMA Cloud" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "IMA 雲端" } }
+      }
+    },
+    "通知与导出" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notifications & Export" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "通知与導出" } }
+      }
+    },
+    "高级版" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pro Version" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "高級版" } }
+      }
+    },
+    "版本" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Version" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "版本" } }
+      }
+    },
+    "测试连接" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Test Connection" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "測試連接" } }
+      }
+    },
+    "连接成功" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connected" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連接成功" } }
+      }
+    },
+    "连接失败" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Failed" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連接失敗" } }
+      }
+    },
+    "全部" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "全部" } }
+      }
+    },
+    "新增" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Created" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "新增" } }
+      }
+    },
+    "修改" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Modified" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "修改" } }
+      }
+    },
+    "删除" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Deleted" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "刪除" } }
+      }
+    },
+    "重命名" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Renamed" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "重命名" } }
+      }
+    },
+    "同步状态" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sync Status" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "同步狀態" } }
+      }
+    },
+    "记录时间" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Record Time" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "記錄時間" } }
+      }
+    },
+    "是否目录" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Is Directory" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "是否目錄" } }
+      }
+    },
+    "已同步" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Synced" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已同步" } }
+      }
+    },
+    "待同步_value" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pending" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "待同步" } }
+      }
+    },
+    "目录" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Directory" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "目錄" } }
+      }
+    },
+    "文件" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "File" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "文件" } }
+      }
+    },
+    "今天" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Today" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "今天" } }
+      }
+    },
+    "近 7 天" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Past 7 Days" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "近 7 天" } }
+      }
+    },
+    "近 30 天" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Past 30 Days" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "近 30 天" } }
+      }
+    },
+    "同步至知识库" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sync to Knowledge Base" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "同步至知識庫" } }
+      }
+    },
+    "默认 (新建笔记)" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Default (New Note)" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "默認 (新建筆記)" } }
+      }
+    },
+    "隐藏" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "隱藏" } }
+      }
+    },
+    "显示" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "顯示" } }
+      }
+    },
+    "复制" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "複製" } }
+      }
+    },
+    "粘贴" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Paste" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "貼上" } }
+      }
+    },
+    "未填写" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not Filled" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "未填寫" } }
+      }
+    },
+    "过滤 .DS_Store、临时文件、系统目录和常见构建缓存" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Filters .DS_Store, temporary files, system directories, and common build caches" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "過濾 .DS_Store、臨時文件、系統目錄和常見構建緩存" } }
+      }
+    },
+    "永久" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Forever" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "永久" } }
+      }
+    },
+    "%lld 天" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld Days" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%lld 天" } }
+      }
+    },
+    "跟随系统" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Follow System" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "跟隨系統" } }
+      }
+    },
+    "界面" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Interface" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "介面" } }
+      }
+    },
+    "语言" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Language" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "語言" } }
+      }
+    },
+    "手动指定界面语言或跟随系统" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Manual language selection or follow system" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "手動指定介面語言或跟隨系統" } }
+      }
+    },
+    "外观模式" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Appearance" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "外觀模式" } }
+      }
+    },
+    "切换浅色、深色或跟随系统设置" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Toggle light, dark, or system appearance" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "切換淺色、深色或跟隨系統設置" } }
+      }
+    },
+    "简体中文" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Simplified Chinese" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "簡體中文" } }
+      }
+    },
+    "繁体中文" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Traditional Chinese" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "繁體中文" } }
+      }
+    },
+    "切换语言" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Switch Language" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "切換語言" } }
+      }
+    },
+    "低频查看统计和导出记录。日常处理请回到待同步。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Low-frequency viewing of statistics and export records. For daily processing, please return to Pending Sync." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "低頻查看統計和導出記錄。日常處理請回到待同步。" } }
       }
     }
   },

@@ -52,11 +52,16 @@ struct LogEntryRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(entry.method) \(entry.url)")
                         .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    Text(entry.url)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    HStack(spacing: 6) {
+                        Text(entry.timestamp.shortActivityTime)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(Color.appAccent)
+                        Text(entry.url)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 }
                 
                 Spacer()
@@ -120,7 +125,7 @@ struct LogEntryRow: View {
     
     private func copyFullLog(_ entry: IMALogService.LogEntry) {
         var text = "【IMA 请求日志】\n"
-        text += "时间: \(entry.timestamp)\n"
+        text += "时间: \(entry.timestamp.shortActivityTime)\n"
         text += "方法: \(entry.method)\n"
         text += "全路径: \(entry.url)\n"
         if let headers = entry.requestHeaders { text += "\n[Request Headers]\n\(headers)\n" }

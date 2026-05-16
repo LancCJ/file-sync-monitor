@@ -10,6 +10,8 @@ final class FileMonitorService {
     private var stream: FSEventStreamRef?
     private let queue = DispatchQueue(label: "com.filesyncmonitor.monitor", qos: .background)
     private var onEventCallback: (([FileEvent]) -> Void)?
+    private var onAutoSyncTrigger: ((FileEvent) -> Void)?
+    private var syncTimers: [String: Timer] = [:]
     
     /// 存储书签数据的 Key
     private let bookmarksKey = "monitored_directory_bookmarks"
@@ -21,6 +23,9 @@ final class FileMonitorService {
     
     /// 当前正在监控的目录路径
     private(set) var monitoredPaths: [String] = []
+    
+    /// 是否正在从云端同步
+    var isPulling: Bool = false
     
     private let mappingKey = "pathKnowledgeBaseMapping"
     private let availableKBsKey = "availableKnowledgeBases"
@@ -127,9 +132,41 @@ final class FileMonitorService {
             Task {
                 let context = await PersistenceController.shared.makeBackgroundContext()
                 for event in events {
-                    context.insert(event)
-                    // 发送本地通知
-                    NotificationManager.shared.sendFileEventNotification(event: event)
+                    let path = event.path
+                    
+                    // 1. 查找是否存在该路径的“未同步”记录
+                    var descriptor = FetchDescriptor<FileEvent>(
+                        predicate: #Predicate<FileEvent> { $0.path == path && $0.isSynced == false }
+                    )
+                    descriptor.fetchLimit = 1
+                    
+                    let targetEvent: FileEvent
+                    if let existing = try? context.fetch(descriptor).first {
+                        // 如果存在，合并更新
+                        existing.timestamp = event.timestamp
+                        existing.type = event.type
+                        existing.isDirectory = event.isDirectory
+                        targetEvent = existing
+                    } else {
+                        // 2. 如果是新记录，尝试从最近一次“已同步”的记录中继承 remoteId
+                        var syncedDescriptor = FetchDescriptor<FileEvent>(
+                            predicate: #Predicate<FileEvent> { $0.path == path && $0.isSynced == true }
+                        )
+                        syncedDescriptor.sortBy = [SortDescriptor(\.timestamp, order: .reverse)]
+                        syncedDescriptor.fetchLimit = 1
+                        
+                        if let lastSynced = try? context.fetch(syncedDescriptor).first {
+                            event.remoteId = lastSynced.remoteId
+                        }
+                        
+                        context.insert(event)
+                        targetEvent = event
+                        // 仅对新变动发送通知
+                        NotificationManager.shared.sendFileEventNotification(event: event)
+                    }
+                    
+                    // 3. 处理自动同步计时器
+                    self.resetSyncTimer(for: targetEvent)
                 }
                 try? context.save()
             }
@@ -188,6 +225,79 @@ final class FileMonitorService {
         }
         
         return "default"
+    }
+
+    /// 从云端拉取更新（双向同步核心尝试）
+    @MainActor
+    func pullFromRemote() async {
+        guard !isPulling else { return }
+        isPulling = true
+        defer { isPulling = false }
+        
+        let mapping = pathKnowledgeBaseMapping
+        for (localPath, kbId) in mapping {
+            guard !kbId.isEmpty && kbId != "default" else { continue }
+            
+            do {
+                // 1. 获取云端列表
+                let (items, _, _) = try await IMASyncService.shared.getKnowledgeList(knowledgeBaseId: kbId)
+                
+                // 2. 检查本地是否存在
+                let localURL = URL(fileURLWithPath: localPath)
+                for item in items {
+                    let fileURL = localURL.appendingPathComponent(item.title)
+                    
+                    if !FileManager.default.fileExists(atPath: fileURL.path) {
+                        // 3. 下载缺失文件
+                        print("Sync: Downloading new file from cloud: \(item.title)")
+                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                        
+                        // 记录一条模拟变动，让 UI 感知
+                        let event = FileEvent(path: fileURL.path, type: "created", isDirectory: false)
+                        event.isSynced = true // 标记为已同步
+                        event.remoteId = item.mediaId
+                        
+                        let context = await PersistenceController.shared.makeBackgroundContext()
+                        context.insert(event)
+                        try? context.save()
+                    }
+                }
+            } catch {
+                print("Pull from remote failed for \(localPath): \(error)")
+            }
+        }
+    }
+
+    // MARK: - Auto Sync Logic
+    
+    func setupAutoSyncTrigger(_ callback: @escaping (FileEvent) -> Void) {
+        self.onAutoSyncTrigger = callback
+    }
+    
+    private func resetSyncTimer(for event: FileEvent) {
+        guard UserDefaults.standard.bool(forKey: "autoSync") else { return }
+        
+        let path = event.path
+        let eventId = event.id
+        
+        DispatchQueue.main.async {
+            self.syncTimers[path]?.invalidate()
+            self.syncTimers[path] = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { [weak self] _ in
+                guard let self = self else { return }
+                self.syncTimers.removeValue(forKey: path)
+                
+                // 触发同步回调
+                Task {
+                    let context = await PersistenceController.shared.makeBackgroundContext()
+                    let descriptor = FetchDescriptor<FileEvent>(
+                        predicate: #Predicate<FileEvent> { $0.id == eventId && $0.isSynced == false }
+                    )
+                    if let freshEvent = try? context.fetch(descriptor).first {
+                        self.onAutoSyncTrigger?(freshEvent)
+                    }
+                }
+            }
+        }
     }
 
     /// 开始监控指定目录

@@ -14,6 +14,15 @@ struct ReportsView: View {
 
         var id: String { rawValue }
 
+        var title: LocalizedStringKey {
+            switch self {
+            case .today: "今天"
+            case .week: "近 7 天"
+            case .month: "近 30 天"
+            case .all: "全部"
+            }
+        }
+
         var startDate: Date {
             let calendar = Calendar.current
             switch self {
@@ -57,7 +66,7 @@ struct ReportsView: View {
                 Spacer()
 
                 AppSegmentedControl(
-                    options: TimeRange.allCases.map { ($0, $0.rawValue) },
+                    options: TimeRange.allCases.map { ($0, $0.title) },
                     selection: $timeRange
                 )
                 .frame(width: 280)
@@ -233,7 +242,10 @@ private struct RecentReportEvents: View {
                                 .foregroundStyle(.secondary)
                             SyncStatusChip(isSynced: event.isSynced)
                         }
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 9)
+                        .background(Color.white.opacity(0.001))
+                        .imaHover()
 
                         if event.id != events.last?.id {
                             Divider()

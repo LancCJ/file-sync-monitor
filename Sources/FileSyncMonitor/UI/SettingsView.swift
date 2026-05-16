@@ -11,6 +11,8 @@ struct SettingsView: View {
     @AppStorage("customIgnoredFileNames") private var customIgnoredFileNames = ""
     @AppStorage("customIgnoredExtensions") private var customIgnoredExtensions = ""
     @AppStorage("customIgnoredDirectoryNames") private var customIgnoredDirectoryNames = ""
+    @AppStorage("autoSync") private var autoSync = false
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
 
     @AppStorage("imaClientId") private var clientId = ""
     @AppStorage("imaApiKey") private var apiKey = ""
@@ -42,6 +44,32 @@ struct SettingsView: View {
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(Color.appInk)
                     .padding(.top, 64)
+
+                IMASettingsGroup(title: "界面") {
+                    IMASettingsRow(title: "语言", subtitle: "手动指定界面语言或跟随系统") {
+                        Menu {
+                            ForEach(AppLanguage.allCases, id: \.self) { lang in
+                                Button {
+                                    appLanguage = lang
+                                } label: {
+                                    Text(lang.title)
+                                }
+                            }
+                        } label: {
+                            AppMenuValue(text: appLanguage.title)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: 120)
+                    }
+
+                    IMASettingsRow(title: "外观模式", subtitle: "切换浅色、深色或跟随系统设置") {
+                        AppSegmentedControl(
+                            options: AppearanceMode.allCases.map { ($0, $0.title) },
+                            selection: $appearance
+                        )
+                        .frame(width: 240)
+                    }
+                }
 
                 IMASettingsGroup(title: "监控目录") {
                     if FileMonitorService.shared.monitoredPaths.isEmpty {
@@ -115,14 +143,17 @@ struct SettingsView: View {
                             Button(action: testIMAConnection) {
                                 if isTestingIMA {
                                     ProgressView().controlSize(.small)
+                                        .transition(.scale.combined(with: .opacity))
                                 } else {
-                                    Text("测试")
+                                    Text("测试连接")
                                 }
                             }
                             .buttonStyle(QuietButtonStyle())
                             .disabled(clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isTestingIMA)
+                            .animation(.snappy, value: isTestingIMA)
                         }
                     }
+                    .imaHover()
                 }
 
                 IMASettingsGroup(title: "通知与导出") {
@@ -136,6 +167,10 @@ struct SettingsView: View {
                             selection: $defaultExportFormat
                         )
                         .frame(width: 112)
+                    }
+
+                    IMASettingsRow(title: "自动同步", subtitle: "文件变动 30 秒后自动触发同步至云端") {
+                        AppToggle(isOn: $autoSync)
                     }
 
                     IMASettingsRow(title: "已同步记录保留", subtitle: "未同步记录不会自动清理") {
@@ -187,30 +222,30 @@ struct SettingsView: View {
         .onChange(of: customIgnoredDirectoryNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
     }
 
-    private var retentionText: String {
+    private var retentionText: LocalizedStringKey {
         retentionDays == 0 ? "永久" : "\(retentionDays) 天"
     }
 
-    private var defaultIgnoreSummary: String {
+    private var defaultIgnoreSummary: LocalizedStringKey {
         "过滤 .DS_Store、临时文件、系统目录和常见构建缓存"
     }
 
-    private var imaStatusTitle: String {
+    private var imaStatusTitle: LocalizedStringKey {
         switch imaStatus {
         case .idle: return "未测试"
-        case .connected: return "可用"
-        case .failed: return "失败"
+        case .connected: return "连接成功"
+        case .failed: return "连接失败"
         }
     }
 
-    private var imaStatusDetail: String {
+    private var imaStatusDetail: LocalizedStringKey {
         switch imaStatus {
         case .idle:
             return "检查当前凭据是否可用"
         case .connected:
             return "IMA OpenAPI 连接成功"
         case .failed(let message):
-            return message
+            return LocalizedStringKey(message)
         }
     }
 
@@ -279,7 +314,7 @@ struct MonitoredPathRow: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            IMASettingsRow(title: URL(fileURLWithPath: path).lastPathComponent, subtitle: path) {
+            IMASettingsRow(title: LocalizedStringKey(URL(fileURLWithPath: path).lastPathComponent), subtitle: LocalizedStringKey(path)) {
                 Button(action: { onRemove(path) }) {
                     Image(systemName: "minus.circle.fill")
                         .foregroundStyle(.red)
@@ -329,6 +364,7 @@ struct MonitoredPathRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .padding(.bottom, 8)
+        .imaHover()
     }
 }
 
@@ -350,7 +386,7 @@ struct WindowFocusActivator: NSViewRepresentable {
 }
 
 struct IMASettingsGroup<Content: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -376,8 +412,8 @@ struct IMASettingsGroup<Content: View>: View {
 }
 
 struct IMASettingsRow<Accessory: View>: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
     var isSelectable: Bool = false
     @ViewBuilder let accessory: Accessory
 
@@ -388,18 +424,17 @@ struct IMASettingsRow<Accessory: View>: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.appInk)
                     .lineLimit(1)
-                if !subtitle.isEmpty {
-                    let text = Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.appMuted)
-                        .lineLimit(isSelectable ? 4 : 1)
-                        .truncationMode(.middle)
-                    
-                    if isSelectable {
-                        text.textSelection(.enabled)
-                    } else {
-                        text.textSelection(.disabled)
-                    }
+                
+                let text = Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.appMuted)
+                    .lineLimit(isSelectable ? 4 : 1)
+                    .truncationMode(.middle)
+                
+                if isSelectable {
+                    text.textSelection(.enabled)
+                } else {
+                    text.textSelection(.disabled)
                 }
             }
             Spacer()
@@ -413,14 +448,17 @@ struct IMASettingsRow<Accessory: View>: View {
                 .frame(height: 1)
                 .padding(.leading, 18)
         }
+        .background(Color.white.opacity(0.001)) // Make entire row hoverable
+        .imaHover()
     }
 }
 
 struct IMASettingsTextRow: View {
-    let title: String
-    let subtitle: String
+    @Environment(\.locale) var locale
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
     @Binding var text: String
-    var placeholder = "未填写"
+    var placeholder: String = "未填写"
     var isSecure = false
     @State private var isRevealed = false
     @State private var isFocused = false
@@ -432,8 +470,10 @@ struct IMASettingsTextRow: View {
                     text: $text,
                     placeholder: placeholder,
                     isSecure: isSecure && !isRevealed,
-                    isFocused: $isFocused
+                    isFocused: $isFocused,
+                    locale: locale
                 )
+                .id(locale)
                 .frame(maxWidth: .infinity)
                 .frame(height: 24)
 
@@ -485,6 +525,7 @@ struct AppKitSingleLineTextField: NSViewRepresentable {
     let placeholder: String
     let isSecure: Bool
     @Binding var isFocused: Bool
+    let locale: Locale
 
     func makeNSView(context: Context) -> NSView {
         let container = NSView()
@@ -503,7 +544,7 @@ struct AppKitSingleLineTextField: NSViewRepresentable {
         if field.stringValue != text {
             field.stringValue = text
         }
-        field.placeholderString = placeholder
+        field.placeholderString = String(localized: String.LocalizationValue(placeholder), locale: locale)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -526,7 +567,7 @@ struct AppKitSingleLineTextField: NSViewRepresentable {
     private func makeField() -> NSTextField {
         let field: NSTextField = isSecure ? FocusableSecureTextField() : FocusableTextField()
         field.stringValue = text
-        field.placeholderString = placeholder
+        field.placeholderString = String(localized: String.LocalizationValue(placeholder), locale: locale)
         field.isBordered = false
         field.isBezeled = false
         field.drawsBackground = false
@@ -591,7 +632,7 @@ private final class FocusableSecureTextField: NSSecureTextField {
 
 struct CredentialToolButton: View {
     let icon: String
-    let help: String
+    let help: LocalizedStringKey
     let action: () -> Void
 
     var body: some View {

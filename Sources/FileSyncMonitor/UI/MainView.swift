@@ -17,7 +17,7 @@ struct MainView: View {
         case home, pendingSync, allEvents, reports, settings, help
         var id: String { rawValue }
 
-        var title: String {
+        var title: LocalizedStringKey {
             switch self {
             case .home: "首页"
             case .pendingSync: "待同步"
@@ -48,6 +48,16 @@ struct MainView: View {
         case renamed = "重命名"
 
         var id: String { rawValue }
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .all: "全部"
+            case .created: "新增"
+            case .modified: "修改"
+            case .deleted: "删除"
+            case .renamed: "重命名"
+            }
+        }
 
         var eventType: String? {
             switch self {
@@ -158,6 +168,9 @@ struct MainView: View {
                 searchText = ""
                 typeFilter = .all
             }
+            .onAppear {
+                setupAutoSyncListener()
+            }
         }
     }
 
@@ -267,13 +280,17 @@ struct IMARailView: View {
                 }
             }
 
-            Button {
-                NSApp.terminate(nil)
-            } label: {
-                IMARailExitButton()
+            VStack(spacing: 18) {
+                IMARailLanguageButton()
+
+                Button {
+                    NSApp.terminate(nil)
+                } label: {
+                    IMARailExitButton()
+                }
+                .buttonStyle(.plain)
+                .help("退出")
             }
-            .buttonStyle(.plain)
-            .help("退出")
             .padding(.bottom, 18)
         }
         .frame(width: layout.railWidth)
@@ -526,7 +543,10 @@ struct HomeRecentEventRow: View {
                 .foregroundStyle(Color.appMuted)
             SyncStatusChip(isSynced: event.isSynced)
         }
+        .padding(.horizontal, 12)
         .padding(.vertical, 9)
+        .background(Color.white.opacity(0.001))
+        .imaHover()
     }
 }
 
@@ -572,7 +592,7 @@ struct IMASecondarySidebar: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text(mode == .pendingSync ? "待同步" : "全部记录")
+                    Text(mode.title)
                         .font(.system(size: 16, weight: .bold))
                     Spacer()
                     Text("\(events.count)")
@@ -583,7 +603,7 @@ struct IMASecondarySidebar: View {
                 SmoothSearchField(text: $searchText, placeholder: "搜索文件或路径")
 
                 AppSegmentedControl(
-                    options: MainView.EventTypeFilter.allCases.map { ($0, $0.rawValue) },
+                    options: MainView.EventTypeFilter.allCases.map { ($0, $0.title) },
                     selection: $typeFilter
                 )
                 .frame(maxWidth: .infinity)
@@ -603,6 +623,24 @@ struct IMASecondarySidebar: View {
                         }
                         .buttonStyle(PillButtonStyle(isPrimary: true))
                         .disabled(pendingCount == 0 || isSyncing)
+
+                        Button(action: {
+                            Task {
+                                await FileMonitorService.shared.pullFromRemote()
+                            }
+                        }) {
+                            HStack {
+                                if FileMonitorService.shared.isPulling {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.down.circle.fill")
+                                }
+                                Text("从云端拉取更新")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PillButtonStyle(isPrimary: false))
+                        .disabled(FileMonitorService.shared.isPulling)
 
                         Button(action: markAllPendingSynced) {
                             Label("全部标记完成", systemImage: "checkmark")
@@ -689,9 +727,20 @@ struct IMAEventListRow: View {
                             .lineLimit(1)
                         Spacer()
                         if !event.isSynced {
-                            Circle()
-                                .fill(Color.appAmber)
-                                .frame(width: 6, height: 6)
+                            HStack(spacing: 4) {
+                                if event.remoteId != nil {
+                                    Text("更新")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 1)
+                                        .background(Color.appMint.opacity(0.15))
+                                        .foregroundStyle(Color.appMint)
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                                }
+                                Circle()
+                                    .fill(Color.appAmber)
+                                    .frame(width: 6, height: 6)
+                            }
                         }
                     }
 
@@ -712,6 +761,7 @@ struct IMAEventListRow: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(isSelected ? Color.appSelection : Color.clear)
             )
+            .imaHover()
         }
         .buttonStyle(.plain)
     }
@@ -769,9 +819,9 @@ struct EventDetailView: View {
                             }
 
                             VStack(spacing: 0) {
-                                EventInfoRow(title: "同步状态", value: event.isSynced ? "已同步" : "待同步", color: event.isSynced ? .appMint : .appAmber)
-                                EventInfoRow(title: "记录时间", value: event.timestamp.formatted(date: .abbreviated, time: .shortened))
-                                EventInfoRow(title: "是否目录", value: event.isDirectory ? "目录" : "文件")
+                                EventInfoRow(title: "同步状态", value: event.isSynced ? String(localized: "已同步") : String(localized: "待同步_value"), color: event.isSynced ? .appMint : .appAmber)
+                                EventInfoRow(title: "记录时间", value: event.timestamp.shortActivityTime)
+                                EventInfoRow(title: "是否目录", value: event.isDirectory ? String(localized: "目录") : String(localized: "文件"))
                                 if let oldPath = event.oldPath, !oldPath.isEmpty {
                                     EventInfoRow(title: "原路径", value: oldPath)
                                 }
@@ -842,10 +892,11 @@ extension MainView {
             defer { isSyncing = false }
             do {
                 let kbId = FileMonitorService.shared.getKnowledgeBaseId(for: event.path)
-                try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
+                let remoteId = try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
                 
                 await MainActor.run {
                     event.isSynced = true
+                    event.remoteId = remoteId
                     try? modelContext.save()
                     MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
                 }
@@ -865,10 +916,11 @@ extension MainView {
             for event in targets {
                 do {
                     let kbId = FileMonitorService.shared.getKnowledgeBaseId(for: event.path)
-                    try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
+                    let remoteId = try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
                     
                     await MainActor.run {
                         event.isSynced = true
+                        event.remoteId = remoteId
                         try? modelContext.save()
                         MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
                     }
@@ -901,6 +953,15 @@ extension MainView {
     private func currentUnsyncedCount() -> Int {
         let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
         return (try? modelContext.fetchCount(descriptor)) ?? 0
+    }
+
+    private func setupAutoSyncListener() {
+        FileMonitorService.shared.setupAutoSyncTrigger { event in
+            // 在主线程执行上传，因为它涉及状态更新
+            Task { @MainActor in
+                self.upload(event)
+            }
+        }
     }
 }
 
@@ -946,7 +1007,7 @@ struct EventDetailToolbar: View {
 }
 
 struct EventInfoRow: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: String
     var color: Color = .appInk
 
@@ -1102,5 +1163,35 @@ struct SyncStatusView: View {
 
     var body: some View {
         SyncStatusChip(isSynced: isSynced)
+    }
+}
+
+struct IMARailLanguageButton: View {
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
+    @State private var isHovered = false
+
+    var body: some View {
+        Menu {
+            ForEach(AppLanguage.allCases, id: \.self) { lang in
+                Button {
+                    appLanguage = lang
+                } label: {
+                    Text(lang.title)
+                }
+            }
+        } label: {
+            Image(systemName: "globe")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(Color.appInk.opacity(0.78))
+                .frame(width: 40, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isHovered ? Color.appSurface.opacity(0.9) : Color.clear)
+                )
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("切换语言")
     }
 }

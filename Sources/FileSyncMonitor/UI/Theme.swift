@@ -31,7 +31,7 @@ extension Color {
 }
 
 enum EventVisuals {
-    static func title(for type: String) -> String {
+    static func title(for type: String) -> LocalizedStringKey {
         switch type {
         case "created": return "新增"
         case "modified": return "修改"
@@ -66,7 +66,7 @@ extension Date {
     var shortActivityTime: String {
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
-        formatter.dateFormat = Calendar.current.isDateInToday(self) ? "HH:mm" : "MM/dd HH:mm"
+        formatter.dateFormat = Calendar.current.isDateInToday(self) ? "HH:mm:ss" : "MM/dd HH:mm:ss"
         return formatter.string(from: self)
     }
 }
@@ -88,6 +88,7 @@ extension View {
                     .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
             )
             .shadow(color: Color.appMint.opacity(0.04), radius: 14, x: 0, y: 8)
+            .imaHover()
     }
 
     func appSection() -> some View {
@@ -97,6 +98,10 @@ extension View {
 
     func imaCard() -> some View {
         appCard()
+    }
+
+    func imaHover() -> some View {
+        self.modifier(HoverScale())
     }
 }
 
@@ -208,39 +213,79 @@ struct PillButtonStyle: ButtonStyle {
     var isPrimary: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .semibold))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isPrimary ? Color.appInk : Color.appControl)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(isPrimary ? Color.appInk : Color.appLine.opacity(0.72), lineWidth: 1)
-                    )
-            )
-            .foregroundStyle(isPrimary ? .white : Color.appInk)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .opacity(configuration.isPressed ? 0.86 : 1)
+        PillButtonContent(configuration: configuration, isPrimary: isPrimary)
+    }
+
+    private struct PillButtonContent: View {
+        let configuration: Configuration
+        let isPrimary: Bool
+        @State private var isHovered = false
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(background)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(stroke, lineWidth: 1)
+                        )
+                )
+                .foregroundStyle(isPrimary ? .white : Color.appInk)
+                .scaleEffect(configuration.isPressed ? 0.97 : (isHovered ? 1.02 : 1))
+                .onHover { isHovered = $0 }
+                .animation(.snappy(duration: 0.15), value: isHovered)
+                .animation(.snappy(duration: 0.1), value: configuration.isPressed)
+        }
+
+        private var background: Color {
+            if isPrimary {
+                return configuration.isPressed ? Color.appInk.opacity(0.8) : (isHovered ? Color.appInk.opacity(0.92) : Color.appInk)
+            } else {
+                return configuration.isPressed ? Color.appControlPressed : (isHovered ? Color.appSelection.opacity(0.4) : Color.appControl)
+            }
+        }
+
+        private var stroke: Color {
+            isPrimary ? Color.appInk : (isHovered ? Color.appMint.opacity(0.3) : Color.appLine.opacity(0.72))
+        }
     }
 }
 
 struct QuietButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .semibold))
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(configuration.isPressed ? Color.appControlPressed : Color.appControl.opacity(0.92))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
-                    )
-            )
-            .foregroundStyle(Color.appInk)
+        QuietButtonContent(configuration: configuration)
+    }
+
+    private struct QuietButtonContent: View {
+        let configuration: Configuration
+        @State private var isHovered = false
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 11)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(background)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(Color.appLine.opacity(isHovered ? 0.9 : 0.72), lineWidth: 1)
+                        )
+                )
+                .foregroundStyle(isHovered ? Color.appInk : Color.appInk.opacity(0.85))
+                .scaleEffect(configuration.isPressed ? 0.97 : (isHovered ? 1.02 : 1))
+                .onHover { isHovered = $0 }
+                .animation(.snappy(duration: 0.15), value: isHovered)
+        }
+
+        private var background: Color {
+            configuration.isPressed ? Color.appControlPressed : (isHovered ? Color.appSelection.opacity(0.5) : Color.appControl.opacity(0.92))
+        }
     }
 }
 
@@ -269,7 +314,7 @@ struct EmptyStateView: View {
 
 struct SmoothSearchField: View {
     @Binding var text: String
-    let placeholder: String
+    let placeholder: LocalizedStringKey
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -305,7 +350,7 @@ struct SmoothSearchField: View {
 }
 
 struct StatusPill: View {
-    let text: String
+    let text: LocalizedStringKey
     let symbol: String
     let color: Color
 
@@ -351,7 +396,7 @@ struct AppToggle: View {
 }
 
 struct AppMenuValue: View {
-    let text: String
+    let text: LocalizedStringKey
 
     var body: some View {
         HStack(spacing: 6) {
@@ -375,7 +420,7 @@ struct AppMenuValue: View {
 }
 
 struct AppSegmentedControl<Value: Hashable>: View {
-    let options: [(Value, String)]
+    let options: [(Value, LocalizedStringKey)]
     @Binding var selection: Value
 
     var body: some View {
@@ -454,8 +499,31 @@ struct HoverScale: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isHovered ? 1.01 : 1)
+            .scaleEffect(isHovered ? 1.012 : 1)
+            .shadow(color: isHovered ? Color.appMint.opacity(0.08) : Color.clear, radius: isHovered ? 12 : 0, x: 0, y: 6)
             .onHover { isHovered = $0 }
-            .animation(.easeInOut(duration: 0.12), value: isHovered)
+            .animation(.snappy(duration: 0.22), value: isHovered)
+    }
+}
+
+enum AppLanguage: String, CaseIterable {
+    case system, en, zhHans, zhHant
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .system: "跟随系统"
+        case .en: "English"
+        case .zhHans: "简体中文"
+        case .zhHant: "繁体中文"
+        }
+    }
+
+    var localeIdentifier: String? {
+        switch self {
+        case .system: return nil
+        case .en: return "en"
+        case .zhHans: return "zh-Hans"
+        case .zhHant: return "zh-Hant"
+        }
     }
 }
