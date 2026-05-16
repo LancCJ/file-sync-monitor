@@ -9,6 +9,10 @@ struct SettingsView: View {
     @AppStorage("defaultExportFormat") private var defaultExportFormat = "csv"
     @AppStorage("imaClientId") private var clientId = ""
     @AppStorage("imaApiKey") private var apiKey = ""
+    @AppStorage("enableDefaultIgnoreRules") private var enableDefaultIgnoreRules = true
+    @AppStorage("customIgnoredFileNames") private var customIgnoredFileNames = ""
+    @AppStorage("customIgnoredExtensions") private var customIgnoredExtensions = ""
+    @AppStorage("customIgnoredDirectoryNames") private var customIgnoredDirectoryNames = ""
 
     @State private var isTestingIMA = false
     @State private var imaStatus: IMAStatus = .idle
@@ -62,6 +66,40 @@ struct SettingsView: View {
                             }
                             .buttonStyle(QuietButtonStyle())
                         }
+                    }
+                }
+
+                IMASettingsGroup(title: "忽略规则") {
+                    IMASettingsRow(title: "启用默认忽略规则", subtitle: defaultIgnoreSummary) {
+                        AppToggle(isOn: $enableDefaultIgnoreRules)
+                    }
+
+                    IMASettingsEditorRow(
+                        title: "忽略文件名",
+                        subtitle: "每行一个文件名，例如 .DS_Store 或 debug.log",
+                        text: $customIgnoredFileNames,
+                        placeholder: ".DS_Store\ndebug.log"
+                    )
+
+                    IMASettingsEditorRow(
+                        title: "忽略后缀",
+                        subtitle: "每行一个后缀，例如 .log、.tmp",
+                        text: $customIgnoredExtensions,
+                        placeholder: ".log\n.tmp"
+                    )
+
+                    IMASettingsEditorRow(
+                        title: "忽略目录名",
+                        subtitle: "每行一个目录名，例如 node_modules 或 DerivedData",
+                        text: $customIgnoredDirectoryNames,
+                        placeholder: "node_modules\nDerivedData"
+                    )
+
+                    IMASettingsRow(title: "恢复默认", subtitle: "清空自定义规则，并重新启用默认忽略规则") {
+                        Button(action: resetIgnoreRules) {
+                            Text("恢复")
+                        }
+                        .buttonStyle(QuietButtonStyle())
                     }
                 }
 
@@ -139,6 +177,10 @@ struct SettingsView: View {
         retentionDays == 0 ? "永久" : "\(retentionDays) 天"
     }
 
+    private var defaultIgnoreSummary: String {
+        "过滤 .DS_Store、临时文件、系统目录和常见构建缓存"
+    }
+
     private var imaStatusTitle: String {
         switch imaStatus {
         case .idle: return "未测试"
@@ -188,6 +230,13 @@ struct SettingsView: View {
             }
             isTestingIMA = false
         }
+    }
+
+    private func resetIgnoreRules() {
+        enableDefaultIgnoreRules = true
+        customIgnoredFileNames = ""
+        customIgnoredExtensions = ""
+        customIgnoredDirectoryNames = ""
     }
 }
 
@@ -310,6 +359,46 @@ struct IMASettingsTextRow: View {
     private func pasteFromPasteboard() {
         if let value = NSPasteboard.general.string(forType: .string) {
             text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+}
+
+struct IMASettingsEditorRow: View {
+    let title: String
+    let subtitle: String
+    @Binding var text: String
+    let placeholder: String
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        IMASettingsRow(title: title, subtitle: subtitle) {
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.appMuted.opacity(0.55))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 7)
+                        .allowsHitTesting(false)
+                }
+
+                TextEditor(text: $text)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.appInk)
+                    .scrollContentBackground(.hidden)
+                    .focused($isFocused)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 3)
+            }
+            .frame(width: 380, height: 74)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.appControl.opacity(0.94))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(isFocused ? Color.appMint.opacity(0.65) : Color.appLine.opacity(0.72), lineWidth: 1)
+                    )
+            )
         }
     }
 }

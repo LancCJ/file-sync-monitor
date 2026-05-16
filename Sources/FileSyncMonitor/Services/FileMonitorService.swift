@@ -13,6 +13,11 @@ final class FileMonitorService {
     
     /// 存储书签数据的 Key
     private let bookmarksKey = "monitored_directory_bookmarks"
+
+    private let enableDefaultIgnoreRulesKey = "enableDefaultIgnoreRules"
+    private let customIgnoredFileNamesKey = "customIgnoredFileNames"
+    private let customIgnoredExtensionsKey = "customIgnoredExtensions"
+    private let customIgnoredDirectoryNamesKey = "customIgnoredDirectoryNames"
     
     /// 当前正在监控的目录路径
     private(set) var monitoredPaths: [String] = []
@@ -157,6 +162,11 @@ final class FileMonitorService {
         for i in 0..<numEvents {
             let path = paths[i]
             let flag = eventFlags[i]
+            let isDir = flag & UInt32(kFSEventStreamEventFlagItemIsDir) != 0
+
+            guard !shouldIgnoreEvent(path: path, isDirectory: isDir) else {
+                continue
+            }
             
             // 确定改动类型
             let type: String
@@ -170,8 +180,6 @@ final class FileMonitorService {
                 type = "modified"
             }
             
-            let isDir = flag & UInt32(kFSEventStreamEventFlagItemIsDir) != 0
-            
             let event = FileEvent(path: path, type: type, isDirectory: isDir)
             events.append(event)
         }
@@ -179,5 +187,157 @@ final class FileMonitorService {
         if !events.isEmpty {
             onEventCallback?(events)
         }
+    }
+
+    private func shouldIgnoreEvent(path: String, isDirectory: Bool) -> Bool {
+        let rules = IgnoreRules.load(
+            userDefaults: .standard,
+            enableDefaultKey: enableDefaultIgnoreRulesKey,
+            customFileNamesKey: customIgnoredFileNamesKey,
+            customExtensionsKey: customIgnoredExtensionsKey,
+            customDirectoryNamesKey: customIgnoredDirectoryNamesKey
+        )
+        return rules.matches(path: path, isDirectory: isDirectory)
+    }
+}
+
+struct IgnoreRules {
+    static let defaultFileNames = [
+        ".DS_Store",
+        "Icon\r",
+        ".localized",
+        "Thumbs.db",
+        "desktop.ini"
+    ]
+
+    static let defaultExtensions = [
+        ".tmp",
+        ".temp",
+        ".swp",
+        ".swo",
+        ".part",
+        ".download",
+        ".crdownload"
+    ]
+
+    static let defaultDirectoryNames = [
+        ".Trashes",
+        ".Spotlight-V100",
+        ".fseventsd",
+        ".TemporaryItems",
+        ".git",
+        ".svn",
+        ".hg",
+        "node_modules",
+        ".next",
+        ".nuxt",
+        "dist",
+        "build",
+        ".build",
+        "DerivedData",
+        ".idea",
+        ".vscode",
+        ".swiftpm",
+        ".cache"
+    ]
+
+    private static let defaultFileNamePrefixes = ["~$"]
+
+    let enableDefaultRules: Bool
+    let customFileNames: [String]
+    let customExtensions: [String]
+    let customDirectoryNames: [String]
+
+    static func load(
+        userDefaults: UserDefaults,
+        enableDefaultKey: String,
+        customFileNamesKey: String,
+        customExtensionsKey: String,
+        customDirectoryNamesKey: String
+    ) -> IgnoreRules {
+        let hasDefaultPreference = userDefaults.object(forKey: enableDefaultKey) != nil
+        return IgnoreRules(
+            enableDefaultRules: hasDefaultPreference ? userDefaults.bool(forKey: enableDefaultKey) : true,
+            customFileNames: parseList(userDefaults.string(forKey: customFileNamesKey) ?? ""),
+            customExtensions: parseList(userDefaults.string(forKey: customExtensionsKey) ?? "").map(normalizeExtension),
+            customDirectoryNames: parseList(userDefaults.string(forKey: customDirectoryNamesKey) ?? "")
+        )
+    }
+
+    func matches(path: String, isDirectory: Bool) -> Bool {
+        let url = URL(fileURLWithPath: path)
+        let fileName = url.lastPathComponent
+        let loweredFileName = fileName.lowercased()
+        let loweredComponents = pathComponents(path).map { $0.lowercased() }
+
+        if containsAnyDirectoryName(in: loweredComponents) {
+            return true
+        }
+
+        let fileNames = normalizedFileNames
+        if fileNames.contains(loweredFileName) {
+            return true
+        }
+
+        if enableDefaultRules && Self.defaultFileNamePrefixes.contains(where: { fileName.hasPrefix($0) }) {
+            return true
+        }
+
+        if !isDirectory {
+            let loweredPath = path.lowercased()
+            if normalizedExtensions.contains(where: { loweredPath.hasSuffix($0) }) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private var normalizedFileNames: Set<String> {
+        var names = Set(customFileNames.map { $0.lowercased() })
+        if enableDefaultRules {
+            names.formUnion(Self.defaultFileNames.map { $0.lowercased() })
+        }
+        return names
+    }
+
+    private var normalizedExtensions: Set<String> {
+        var extensions = Set(customExtensions.map(Self.normalizeExtension))
+        if enableDefaultRules {
+            extensions.formUnion(Self.defaultExtensions.map(Self.normalizeExtension))
+        }
+        return extensions
+    }
+
+    private var normalizedDirectoryNames: Set<String> {
+        var names = Set(customDirectoryNames.map { $0.lowercased() })
+        if enableDefaultRules {
+            names.formUnion(Self.defaultDirectoryNames.map { $0.lowercased() })
+        }
+        return names
+    }
+
+    private func containsAnyDirectoryName(in pathComponents: [String]) -> Bool {
+        let directoryNames = normalizedDirectoryNames
+        return pathComponents.contains { directoryNames.contains($0) }
+    }
+
+    private func pathComponents(_ path: String) -> [String] {
+        URL(fileURLWithPath: path).pathComponents.filter { $0 != "/" }
+    }
+
+    private static func parseList(_ value: String) -> [String] {
+        value
+            .split { character in
+                character == "\n" || character == "," || character == ";"
+            }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func normalizeExtension(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return trimmed }
+        return trimmed.hasPrefix(".") ? trimmed : ".\(trimmed)"
     }
 }
