@@ -263,6 +263,25 @@ final class FileMonitorService {
         isPulling = true
         defer { isPulling = false }
         
+        let context = PersistenceController.shared.container.mainContext
+        
+        func getLatestSyncedEvent(for path: String) -> FileEvent? {
+            var descriptor = FetchDescriptor<FileEvent>(
+                predicate: #Predicate<FileEvent> { $0.path == path && $0.remoteId != nil }
+            )
+            descriptor.sortBy = [SortDescriptor(\.timestamp, order: .reverse)]
+            descriptor.fetchLimit = 1
+            return try? context.fetch(descriptor).first
+        }
+        
+        func hasUnsyncedLocalChanges(for path: String) -> Bool {
+            let descriptor = FetchDescriptor<FileEvent>(
+                predicate: #Predicate<FileEvent> { $0.path == path && $0.isSynced == false }
+            )
+            let count = (try? context.fetchCount(descriptor)) ?? 0
+            return count > 0
+        }
+        
         let mapping = pathKnowledgeBaseMapping
         for (localPath, kbId) in mapping {
             guard !kbId.isEmpty && kbId != "default" else { continue }
@@ -271,30 +290,103 @@ final class FileMonitorService {
                 // 1. 获取云端列表
                 let (items, _, _) = try await IMASyncService.shared.getKnowledgeList(knowledgeBaseId: kbId)
                 
-                // 2. 检查本地是否存在
                 let localURL = URL(fileURLWithPath: localPath)
                 for item in items {
                     let fileURL = localURL.appendingPathComponent(item.title)
+                    let filePath = fileURL.path
                     
-                    if !FileManager.default.fileExists(atPath: fileURL.path) {
+                    // 2. 检查本地是否存在
+                    if !FileManager.default.fileExists(atPath: filePath) {
                         // 3. 下载缺失文件
                         print("Sync: Downloading new file from cloud: \(item.title)")
                         try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
                         
                         // 记录一条模拟变动，让 UI 感知
-                        let event = FileEvent(path: fileURL.path, type: "created", isDirectory: false)
+                        let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
                         event.isSynced = true // 标记为已同步
-                        event.remoteId = item.mediaId
-                        
-                        let context = await PersistenceController.shared.makeBackgroundContext()
                         context.insert(event)
                         try? context.save()
+                    } else {
+                        // 本地存在该文件，比对状态
+                        let latestSynced = getLatestSyncedEvent(for: filePath)
+                        let hasUnsynced = hasUnsyncedLocalChanges(for: filePath)
+                        
+                        if let lastRemoteId = latestSynced?.remoteId {
+                            if item.mediaId == lastRemoteId {
+                                // 场景 1: 标识匹配，说明是一样的，无需处理
+                                print("Sync: File identical (mediaId matches): \(item.title)")
+                            } else {
+                                // 标识不匹配，说明云端已被修改！
+                                if hasUnsynced {
+                                    // 场景 2: 发生冲突 (云端已改，本地也有未同步修改)
+                                    print("Sync: CONFLICT detected for \(item.title). Cloud changed and local has unsynced changes.")
+                                    
+                                    // 自动备份本地文件
+                                    let ext = fileURL.pathExtension
+                                    let baseName = fileURL.deletingPathExtension().lastPathComponent
+                                    let timestamp = Int(Date().timeIntervalSince1970)
+                                    let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
+                                    let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
+                                    
+                                    try? FileManager.default.moveItem(at: fileURL, to: backupURL)
+                                    
+                                    // 记录一条本地备份事件，让用户在界面知晓
+                                    let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
+                                    backupEvent.isSynced = true
+                                    context.insert(backupEvent)
+                                    
+                                    // 下载云端最新版本覆盖原路径
+                                    try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                                    
+                                    // 记录同步覆写的修改事件
+                                    let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
+                                    event.isSynced = true
+                                    context.insert(event)
+                                    try? context.save()
+                                } else {
+                                    // 场景 3: 干净覆写 (云端已改，本地无修改)
+                                    print("Sync: Safe pull (cloud updated, local untouched) for \(item.title)")
+                                    try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                                    
+                                    let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
+                                    event.isSynced = true
+                                    context.insert(event)
+                                    try? context.save()
+                                }
+                            }
+                        } else {
+                            // 场景 4: 本地存在此同名文件，但没有云端关联记录 (可能用户手动创建了同名文件)
+                            print("Sync: File exists locally but has no remoteId record. Treating as conflict.")
+                            let ext = fileURL.pathExtension
+                            let baseName = fileURL.deletingPathExtension().lastPathComponent
+                            let timestamp = Int(Date().timeIntervalSince1970)
+                            let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
+                            let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
+                            
+                            try? FileManager.default.moveItem(at: fileURL, to: backupURL)
+                            
+                            let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
+                            backupEvent.isSynced = true
+                            context.insert(backupEvent)
+                            
+                            try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                            
+                            let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
+                            event.isSynced = true
+                            context.insert(event)
+                            try? context.save()
+                        }
                     }
                 }
             } catch {
                 print("Pull from remote failed for \(localPath): \(error)")
             }
         }
+        
+        // 更新菜单栏 Badge
+        let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
+        let unsyncedCount = (try? context.fetchCount(descriptor)) ?? 0
+        MenuBarManager.shared.updateBadge(count: unsyncedCount)
     }
 
     // MARK: - Auto Sync Logic
