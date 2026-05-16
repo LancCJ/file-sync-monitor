@@ -927,7 +927,18 @@ struct IMASecondarySidebar: View {
 
                         Button(action: {
                             Task {
-                                await FileMonitorService.shared.pullFromRemote()
+                                await FileMonitorService.shared.pullFromRemote(confirmDownloadForDeleted: { urls in
+                                    let alert = NSAlert()
+                                    alert.messageText = "检测到本地已删除的云端文件".appLocalized
+                                    let fileListString = urls.map { $0.lastPathComponent }.joined(separator: "\n")
+                                    alert.informativeText = String(format: "以下文件已被本地删除，但云端仍然存在：\n\n%@\n\n是否重新下载拉回到本地目录？".appLocalized, fileListString)
+                                    alert.alertStyle = .informational
+                                    alert.addButton(withTitle: "重新拉回本地".appLocalized)
+                                    alert.addButton(withTitle: "保持本地删除状态".appLocalized)
+                                    
+                                    let response = alert.runModal()
+                                    return response == .alertFirstButtonReturn
+                                })
                             }
                         }) {
                             HStack {
@@ -1253,6 +1264,24 @@ extension MainView {
         isSyncing = true
         Task {
             defer { isSyncing = false }
+            
+            // 如果是删除类型的事件，无需上传文件（防止因找不到本地文件而闪退/报错）
+            if event.type == "deleted" {
+                await MainActor.run {
+                    event.isSynced = true
+                    try? modelContext.save()
+                    MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
+                }
+                
+                let alert = NSAlert()
+                alert.messageText = "已同步本地删除状态".appLocalized
+                alert.informativeText = "该文件已在本地标记为“已同步”。\n由于腾讯 IMA 官方目前未开放删除云端文档的 API，如需完全移出云端文档，请前往 IMA 客户端或网页版手动删除该文档，以保持云端一致。".appLocalized
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "我知道了".appLocalized)
+                alert.runModal()
+                return
+            }
+            
             do {
                 let kbId = FileMonitorService.shared.getKnowledgeBaseId(for: event.path)
                 let remoteId = try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
@@ -1277,7 +1306,19 @@ extension MainView {
         isSyncing = true
         Task {
             defer { isSyncing = false }
+            var hasDeletedEvent = false
+            
             for event in targets {
+                if event.type == "deleted" {
+                    hasDeletedEvent = true
+                    await MainActor.run {
+                        event.isSynced = true
+                        try? modelContext.save()
+                        MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
+                    }
+                    continue
+                }
+                
                 do {
                     let kbId = FileMonitorService.shared.getKnowledgeBaseId(for: event.path)
                     let remoteId = try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
@@ -1290,6 +1331,17 @@ extension MainView {
                     }
                 } catch {
                     print("Batch sync failed for \(event.fileName): \(error)")
+                }
+            }
+            
+            if hasDeletedEvent {
+                await MainActor.run {
+                    let alert = NSAlert()
+                    alert.messageText = "已同步全部变动（包含删除事件）".appLocalized
+                    alert.informativeText = "部分本地删除的文件已在 App 内标记为“已同步”。\n由于腾讯 IMA 官方目前未开放删除云端文档的 API，如需完全移出云端文档，请前往 IMA 客户端或网页版手动删除对应文档。".appLocalized
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "我知道了".appLocalized)
+                    alert.runModal()
                 }
             }
         }

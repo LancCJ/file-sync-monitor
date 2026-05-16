@@ -258,7 +258,7 @@ final class FileMonitorService {
 
     /// 从云端拉取更新（双向同步核心尝试）
     @MainActor
-    func pullFromRemote() async {
+    func pullFromRemote(confirmDownloadForDeleted: (([URL]) async -> Bool)? = nil) async {
         guard !isPulling else { return }
         isPulling = true
         defer { isPulling = false }
@@ -282,7 +282,17 @@ final class FileMonitorService {
             return count > 0
         }
         
+        func hasLocalDeletionRecord(for path: String) -> Bool {
+            let descriptor = FetchDescriptor<FileEvent>(
+                predicate: #Predicate<FileEvent> { $0.path == path && $0.type == "deleted" }
+            )
+            let count = (try? context.fetchCount(descriptor)) ?? 0
+            return count > 0
+        }
+        
+        var deletedFilesToPull: [(url: URL, mediaId: String)] = []
         let mapping = pathKnowledgeBaseMapping
+        
         for (localPath, kbId) in mapping {
             guard !kbId.isEmpty && kbId != "default" else { continue }
             
@@ -297,15 +307,21 @@ final class FileMonitorService {
                     
                     // 2. 检查本地是否存在
                     if !FileManager.default.fileExists(atPath: filePath) {
-                        // 3. 下载缺失文件
-                        print("Sync: Downloading new file from cloud: \(item.title)")
-                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
-                        
-                        // 记录一条模拟变动，让 UI 感知
-                        let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
-                        event.isSynced = true // 标记为已同步
-                        context.insert(event)
-                        try? context.save()
+                        // 3. 检查是否有本地删除记录
+                        if hasLocalDeletionRecord(for: filePath) {
+                            // 暂存，稍后统一确认
+                            deletedFilesToPull.append((fileURL, item.mediaId))
+                            print("Sync: Found locally deleted file still on cloud (pending choice): \(item.title)")
+                        } else {
+                            // 无删除记录，安全直接下载
+                            print("Sync: Downloading new file from cloud: \(item.title)")
+                            try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                            
+                            let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
+                            event.isSynced = true
+                            context.insert(event)
+                            try? context.save()
+                        }
                     } else {
                         // 本地存在该文件，比对状态
                         let latestSynced = getLatestSyncedEvent(for: filePath)
@@ -313,15 +329,11 @@ final class FileMonitorService {
                         
                         if let lastRemoteId = latestSynced?.remoteId {
                             if item.mediaId == lastRemoteId {
-                                // 场景 1: 标识匹配，说明是一样的，无需处理
                                 print("Sync: File identical (mediaId matches): \(item.title)")
                             } else {
-                                // 标识不匹配，说明云端已被修改！
                                 if hasUnsynced {
-                                    // 场景 2: 发生冲突 (云端已改，本地也有未同步修改)
                                     print("Sync: CONFLICT detected for \(item.title). Cloud changed and local has unsynced changes.")
                                     
-                                    // 自动备份本地文件
                                     let ext = fileURL.pathExtension
                                     let baseName = fileURL.deletingPathExtension().lastPathComponent
                                     let timestamp = Int(Date().timeIntervalSince1970)
@@ -330,21 +342,17 @@ final class FileMonitorService {
                                     
                                     try? FileManager.default.moveItem(at: fileURL, to: backupURL)
                                     
-                                    // 记录一条本地备份事件，让用户在界面知晓
                                     let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
                                     backupEvent.isSynced = true
                                     context.insert(backupEvent)
                                     
-                                    // 下载云端最新版本覆盖原路径
                                     try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
                                     
-                                    // 记录同步覆写的修改事件
                                     let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
                                     event.isSynced = true
                                     context.insert(event)
                                     try? context.save()
                                 } else {
-                                    // 场景 3: 干净覆写 (云端已改，本地无修改)
                                     print("Sync: Safe pull (cloud updated, local untouched) for \(item.title)")
                                     try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
                                     
@@ -355,7 +363,6 @@ final class FileMonitorService {
                                 }
                             }
                         } else {
-                            // 场景 4: 本地存在此同名文件，但没有云端关联记录 (可能用户手动创建了同名文件)
                             print("Sync: File exists locally but has no remoteId record. Treating as conflict.")
                             let ext = fileURL.pathExtension
                             let baseName = fileURL.deletingPathExtension().lastPathComponent
@@ -380,6 +387,35 @@ final class FileMonitorService {
                 }
             } catch {
                 print("Pull from remote failed for \(localPath): \(error)")
+            }
+        }
+        
+        // 3. 统一处理本地已删除的云端文件确认
+        if !deletedFilesToPull.isEmpty {
+            var shouldDownload = false
+            if let confirmCallback = confirmDownloadForDeleted {
+                shouldDownload = await confirmCallback(deletedFilesToPull.map { $0.url })
+            } else {
+                // 无回调（如背景/自动拉取）则静默跳过，保留本地删除状态
+                shouldDownload = false
+            }
+            
+            if shouldDownload {
+                for item in deletedFilesToPull {
+                    do {
+                        print("Sync: Re-downloading locally deleted file: \(item.url.lastPathComponent)")
+                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: item.url)
+                        
+                        let event = FileEvent(path: item.url.path, type: "created", isDirectory: false, remoteId: item.mediaId)
+                        event.isSynced = true
+                        context.insert(event)
+                    } catch {
+                        print("Failed to re-download \(item.url.lastPathComponent): \(error)")
+                    }
+                }
+                try? context.save()
+            } else {
+                print("Sync: User or system chose to keep local deletion. Skipped pulling \(deletedFilesToPull.count) files.")
             }
         }
         
