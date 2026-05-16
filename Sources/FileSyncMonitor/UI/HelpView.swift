@@ -52,8 +52,8 @@ struct HelpView: View {
                             color: .appViolet, 
                             imageName: "help-sync",
                             items: [
-                                ("双向拉取尝试", "点击「从云端拉取更新」，即可智能识别并下载知识库中的新文件到本地。"),
-                                ("自动化推送流程", "开启自动同步后，应用会在您保存文件 30 秒后自动完成云端备份。"),
+                                ("双向拉取与删除决策", "点击「从云端拉取更新」以合并云端更改。若本地已被删除的文件仍存于云端，会弹框提示您选择重新拉回或保持本地删除。"),
+                                ("自动推送与删除同步", "开启自动同步后 30 秒自动完成云端备份。对于本地删除事件，应用会自动标记同步成功，并指引您手动清理云端以实现双向一致。"),
                                 ("智能状态合并", "系统会自动合并同一文件的多次连续操作。例如「新建后编辑」仍记为新建，「多次编辑」仅保留最新修改，从而大幅减少同步冗余。")
                             ]
                         )
@@ -185,7 +185,7 @@ struct AboutCard: View {
                     .foregroundStyle(Color.appInk)
                 
                 HStack(spacing: 12) {
-                    Text("Version 1.1.0 Professional")
+                    Text("Version 1.2.0 Professional")
                         .font(.system(size: 13, weight: .bold))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -193,7 +193,7 @@ struct AboutCard: View {
                         .foregroundStyle(Color.appMint)
                         .clipShape(Capsule())
                     
-                    Text("Build 20260516.Release")
+                    Text("Build 20260517.Release")
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(Color.appMuted)
                 }
