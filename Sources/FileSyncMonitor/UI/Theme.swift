@@ -2,33 +2,93 @@ import SwiftUI
 import AppKit
 
 extension Color {
-    static let appAccent = Color(red: 34 / 255, green: 36 / 255, blue: 38 / 255)
-    static let appAccentSoft = Color(red: 234 / 255, green: 245 / 255, blue: 239 / 255)
-    static let appInk = Color(red: 29 / 255, green: 31 / 255, blue: 34 / 255)
-    static let appMuted = Color(red: 119 / 255, green: 124 / 255, blue: 132 / 255)
-    static let appMint = Color(red: 0 / 255, green: 173 / 255, blue: 111 / 255)
-    static let appAmber = Color(red: 233 / 255, green: 146 / 255, blue: 47 / 255)
-    static let appRose = Color(red: 219 / 255, green: 78 / 255, blue: 95 / 255)
-    static let appViolet = Color(red: 104 / 255, green: 102 / 255, blue: 232 / 255)
-    static let appCanvas = Color(red: 247 / 255, green: 247 / 255, blue: 247 / 255)
-    static let appCanvasTop = Color(red: 250 / 255, green: 250 / 255, blue: 250 / 255)
-    static let appGlowBlue = Color(red: 242 / 255, green: 247 / 255, blue: 247 / 255)
-    static let appGlowLime = Color(red: 234 / 255, green: 245 / 255, blue: 239 / 255)
-    static let appPanel = Color.white
-    static let appSurface = Color(red: 252 / 255, green: 254 / 255, blue: 252 / 255)
-    static let appSurfaceSoft = Color(red: 246 / 255, green: 252 / 255, blue: 247 / 255)
-    static let appControl = Color(red: 249 / 255, green: 253 / 255, blue: 250 / 255)
-    static let appControlPressed = Color(red: 239 / 255, green: 249 / 255, blue: 242 / 255)
-    static let appPanelSoft = Color.appSurfaceSoft
-    static let appLine = Color(red: 220 / 255, green: 232 / 255, blue: 224 / 255)
-    static let appSelection = Color(red: 234 / 255, green: 245 / 255, blue: 239 / 255)
+    init(light: Color, dark: Color) {
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+                return NSColor(dark)
+            } else {
+                return NSColor(light)
+            }
+        })
+    }
+    
+    // 主色调
+    static var appMint: Color { Color(red: 0 / 255, green: 173 / 255, blue: 111 / 255) }
+    static var appAmber: Color { Color(red: 233 / 255, green: 146 / 255, blue: 47 / 255) }
+    static var appRose: Color { Color(red: 219 / 255, green: 78 / 255, blue: 95 / 255) }
+    static var appViolet: Color { Color(red: 104 / 255, green: 102 / 255, blue: 232 / 255) }
 
-    // Backwards-compatible names used by older views.
-    static let tencentBlue = Color.appAccent
-    static let tencentLightBlue = Color.appAccentSoft
-    static let imaBackground = Color.appCanvas
-    static let successGreen = Color.appMint
-    static let warningOrange = Color.appAmber
+    // 动态文字颜色
+    static var appInk: Color {
+        Color(
+            light: Color(red: 29 / 255, green: 31 / 255, blue: 34 / 255),
+            dark: Color(red: 220 / 255, green: 225 / 255, blue: 235 / 255)
+        )
+    }
+    static var appMuted: Color {
+        Color(
+            light: Color(red: 119 / 255, green: 124 / 255, blue: 132 / 255),
+            dark: Color(red: 120 / 255, green: 130 / 255, blue: 145 / 255)
+        )
+    }
+
+    // 动态背景颜色 - 深色模式使用更有深度的星空灰 (Deep Slate)
+    static var appCanvas: Color {
+        Color(
+            light: Color(red: 247 / 255, green: 247 / 255, blue: 247 / 255),
+            dark: Color(red: 18 / 255, green: 19 / 255, blue: 21 / 255)
+        )
+    }
+    static var appSurface: Color {
+        Color(
+            light: Color(red: 252 / 255, green: 254 / 255, blue: 252 / 255),
+            dark: Color(red: 28 / 255, green: 30 / 255, blue: 33 / 255)
+        )
+    }
+    static var appPanel: Color {
+        Color(
+            light: .white,
+            dark: Color(red: 32 / 255, green: 34 / 255, blue: 38 / 255)
+        )
+    }
+    
+    static var appControl: Color {
+        Color(
+            light: Color(red: 249 / 255, green: 253 / 255, blue: 250 / 255),
+            dark: Color(red: 40 / 255, green: 42 / 255, blue: 46 / 255)
+        )
+    }
+    static var appControlPressed: Color {
+        Color(
+            light: Color(red: 239 / 255, green: 249 / 255, blue: 242 / 255),
+            dark: Color(red: 50 / 255, green: 55 / 255, blue: 60 / 255)
+        )
+    }
+
+    // 动态线条与装饰
+    static var appLine: Color {
+        Color(
+            light: Color(red: 220 / 255, green: 232 / 255, blue: 224 / 255),
+            dark: Color(red: 255 / 255, green: 255 / 255, blue: 255 / 255).opacity(0.08)
+        )
+    }
+    static var appSelection: Color {
+        Color(
+            light: Color(red: 234 / 255, green: 245 / 255, blue: 239 / 255),
+            dark: Color(red: 0 / 255, green: 173 / 255, blue: 111 / 255).opacity(0.12)
+        )
+    }
+
+    // 辅助色
+    static var appAccentSoft: Color { Color(light: Color(red: 234/255, green: 245/255, blue: 239/255), dark: Color(red: 35/255, green: 45/255, blue: 40/255)) }
+    static var appSurfaceSoft: Color { Color(light: Color(red: 246/255, green: 252/255, blue: 247/255), dark: Color(red: 30/255, green: 32/255, blue: 34/255)) }
+
+    // 旧名称兼容
+    static var appAccent: Color { Color.appInk }
+    static var tencentBlue: Color { Color.appInk }
+    static var imaBackground: Color { Color.appCanvas }
+    static var successGreen: Color { Color.appMint }
+    static var warningOrange: Color { Color.appAmber }
 }
 
 enum EventVisuals {
@@ -217,14 +277,18 @@ private final class AppLocalization {
 }
 
 struct IMAWindowBackground: View {
+    @Environment(\.colorScheme) var scheme
     var body: some View {
-        SoftAtmosphereBackground(base: Color(red: 253 / 255, green: 254 / 255, blue: 253 / 255), intensity: 1)
+        SoftAtmosphereBackground(base: Color.appCanvas, intensity: 1)
+            .id(scheme) // 强制刷新
     }
 }
 
 struct IMAClientSurfaceBackground: View {
+    @Environment(\.colorScheme) var scheme
     var body: some View {
-        SoftAtmosphereBackground(base: Color.white, intensity: 0.72)
+        SoftAtmosphereBackground(base: Color.appPanel, intensity: 0.6)
+            .id(scheme) // 强制刷新
     }
 }
 
@@ -238,31 +302,12 @@ private struct SoftAtmosphereBackground: View {
 
             LinearGradient(
                 colors: [
-                    Color(red: 235 / 255, green: 252 / 255, blue: 252 / 255).opacity(0.58 * intensity),
-                    Color.white.opacity(0.18),
-                    Color(red: 239 / 255, green: 255 / 255, blue: 218 / 255).opacity(0.86 * intensity)
+                    Color(light: Color(red: 235/255, green: 252/255, blue: 252/255), dark: Color(red: 30/255, green: 45/255, blue: 45/255)).opacity(0.5 * intensity),
+                    base.opacity(0.1),
+                    Color(light: Color(red: 239/255, green: 255/255, blue: 218/255), dark: Color(red: 35/255, green: 40/255, blue: 30/255)).opacity(0.6 * intensity)
                 ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-
-            LinearGradient(
-                colors: [
-                    Color.clear,
-                    Color(red: 250 / 255, green: 255 / 255, blue: 231 / 255).opacity(0.72 * intensity),
-                    Color(red: 230 / 255, green: 250 / 255, blue: 244 / 255).opacity(0.46 * intensity)
-                ],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.86),
-                    Color.clear
-                ],
-                startPoint: .top,
-                endPoint: .center
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
         }
     }
@@ -392,6 +437,7 @@ struct PillButtonStyle: ButtonStyle {
                                 .stroke(stroke, lineWidth: 1)
                         )
                 )
+                .contentShape(Rectangle())
                 .foregroundStyle(isPrimary ? .white : Color.appInk)
                 .scaleEffect(configuration.isPressed ? 0.98 : 1)
                 .onHover { isHovered = $0 }
@@ -435,6 +481,7 @@ struct QuietButtonStyle: ButtonStyle {
                                 .stroke(Color.appLine.opacity(isHovered ? 0.9 : 0.72), lineWidth: 1)
                         )
                 )
+                .contentShape(Rectangle())
                 .foregroundStyle(isHovered ? Color.appInk : Color.appInk.opacity(0.85))
                 .scaleEffect(configuration.isPressed ? 0.98 : 1)
                 .onHover { isHovered = $0 }
@@ -555,25 +602,45 @@ struct AppToggle: View {
 
 struct AppMenuValue: View {
     let text: String
+    var icon: String? = nil
+    @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.appMint)
+            }
+            
             LocalizedText(text)
                 .font(.system(size: 12, weight: .semibold))
-            Image(systemName: "chevron.down")
-                .font(.system(size: 9, weight: .bold))
+                .lineLimit(1)
+            
+            Spacer(minLength: 0)
+            
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(Color.appMuted.opacity(0.8))
         }
         .padding(.horizontal, 10)
         .frame(height: 30)
         .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.appControl.opacity(0.9))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
-                )
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.appSurface)
+                
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isHovered ? Color.appMint.opacity(0.06) : Color.clear)
+            }
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(isHovered ? Color.appMint.opacity(0.32) : Color.appLine.opacity(0.72), lineWidth: 1)
+        )
+        .shadow(color: Color.appInk.opacity(isHovered ? 0.08 : 0.04), radius: isHovered ? 6 : 2, x: 0, y: isHovered ? 2 : 1)
         .foregroundStyle(Color.appInk)
+        .onHover { isHovered = $0 }
     }
 }
 

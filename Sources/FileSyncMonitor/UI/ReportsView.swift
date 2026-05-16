@@ -70,22 +70,31 @@ struct ReportsView: View {
             .padding(.horizontal, 30)
             .padding(.vertical, 22)
 
-            Divider()
+            Rectangle()
+                .fill(Color.appLine)
+                .frame(height: 1)
 
             ScrollView {
-                VStack(spacing: 18) {
+                VStack(spacing: 20) {
+                    // Top Metric Cards
                     HStack(spacing: 12) {
                         SimpleReportCard(title: "记录", value: stats.total, icon: "list.bullet.rectangle", color: .appAccent)
                         SimpleReportCard(title: "待同步", value: stats.pending, icon: "clock", color: stats.pending == 0 ? .appMint : .appAmber)
                         SimpleReportCard(title: "已完成", value: stats.synced, icon: "checkmark", color: .appMint)
                     }
 
-                    HStack(alignment: .top, spacing: 18) {
-                        ReportBreakdown(stats: stats)
-                        ReportExportPanel(events: scopedEvents)
-                    }
+                    HStack(alignment: .top, spacing: 20) {
+                        // Left: Main Content (Recent Records)
+                        RecentReportEvents(events: Array(scopedEvents.prefix(15)))
+                            .frame(maxWidth: .infinity)
 
-                    RecentReportEvents(events: Array(scopedEvents.prefix(6)))
+                        // Right: Sidebar (Breakdown + Export)
+                        VStack(spacing: 20) {
+                            ReportBreakdown(stats: stats)
+                            ReportExportPanel(events: scopedEvents)
+                        }
+                        .frame(width: 260)
+                    }
                 }
                 .padding(30)
             }
@@ -199,7 +208,6 @@ private struct ReportExportPanel: View {
                 .buttonStyle(QuietButtonStyle())
             }
         }
-        .frame(width: 280)
     }
 
     private func export(format: ExportService.ExportFormat) {

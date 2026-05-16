@@ -140,13 +140,44 @@ final class FileMonitorService {
                     )
                     descriptor.fetchLimit = 1
                     
-                    let targetEvent: FileEvent
                     if let existing = try? context.fetch(descriptor).first {
-                        // 如果存在，合并更新
-                        existing.timestamp = event.timestamp
-                        existing.type = event.type
-                        existing.isDirectory = event.isDirectory
-                        targetEvent = existing
+                        // --- 核心状态合并逻辑 ---
+                        let oldType = existing.type
+                        let newType = event.type
+                        
+                        var shouldDelete = false
+                        if oldType == "created" {
+                            if newType == "deleted" {
+                                shouldDelete = true
+                            } else {
+                                existing.timestamp = event.timestamp
+                            }
+                        } else if oldType == "modified" {
+                            if newType == "deleted" {
+                                existing.type = "deleted"
+                                existing.timestamp = event.timestamp
+                            } else {
+                                existing.timestamp = event.timestamp
+                            }
+                        } else if oldType == "deleted" {
+                            if newType == "created" {
+                                existing.type = "modified"
+                                existing.timestamp = event.timestamp
+                            } else {
+                                existing.timestamp = event.timestamp
+                            }
+                        } else {
+                            existing.type = newType
+                            existing.timestamp = event.timestamp
+                        }
+                        
+                        if shouldDelete {
+                            context.delete(existing)
+                            continue
+                        }
+                        
+                        // 触发自动同步计时器
+                        self.resetSyncTimer(for: existing)
                     } else {
                         // 2. 如果是新记录，尝试从最近一次“已同步”的记录中继承 remoteId
                         var syncedDescriptor = FetchDescriptor<FileEvent>(
@@ -160,13 +191,11 @@ final class FileMonitorService {
                         }
                         
                         context.insert(event)
-                        targetEvent = event
-                        // 仅对新变动发送通知
+                        // 仅对新产生的变动发送通知
                         NotificationManager.shared.sendFileEventNotification(event: event)
+                        // 触发自动同步计时器
+                        self.resetSyncTimer(for: event)
                     }
-                    
-                    // 3. 处理自动同步计时器
-                    self.resetSyncTimer(for: targetEvent)
                 }
                 try? context.save()
             }
