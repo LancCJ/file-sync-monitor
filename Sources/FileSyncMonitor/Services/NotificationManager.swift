@@ -26,14 +26,14 @@ final class NotificationManager {
         
         // 如果用户关闭了通知，则不发送
         let content = UNMutableNotificationContent()
-        content.title = String(localized: "检测到文件改动")
+        content.title = "检测到文件改动".appLocalized
         
         var typeString: String
         switch event.type {
-        case "created": typeString = String(localized: "创建")
-        case "modified": typeString = String(localized: "修改")
-        case "deleted": typeString = String(localized: "删除")
-        case "renamed": typeString = String(localized: "重命名")
+        case "created": typeString = "创建".appLocalized
+        case "modified": typeString = "修改".appLocalized
+        case "deleted": typeString = "删除".appLocalized
+        case "renamed": typeString = "重命名".appLocalized
         default: typeString = event.type
         }
         

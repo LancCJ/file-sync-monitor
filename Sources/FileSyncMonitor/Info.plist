@@ -6,6 +6,8 @@
 	<string>com.filesyncmonitor.app</string>
 	<key>CFBundleName</key>
 	<string>FileSyncMonitor</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>LSUIElement</key>

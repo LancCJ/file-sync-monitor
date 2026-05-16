@@ -13,12 +13,24 @@ final class MenuBarManager: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: "FileSyncMonitor")
+            button.image = makeStatusBarImage()
             button.imagePosition = .imageLeft
             updateBadge(count: 0)
         }
 
         setupMenu()
+    }
+
+    private func makeStatusBarImage() -> NSImage? {
+        if let url = Bundle.module.url(forResource: "AppMenuBarIcon", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            image.size = NSSize(width: 18, height: 18)
+            image.isTemplate = false
+            image.accessibilityDescription = "FileSyncMonitor"
+            return image
+        }
+
+        return NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: "FileSyncMonitor")
     }
 
     func updateBadge(count: Int) {
@@ -37,6 +49,10 @@ final class MenuBarManager: NSObject {
         }
     }
 
+    func refreshMenu() {
+        setupMenu()
+    }
+
     private func setupMenu() {
         let menu = NSMenu()
 
@@ -48,13 +64,14 @@ final class MenuBarManager: NSObject {
                 .foregroundColor: NSColor.labelColor
             ]
         )
+        headerItem.image = makeStatusBarImage()
         headerItem.isEnabled = false
         menu.addItem(headerItem)
 
         let statusMenuItem = NSMenuItem()
         let unsyncedCount = getUnsyncedCount()
         statusMenuItem.attributedTitle = NSAttributedString(
-            string: unsyncedCount > 0 ? "\(unsyncedCount) 条待同步" : "没有待同步文件",
+            string: unsyncedCount > 0 ? String(format: "条待同步_format".appLocalized, unsyncedCount) : "没有待同步文件".appLocalized,
             attributes: [
                 .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: NSColor.secondaryLabelColor
@@ -67,7 +84,7 @@ final class MenuBarManager: NSObject {
 
         for event in getRecentUnsyncedEvents() {
             let item = NSMenuItem(
-                title: "\(eventTypeLabel(event.type)) · \(event.fileName)",
+            title: "\(eventTypeLabel(event.type)) · \(event.fileName)",
                 action: #selector(markMenuEventSynced(_:)),
                 keyEquivalent: ""
             )
@@ -82,7 +99,7 @@ final class MenuBarManager: NSObject {
         }
 
         let openItem = NSMenuItem(
-            title: "打开待同步文件",
+            title: "打开待同步文件".appLocalized,
             action: #selector(openMainWindow),
             keyEquivalent: "m"
         )
@@ -93,7 +110,7 @@ final class MenuBarManager: NSObject {
         menu.addItem(NSMenuItem.separator())
 
         let syncItem = NSMenuItem(
-            title: "全部完成",
+            title: "全部标记完成".appLocalized,
             action: #selector(syncAll),
             keyEquivalent: "s"
         )
@@ -101,26 +118,10 @@ final class MenuBarManager: NSObject {
         syncItem.image = NSImage(systemSymbolName: "checkmark.circle", accessibilityDescription: nil)
         menu.addItem(syncItem)
 
-        let exportMenu = NSMenu(title: "导出")
-        let csvItem = NSMenuItem(title: "导出 CSV...", action: #selector(exportCSV), keyEquivalent: "")
-        csvItem.target = self
-        csvItem.image = NSImage(systemSymbolName: "tablecells", accessibilityDescription: nil)
-        exportMenu.addItem(csvItem)
-
-        let jsonItem = NSMenuItem(title: "导出 JSON...", action: #selector(exportJSON), keyEquivalent: "")
-        jsonItem.target = self
-        jsonItem.image = NSImage(systemSymbolName: "curlybraces", accessibilityDescription: nil)
-        exportMenu.addItem(jsonItem)
-
-        let exportItem = NSMenuItem(title: "导出", action: nil, keyEquivalent: "")
-        exportItem.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: nil)
-        exportItem.submenu = exportMenu
-        menu.addItem(exportItem)
-
         menu.addItem(NSMenuItem.separator())
 
         let settingsItem = NSMenuItem(
-            title: "设置...",
+            title: "设置...".appLocalized,
             action: #selector(openSettings),
             keyEquivalent: ","
         )
@@ -132,10 +133,11 @@ final class MenuBarManager: NSObject {
 
         // Quit
         let quitItem = NSMenuItem(
-            title: "退出",
-            action: #selector(NSApplication.terminate(_:)),
+            title: "退出".appLocalized,
+            action: #selector(confirmQuit),
             keyEquivalent: "q"
         )
+        quitItem.target = self
         quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         menu.addItem(quitItem)
 
@@ -170,6 +172,19 @@ final class MenuBarManager: NSObject {
         }
     }
 
+    @objc private func confirmQuit() {
+        let alert = NSAlert()
+        alert.messageText = "确定退出 FileSyncMonitor？".appLocalized
+        alert.informativeText = "退出后将停止监控文件变动和自动同步。".appLocalized
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "退出".appLocalized)
+        alert.addButton(withTitle: "取消".appLocalized)
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSApp.terminate(nil)
+        }
+    }
+
     @objc private func markMenuEventSynced(_ sender: NSMenuItem) {
         guard let idString = sender.representedObject as? String,
               let id = UUID(uuidString: idString) else { return }
@@ -184,33 +199,6 @@ final class MenuBarManager: NSObject {
             let count = getUnsyncedCount()
             updateBadge(count: count)
             setupMenu()
-        }
-    }
-
-    @objc private func exportCSV() {
-        export(format: .csv)
-    }
-
-    @objc private func exportJSON() {
-        export(format: .json)
-    }
-
-    private func export(format: ExportService.ExportFormat) {
-        let context = PersistenceController.shared.makeBackgroundContext()
-        let descriptor = FetchDescriptor<FileEvent>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
-        guard let events = try? context.fetch(descriptor) else { return }
-
-        do {
-            let data = try ExportService.shared.export(events: events, format: format)
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [format == .csv ? .commaSeparatedText : .json]
-            panel.nameFieldStringValue = "Export_\(Int(Date().timeIntervalSince1970)).\(format == .csv ? "csv" : "json")"
-
-            if panel.runModal() == .OK, let url = panel.url {
-                try data.write(to: url)
-            }
-        } catch {
-            print("Export failed: \(error)")
         }
     }
 
@@ -232,11 +220,11 @@ final class MenuBarManager: NSObject {
 
     private func eventTypeLabel(_ type: String) -> String {
         switch type {
-        case "created": return "新增"
-        case "modified": return "修改"
-        case "deleted": return "删除"
-        case "renamed": return "重命名"
-        default: return "变动"
+        case "created": return "新增".appLocalized
+        case "modified": return "修改".appLocalized
+        case "deleted": return "删除".appLocalized
+        case "renamed": return "重命名".appLocalized
+        default: return "变动".appLocalized
         }
     }
 

@@ -12,9 +12,9 @@ struct IMALogView: View {
                         Image(systemName: "doc.text.magnifyingglass")
                             .font(.system(size: 40))
                             .foregroundStyle(.secondary)
-                        Text("暂无日志记录")
+                        LocalizedText("暂无日志记录")
                             .font(.headline)
-                        Text("所有的 IMA 接口请求和响应详情都会记录在这里")
+                        LocalizedText("所有的 IMA 接口请求和响应详情都会记录在这里")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -26,13 +26,13 @@ struct IMALogView: View {
                     }
                 }
             }
-            .navigationTitle("IMA 请求日志")
+            .navigationTitle("IMA 请求日志".appLocalized)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button("关闭".appLocalized) { dismiss() }
                 }
                 ToolbarItem(placement: .destructiveAction) {
-                    Button("清空") { logService.clear() }
+                    Button("清空".appLocalized) { logService.clear() }
                 }
             }
         }
@@ -108,7 +108,11 @@ struct LogEntryRow: View {
                     }
                     
                     Button(action: { copyFullLog(entry) }) {
-                        Label("复制完整日志详情", systemImage: "doc.on.doc")
+                        Label {
+                            LocalizedText("复制完整日志详情")
+                        } icon: {
+                            Image(systemName: "doc.on.doc")
+                        }
                             .font(.system(size: 11, weight: .medium))
                             .padding(.vertical, 4)
                             .frame(maxWidth: .infinity)
@@ -124,13 +128,13 @@ struct LogEntryRow: View {
     }
     
     private func copyFullLog(_ entry: IMALogService.LogEntry) {
-        var text = "【IMA 请求日志】\n"
-        text += "时间: \(entry.timestamp.shortActivityTime)\n"
-        text += "方法: \(entry.method)\n"
-        text += "全路径: \(entry.url)\n"
+        var text = "【IMA 请求日志】\n".appLocalized
+        text += "\("时间".appLocalized): \(entry.timestamp.shortActivityTime)\n"
+        text += "\("方法".appLocalized): \(entry.method)\n"
+        text += "\("全路径".appLocalized): \(entry.url)\n"
         if let headers = entry.requestHeaders { text += "\n[Request Headers]\n\(headers)\n" }
         if let rid = entry.requestId { text += "RequestID: \(rid)\n" }
-        if let code = entry.responseCode { text += "HTTP 状态: \(code)\n" }
+        if let code = entry.responseCode { text += "\("HTTP 状态".appLocalized): \(code)\n" }
         if let req = entry.requestBody { text += "\n[Request Body]\n\(req)\n" }
         if let res = entry.responseBody { text += "\n[Response Body]\n\(res)\n" }
         if let err = entry.error { text += "\n[Error]\n\(err)\n" }
@@ -178,7 +182,7 @@ struct LogSection: View {
                         .foregroundStyle(Color.appAccent)
                 }
                 .buttonStyle(.plain)
-                .help("复制此段内容")
+                .help("复制此段内容".appLocalized)
             }
             
             Text(content)

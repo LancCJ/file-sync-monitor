@@ -16,19 +16,7 @@ struct FileSyncMonitorApp: App {
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
 
     private var appLocale: Locale {
-        if let identifier = appLanguage.localeIdentifier {
-            return Locale(identifier: identifier)
-        }
-        
-        // If system, check if it's one of the supported ones
-        let supported = ["en", "zh-Hans", "zh-Hant"]
-        let current = Locale.current.identifier
-        if supported.contains(where: { current.hasPrefix($0) }) {
-            return .current
-        }
-        
-        // Default to English if not supported
-        return Locale(identifier: "en")
+        Locale(identifier: appLanguage.effectiveLocaleIdentifier)
     }
 
     var body: some Scene {
@@ -37,7 +25,6 @@ struct FileSyncMonitorApp: App {
                 .frame(minWidth: 1000, minHeight: 650)
                 .modelContainer(PersistenceController.shared.container)
                 .environment(\.locale, appLocale)
-                .id(appLanguage)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1100, height: 720)
@@ -47,7 +34,6 @@ struct FileSyncMonitorApp: App {
                 .frame(minWidth: 700, minHeight: 500)
                 .modelContainer(PersistenceController.shared.container)
                 .environment(\.locale, appLocale)
-                .id(appLanguage)
         }
     }
 }

@@ -7,24 +7,28 @@ struct MainView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FileEvent.timestamp, order: .reverse) private var events: [FileEvent]
 
+    // 观测语言变化，确保切换语言时 body 重新执行，所有 LocalizedText / .appLocalized 使用新语言
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
+
     @State private var selectedSidebarItem: SidebarItem = .home
     @State private var selectedEventID: UUID?
     @State private var searchText = ""
     @State private var typeFilter: EventTypeFilter = .all
     @State private var isSyncing = false
+    @State private var isShowingQuitConfirmation = false
 
     enum SidebarItem: String, CaseIterable, Identifiable {
         case home, pendingSync, allEvents, reports, settings, help
         var id: String { rawValue }
 
-        var title: LocalizedStringKey {
+        var titleKey: String {
             switch self {
-            case .home: "首页"
-            case .pendingSync: "待同步"
-            case .allEvents: "全部记录"
-            case .reports: "报告"
-            case .settings: "设置"
-            case .help: "帮助"
+            case .home: return "首页"
+            case .pendingSync: return "待同步"
+            case .allEvents: return "全部记录"
+            case .reports: return "报告"
+            case .settings: return "设置"
+            case .help: return "帮助"
             }
         }
 
@@ -49,13 +53,13 @@ struct MainView: View {
 
         var id: String { rawValue }
 
-        var title: LocalizedStringKey {
+        var titleKey: String {
             switch self {
-            case .all: "全部"
-            case .created: "新增"
-            case .modified: "修改"
-            case .deleted: "删除"
-            case .renamed: "重命名"
+            case .all: return "全部"
+            case .created: return "新增"
+            case .modified: return "修改"
+            case .deleted: return "删除"
+            case .renamed: return "重命名"
             }
         }
 
@@ -96,69 +100,80 @@ struct MainView: View {
         GeometryReader { proxy in
             let layout = MainLayoutMetrics(size: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
 
-            VStack(spacing: 0) {
-                Color.clear
-                    .frame(height: layout.titleBarInset)
+            ZStack {
+                VStack(spacing: 0) {
+                    Color.clear
+                        .frame(height: layout.titleBarInset)
 
-                HStack(spacing: 0) {
-                    IMARailView(
-                        selection: $selectedSidebarItem,
-                        pendingCount: pendingEvents.count,
-                        layout: layout
-                    )
-
-                    switch selectedSidebarItem {
-                    case .home:
-                        FileSyncHomeView(
-                            events: events,
-                            pendingEvents: pendingEvents,
-                            addDirectory: addDirectory,
-                            showPending: { selectedSidebarItem = .pendingSync },
-                            showAllRecords: { selectedSidebarItem = .allEvents },
-                            showReports: { selectedSidebarItem = .reports },
-                            markAllPendingSynced: markAllPendingSynced,
-                            syncAllToIMA: syncAllToIMA
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    case .pendingSync, .allEvents:
-                        IMASecondarySidebar(
-                            mode: selectedSidebarItem,
-                            events: filteredEvents,
+                    HStack(spacing: 0) {
+                        IMARailView(
+                            selection: $selectedSidebarItem,
                             pendingCount: pendingEvents.count,
-                            selectedEventID: $selectedEventID,
-                            searchText: $searchText,
-                            typeFilter: $typeFilter,
-                            markAllPendingSynced: markAllPendingSynced,
-                            syncAllToIMA: syncAllToIMA,
-                            isSyncing: isSyncing,
-                            layout: layout
+                            layout: layout,
+                            requestQuit: { isShowingQuitConfirmation = true }
                         )
 
-                        EventDetailView(
-                            event: selectedEvent,
-                            mode: selectedSidebarItem,
-                            visibleEvents: filteredEvents,
-                            isSyncing: isSyncing,
-                            showAllRecords: { selectedSidebarItem = .allEvents },
-                            addDirectory: addDirectory,
-                            markSynced: markSynced,
-                            upload: upload,
-                            reveal: reveal,
-                            export: export,
-                            layout: layout
-                        )
-                    case .reports:
-                        ReportsView()
+                        switch selectedSidebarItem {
+                        case .home:
+                            FileSyncHomeView(
+                                events: events,
+                                pendingEvents: pendingEvents,
+                                addDirectory: addDirectory,
+                                showPending: { selectedSidebarItem = .pendingSync },
+                                showAllRecords: { selectedSidebarItem = .allEvents },
+                                showReports: { selectedSidebarItem = .reports },
+                                markAllPendingSynced: markAllPendingSynced,
+                                syncAllToIMA: syncAllToIMA
+                            )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    case .settings:
-                        SettingsView()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    case .help:
-                        HelpView()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        case .pendingSync, .allEvents:
+                            IMASecondarySidebar(
+                                mode: selectedSidebarItem,
+                                events: filteredEvents,
+                                pendingCount: pendingEvents.count,
+                                selectedEventID: $selectedEventID,
+                                searchText: $searchText,
+                                typeFilter: $typeFilter,
+                                markAllPendingSynced: markAllPendingSynced,
+                                syncAllToIMA: syncAllToIMA,
+                                isSyncing: isSyncing,
+                                layout: layout
+                            )
+
+                            EventDetailView(
+                                event: selectedEvent,
+                                mode: selectedSidebarItem,
+                                visibleEvents: filteredEvents,
+                                isSyncing: isSyncing,
+                                showAllRecords: { selectedSidebarItem = .allEvents },
+                                addDirectory: addDirectory,
+                                markSynced: markSynced,
+                                upload: upload,
+                                reveal: reveal,
+                                export: export,
+                                layout: layout
+                            )
+                        case .reports:
+                            ReportsView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        case .settings:
+                            SettingsView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        case .help:
+                            HelpView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if isShowingQuitConfirmation {
+                    QuitConfirmationOverlay(
+                        cancel: { isShowingQuitConfirmation = false },
+                        quit: { NSApp.terminate(nil) }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(IMAWindowBackground())
@@ -242,17 +257,11 @@ struct IMARailView: View {
     @Binding var selection: MainView.SidebarItem
     let pendingCount: Int
     let layout: MainLayoutMetrics
+    let requestQuit: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.appSelection)
-                .frame(width: 34, height: 34)
-                .overlay {
-                    Text("FSM")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(Color.appInk)
-                }
+            AppBrandIcon(size: 38, cornerRadius: 10)
                 .padding(.top, layout.topContentPadding)
 
             VStack(spacing: 18) {
@@ -283,13 +292,11 @@ struct IMARailView: View {
             VStack(spacing: 18) {
                 IMARailLanguageButton()
 
-                Button {
-                    NSApp.terminate(nil)
-                } label: {
+                Button(action: requestQuit) {
                     IMARailExitButton()
                 }
                 .buttonStyle(.plain)
-                .help("退出")
+                .help("退出".appLocalized)
             }
             .padding(.bottom, 18)
         }
@@ -321,6 +328,62 @@ struct IMARailExitButton: View {
             )
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
+    }
+}
+
+struct QuitConfirmationOverlay: View {
+    let cancel: () -> Void
+    let quit: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.appInk.opacity(0.16)
+                .ignoresSafeArea()
+                .onTapGesture(perform: cancel)
+
+            VStack(spacing: 18) {
+                AppBrandIcon(size: 54, cornerRadius: 14)
+
+                VStack(spacing: 8) {
+                    LocalizedText("确定退出 FileSyncMonitor？")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color.appInk)
+
+                    LocalizedText("退出后将停止监控文件变动和自动同步。")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.appMuted)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+
+                HStack(spacing: 10) {
+                    Button(action: cancel) {
+                        LocalizedText("取消")
+                    }
+                    .buttonStyle(QuietButtonStyle())
+
+                    Button(action: quit) {
+                        Label {
+                            LocalizedText("退出")
+                        } icon: {
+                            Image(systemName: "power")
+                        }
+                    }
+                    .buttonStyle(PillButtonStyle(isPrimary: true))
+                }
+            }
+            .padding(24)
+            .frame(width: 360)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.appSurface.opacity(0.98))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.appLine.opacity(0.78), lineWidth: 1)
+                    )
+            )
+            .shadow(color: Color.appInk.opacity(0.16), radius: 24, x: 0, y: 16)
+        }
     }
 }
 
@@ -357,11 +420,14 @@ struct IMARailButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .help(item.title)
+        .help(item.titleKey.appLocalized)
     }
 }
 
 struct FileSyncHomeView: View {
+    @AppStorage("autoSync") private var autoSync = false
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
+
     let events: [FileEvent]
     let pendingEvents: [FileEvent]
     let addDirectory: () -> Void
@@ -383,24 +449,28 @@ struct FileSyncHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .top, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("FileSync")
-                            .font(.system(size: 44, weight: .black))
-                            .foregroundStyle(Color.appInk)
-                        Text("monitor")
-                            .font(.system(size: 12, weight: .medium))
-                            .tracking(8)
-                            .foregroundStyle(Color.appInk.opacity(0.68))
-                        Text(homeMessage)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.appMuted)
-                            .padding(.top, 4)
+                    HStack(alignment: .top, spacing: 16) {
+                        AppBrandIcon(size: 66, cornerRadius: 16)
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("FileSync")
+                                .font(.system(size: 44, weight: .black))
+                                .foregroundStyle(Color.appInk)
+                            Text("monitor")
+                                .font(.system(size: 12, weight: .medium))
+                                .tracking(8)
+                                .foregroundStyle(Color.appInk.opacity(0.68))
+                            LocalizedText(homeMessage)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color.appMuted)
+                                .padding(.top, 4)
+                        }
                     }
 
                     Spacer()
 
                     StatusPill(
-                        text: pendingEvents.isEmpty ? "已同步" : "\(pendingEvents.count) 个待处理",
+                        text: pendingEvents.isEmpty ? "已同步" : String(format: "个待处理_format".appLocalized, pendingEvents.count),
                         symbol: pendingEvents.isEmpty ? "checkmark" : "clock",
                         color: pendingEvents.isEmpty ? .appMint : .appAmber
                     )
@@ -415,40 +485,57 @@ struct FileSyncHomeView: View {
 
                 HStack(spacing: 10) {
                     Button(action: addDirectory) {
-                        Label("添加目录", systemImage: "plus")
+                        Label {
+                            LocalizedText("添加目录")
+                        } icon: {
+                            Image(systemName: "plus")
+                        }
                     }
                     .buttonStyle(PillButtonStyle(isPrimary: true))
 
                     Button(action: showPending) {
-                        Label("处理待同步", systemImage: "clock")
+                        Label {
+                            LocalizedText("处理待同步")
+                        } icon: {
+                            Image(systemName: "clock")
+                        }
                     }
                     .buttonStyle(QuietButtonStyle())
                     .disabled(pendingEvents.isEmpty)
 
                     Button(action: showAllRecords) {
-                        Label("查看全部记录", systemImage: "doc.text")
+                        Label {
+                            LocalizedText("查看全部记录")
+                        } icon: {
+                            Image(systemName: "doc.text")
+                        }
                     }
                     .buttonStyle(QuietButtonStyle())
 
                     Button(action: showReports) {
-                        Label("查看报告", systemImage: "chart.bar")
+                        Label {
+                            LocalizedText("查看报告")
+                        } icon: {
+                            Image(systemName: "chart.bar")
+                        }
                     }
                     .buttonStyle(QuietButtonStyle())
 
                     Spacer()
 
-                    Button(action: syncAllToIMA) {
-                        Label("全部同步", systemImage: "cloud.fill")
-                    }
-                    .buttonStyle(QuietButtonStyle())
-                    .disabled(pendingEvents.isEmpty)
+                    HomeSyncModeControl(isAutoSync: $autoSync)
 
-                    Button(action: markAllPendingSynced) {
-                        Label("全部完成", systemImage: "checkmark")
+                    Button(action: syncAllToIMA) {
+                        Label {
+                            LocalizedText("全部同步")
+                        } icon: {
+                            Image(systemName: "cloud.fill")
+                        }
                     }
-                    .buttonStyle(QuietButtonStyle())
+                    .buttonStyle(PillButtonStyle(isPrimary: true))
                     .disabled(pendingEvents.isEmpty)
                 }
+                .help("批量标记完成已移到待同步页，首页只保留同步主操作。".appLocalized)
 
                 HStack(alignment: .top, spacing: 18) {
                     SimplePanel(title: "最近记录", subtitle: events.isEmpty ? "添加监控目录后，文件变动会显示在这里。" : "最近捕获到的文件变动。") {
@@ -469,9 +556,10 @@ struct FileSyncHomeView: View {
 
                     SimplePanel(title: "当前状态", subtitle: "快速了解监控与同步状态。") {
                         VStack(spacing: 0) {
-                            HomeStatusRow(title: "同步队列", value: pendingEvents.isEmpty ? "没有待同步文件" : "\(pendingEvents.count) 个文件待处理", color: pendingEvents.isEmpty ? .appMint : .appAmber)
-                            HomeStatusRow(title: "监控目录", value: monitoredCount == 0 ? "尚未添加" : "\(monitoredCount) 个目录")
-                            HomeStatusRow(title: "记录总数", value: "\(events.count) 条")
+                            HomeStatusRow(title: "同步队列", value: pendingEvents.isEmpty ? "没有待同步文件" : "个文件待处理_count:\(pendingEvents.count)", color: pendingEvents.isEmpty ? .appMint : .appAmber)
+                            HomeStatusRow(title: "同步模式", value: autoSync ? "自动同步" : "手动同步", color: autoSync ? .appMint : .appInk)
+                            HomeStatusRow(title: "监控目录", value: monitoredCount == 0 ? "尚未添加" : "个目录_count:\(monitoredCount)")
+                            HomeStatusRow(title: "记录总数", value: "条_count:\(events.count)")
                         }
                     }
                     .frame(width: 280)
@@ -509,7 +597,7 @@ struct HomeMetricCard: View {
                 Text("\(value)")
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(color)
-                Text(title)
+                LocalizedText(title)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.appMuted)
             }
@@ -517,6 +605,42 @@ struct HomeMetricCard: View {
         }
         .frame(maxWidth: .infinity)
         .appCard(padding: 15)
+    }
+}
+
+struct HomeSyncModeControl: View {
+    @Binding var isAutoSync: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Image(systemName: isAutoSync ? "bolt.circle.fill" : "hand.tap")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isAutoSync ? Color.appMint : Color.appMuted)
+
+                LocalizedText(isAutoSync ? "自动同步" : "手动同步")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.appInk)
+                    .frame(width: 56, alignment: .leading)
+
+                AppToggle(isOn: $isAutoSync)
+            }
+
+            LocalizedText(isAutoSync ? "稳定 30 秒后上传" : "点击按钮时上传")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.appMuted)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.appSurface.opacity(0.9))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(isAutoSync ? Color.appMint.opacity(0.34) : Color.appLine.opacity(0.72), lineWidth: 1)
+                )
+        )
+        .help((isAutoSync ? "当前为自动同步：文件变动 30 秒后自动同步至云端" : "当前为手动同步：需要点击全部同步或单条上传").appLocalized)
     }
 }
 
@@ -554,14 +678,15 @@ struct HomeStatusRow: View {
     let title: String
     let value: String
     var color: Color = .appInk
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(title)
+            LocalizedText(title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.appMuted)
             Spacer()
-            Text(value)
+            Text(localizedValue)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(color)
                 .lineLimit(1)
@@ -573,6 +698,22 @@ struct HomeStatusRow: View {
                 .fill(Color.appLine.opacity(0.64))
                 .frame(height: 1)
         }
+    }
+
+    private var localizedValue: String {
+        if value.hasPrefix("个文件待处理_count:"),
+           let count = Int(value.replacingOccurrences(of: "个文件待处理_count:", with: "")) {
+            return String(format: "个文件待处理_format".appLocalized, count)
+        }
+        if value.hasPrefix("个目录_count:"),
+           let count = Int(value.replacingOccurrences(of: "个目录_count:", with: "")) {
+            return String(format: "个目录_format".appLocalized, count)
+        }
+        if value.hasPrefix("条_count:"),
+           let count = Int(value.replacingOccurrences(of: "条_count:", with: "")) {
+            return String(format: "条_format".appLocalized, count)
+        }
+        return value.appLocalized
     }
 }
 
@@ -588,11 +729,19 @@ struct IMASecondarySidebar: View {
     let isSyncing: Bool
     let layout: MainLayoutMetrics
 
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
+    @State private var viewMode: EventListViewMode = .list
+
+    enum EventListViewMode: String, CaseIterable {
+        case list = "列表"
+        case tree = "树状"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text(mode.title)
+                    LocalizedText(mode.titleKey)
                         .font(.system(size: 16, weight: .bold))
                     Spacer()
                     Text("\(events.count)")
@@ -602,10 +751,41 @@ struct IMASecondarySidebar: View {
 
                 SmoothSearchField(text: $searchText, placeholder: "搜索文件或路径")
 
-                AppSegmentedControl(
-                    options: MainView.EventTypeFilter.allCases.map { ($0, $0.title) },
-                    selection: $typeFilter
-                )
+                HStack(spacing: 8) {
+                    AppSegmentedControl(
+                        options: MainView.EventTypeFilter.allCases.map { ($0, $0.titleKey) },
+                        selection: $typeFilter
+                    )
+
+                    // 视图模式切换
+                    HStack(spacing: 2) {
+                        ForEach([EventListViewMode.list, .tree], id: \.self) { m in
+                            Button {
+                                withAnimation(.snappy(duration: 0.18)) { viewMode = m }
+                            } label: {
+                                Image(systemName: m == .list ? "list.bullet" : "folder.badge.gearshape")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .frame(width: 26, height: 26)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                            .fill(viewMode == m ? Color.appInk : Color.clear)
+                                    )
+                                    .foregroundStyle(viewMode == m ? .white : Color.appMuted)
+                            }
+                            .buttonStyle(.plain)
+                            .help(m.rawValue.appLocalized)
+                        }
+                    }
+                    .padding(3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.appSurface.opacity(0.82))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
+                            )
+                    )
+                }
                 .frame(maxWidth: .infinity)
 
                 if mode == .pendingSync {
@@ -617,7 +797,7 @@ struct IMASecondarySidebar: View {
                                 } else {
                                     Image(systemName: "cloud.fill")
                                 }
-                                Text("全部同步至 IMA")
+                                LocalizedText("全部同步至 IMA")
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -635,7 +815,7 @@ struct IMASecondarySidebar: View {
                                 } else {
                                     Image(systemName: "arrow.down.circle.fill")
                                 }
-                                Text("从云端拉取更新")
+                                LocalizedText("从云端拉取更新")
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -643,7 +823,11 @@ struct IMASecondarySidebar: View {
                         .disabled(FileMonitorService.shared.isPulling)
 
                         Button(action: markAllPendingSynced) {
-                            Label("全部标记完成", systemImage: "checkmark")
+                            Label {
+                                LocalizedText("全部标记完成")
+                            } icon: {
+                                Image(systemName: "checkmark")
+                            }
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(QuietButtonStyle())
@@ -663,16 +847,16 @@ struct IMASecondarySidebar: View {
                     Image(systemName: mode == .pendingSync ? "checkmark.circle" : "tray")
                         .font(.system(size: 30, weight: .light))
                         .foregroundStyle(Color.appMuted)
-                    Text(mode == .pendingSync ? "没有待同步文件" : "暂无记录")
+                    LocalizedText(mode == .pendingSync ? "没有待同步文件" : "暂无记录")
                         .font(.system(size: 13, weight: .semibold))
-                    Text(mode == .pendingSync ? "所有变动都处理完成了。" : "添加目录后记录会显示在这里。")
+                    LocalizedText(mode == .pendingSync ? "所有变动都处理完成了。" : "添加目录后记录会显示在这里。")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
+            } else if viewMode == .list {
                 ScrollView {
                     LazyVStack(spacing: 4) {
                         ForEach(events) { event in
@@ -686,6 +870,11 @@ struct IMASecondarySidebar: View {
                     }
                     .padding(8)
                 }
+            } else {
+                EventTreeView(
+                    events: events,
+                    selectedEventID: $selectedEventID
+                )
             }
         }
         .frame(width: layout.secondarySidebarWidth)
@@ -729,7 +918,7 @@ struct IMAEventListRow: View {
                         if !event.isSynced {
                             HStack(spacing: 4) {
                                 if event.remoteId != nil {
-                                    Text("更新")
+                                    LocalizedText("更新")
                                         .font(.system(size: 9, weight: .bold))
                                         .padding(.horizontal, 4)
                                         .padding(.vertical, 1)
@@ -769,6 +958,7 @@ struct IMAEventListRow: View {
 
 struct EventDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
 
     let event: FileEvent?
     let mode: MainView.SidebarItem
@@ -819,9 +1009,9 @@ struct EventDetailView: View {
                             }
 
                             VStack(spacing: 0) {
-                                EventInfoRow(title: "同步状态", value: event.isSynced ? String(localized: "已同步") : String(localized: "待同步_value"), color: event.isSynced ? .appMint : .appAmber)
+                                EventInfoRow(title: "同步状态", value: event.isSynced ? "已同步" : "待同步", color: event.isSynced ? .appMint : .appAmber)
                                 EventInfoRow(title: "记录时间", value: event.timestamp.shortActivityTime)
-                                EventInfoRow(title: "是否目录", value: event.isDirectory ? String(localized: "目录") : String(localized: "文件"))
+                                EventInfoRow(title: "是否目录", value: event.isDirectory ? "目录" : "文件")
                                 if let oldPath = event.oldPath, !oldPath.isEmpty {
                                     EventInfoRow(title: "原路径", value: oldPath)
                                 }
@@ -836,24 +1026,36 @@ struct EventDetailView: View {
                             )
 
                             HStack(spacing: 10) {
-                                Button(action: { markSynced(event) }) {
-                                    Label(event.isSynced ? "重新标记待同步" : "标记完成", systemImage: event.isSynced ? "arrow.uturn.backward" : "checkmark")
-                                }
-                                .buttonStyle(PillButtonStyle(isPrimary: true))
-
                                 Button(action: { upload(event) }) {
                                     if isSyncing {
                                         ProgressView()
                                             .controlSize(.small)
                                     } else {
-                                        Label("上传到 IMA", systemImage: "icloud.and.arrow.up")
+                                        Label {
+                                            LocalizedText("同步到 IMA")
+                                        } icon: {
+                                            Image(systemName: "icloud.and.arrow.up")
+                                        }
+                                    }
+                                }
+                                .buttonStyle(PillButtonStyle(isPrimary: true))
+                                .disabled(event.isSynced || isSyncing)
+
+                                Button(action: { markSynced(event) }) {
+                                    Label {
+                                        LocalizedText(event.isSynced ? "重新标记待同步" : "仅标记完成")
+                                    } icon: {
+                                        Image(systemName: event.isSynced ? "arrow.uturn.backward" : "checkmark")
                                     }
                                 }
                                 .buttonStyle(QuietButtonStyle())
-                                .disabled(event.isSynced || isSyncing)
 
                                 Button(action: { reveal(event) }) {
-                                    Label("在 Finder 中显示", systemImage: "folder")
+                                    Label {
+                                        LocalizedText("在 Finder 中显示")
+                                    } icon: {
+                                        Image(systemName: "folder")
+                                    }
                                 }
                                 .buttonStyle(QuietButtonStyle())
 
@@ -989,14 +1191,14 @@ struct EventDetailToolbar: View {
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
-            .help("导出 CSV")
+            .help("导出 CSV".appLocalized)
 
             Button(action: { export(.json) }) {
                 Image(systemName: "curlybraces")
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
-            .help("导出 JSON")
+            .help("导出 JSON".appLocalized)
         }
         .font(.system(size: 13, weight: .medium))
         .foregroundStyle(Color.appInk)
@@ -1007,18 +1209,18 @@ struct EventDetailToolbar: View {
 }
 
 struct EventInfoRow: View {
-    let title: LocalizedStringKey
+    let title: String
     let value: String
     var color: Color = .appInk
 
     var body: some View {
         HStack(alignment: .top) {
-            Text(title)
+            LocalizedText(title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.appInk)
                 .frame(width: 92, alignment: .leading)
 
-            Text(value)
+            Text(value.appLocalized)
                 .font(.system(size: 13))
                 .foregroundStyle(color)
                 .textSelection(.enabled)
@@ -1043,6 +1245,9 @@ struct IMAEmptyHomeState: View {
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 8) {
+                AppBrandIcon(size: 74, cornerRadius: 18)
+                    .padding(.bottom, 4)
+
                 Text("FileSync")
                     .font(.system(size: 58, weight: .black))
                     .foregroundStyle(Color.appInk)
@@ -1053,22 +1258,30 @@ struct IMAEmptyHomeState: View {
             }
 
             VStack(spacing: 8) {
-                Text(isPendingMode ? "所有文件都已同步" : "还没有文件记录")
+                LocalizedText(isPendingMode ? "所有文件都已同步" : "还没有文件记录")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Color.appInk)
-                Text(isPendingMode ? "新的文件变动会自动出现在左侧列表。" : "添加监控目录后，文件变动会被自动记录。")
+                LocalizedText(isPendingMode ? "新的文件变动会自动出现在左侧列表。" : "添加监控目录后，文件变动会被自动记录。")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.appMuted)
             }
 
             HStack(spacing: 10) {
                 Button(action: addDirectory) {
-                    Label("添加目录", systemImage: "plus")
+                    Label {
+                        LocalizedText("添加目录")
+                    } icon: {
+                        Image(systemName: "plus")
+                    }
                 }
                 .buttonStyle(PillButtonStyle(isPrimary: true))
 
                 Button(action: showAllRecords) {
-                    Label("查看全部记录", systemImage: "doc.text")
+                    Label {
+                        LocalizedText("查看全部记录")
+                    } icon: {
+                        Image(systemName: "doc.text")
+                    }
                 }
                 .buttonStyle(QuietButtonStyle())
             }
@@ -1084,10 +1297,10 @@ struct IMASelectEventState: View {
             AppIconBadge(symbol: "cursorarrow.click", color: .appMint, size: 54)
 
             VStack(spacing: 7) {
-                Text("选择一条记录")
+                LocalizedText("选择一条记录")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Color.appInk)
-                Text("从左侧列表中选择文件变动后，可查看路径、状态并执行同步操作。")
+                LocalizedText("从左侧列表中选择文件变动后，可查看路径、状态并执行同步操作。")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.appMuted)
                     .multilineTextAlignment(.center)
@@ -1106,9 +1319,9 @@ struct SimplePanel<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                LocalizedText(title)
                     .font(.system(size: 14, weight: .semibold))
-                Text(subtitle)
+                LocalizedText(subtitle)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -1129,7 +1342,7 @@ struct MetricLine: View {
             Text("\(value)")
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
-            Text(label)
+            LocalizedText(label)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.secondary)
             Spacer()
@@ -1175,23 +1388,375 @@ struct IMARailLanguageButton: View {
             ForEach(AppLanguage.allCases, id: \.self) { lang in
                 Button {
                     appLanguage = lang
+                    MenuBarManager.shared.refreshMenu()
                 } label: {
-                    Text(lang.title)
+                    HStack {
+                        Text(lang.displayTitle)
+                        if appLanguage == lang {
+                            Image(systemName: "checkmark")
+                        }
+                    }
                 }
             }
         } label: {
-            Image(systemName: "globe")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Color.appInk.opacity(0.78))
-                .frame(width: 40, height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isHovered ? Color.appSurface.opacity(0.9) : Color.clear)
-                )
+            VStack(spacing: 1) {
+                Image(systemName: "globe")
+                    .font(.system(size: 17, weight: .medium))
+                Text(appLanguage == .en ? "EN" : (appLanguage == .zhHant ? "繁" : "简"))
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(Color.appInk.opacity(0.78))
+            .frame(width: 40, height: 40)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isHovered ? Color.appSurface.opacity(0.9) : Color.clear)
+            )
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .help("切换语言")
+        .help("切换语言".appLocalized)
+        .id(appLanguage)
+    }
+}
+
+// MARK: - Tree View
+
+/// 树节点：可以是虚拟目录节点，也可以是叶子文件事件节点
+final class EventTreeNode: Identifiable {
+    let id: String            // 完整路径，作为唯一标识
+    let name: String          // 目录名 或 文件名
+    let path: String          // 完整路径
+    var children: [EventTreeNode] = []
+    var events: [FileEvent] = []  // 该节点直接持有的事件（叶子节点）
+
+    init(path: String, name: String) {
+        self.id = path
+        self.path = path
+        self.name = name
+    }
+
+    /// 该节点（含所有子孙）下的待同步事件数
+    var pendingCount: Int {
+        events.filter { !$0.isSynced }.count
+            + children.reduce(0) { $0 + $1.pendingCount }
+    }
+
+    /// 该节点（含所有子孙）下的总事件数
+    var totalCount: Int {
+        events.count + children.reduce(0) { $0 + $1.totalCount }
+    }
+}
+
+/// 把 [FileEvent] 按路径层级构建成前缀树
+struct EventTreeBuilder {
+    /// 将事件列表构建为以监控根目录为根的树节点数组
+    static func build(events: [FileEvent], monitoredPaths: [String]) -> [EventTreeNode] {
+        // 先建一个虚拟全局根，方便操作
+        let globalRoot = EventTreeNode(path: "__root__", name: "root")
+
+        for event in events {
+            // 找到该事件所属的最深监控根目录
+            let sortedMonitoredPaths = monitoredPaths.sorted { $0.count > $1.count }
+            let rootPath = sortedMonitoredPaths.first { event.path.hasPrefix($0) }
+
+            if let rootPath {
+                // 拆分出相对路径片段
+                let relativePath = String(event.path.dropFirst(rootPath.count))
+                let segments = relativePath
+                    .split(separator: "/", omittingEmptySubsequences: true)
+                    .map(String.init)
+
+                // 确保根目录节点存在
+                let rootNode = findOrCreate(child: URL(fileURLWithPath: rootPath).lastPathComponent,
+                                            fullPath: rootPath,
+                                            in: globalRoot)
+
+                // 逐层插入中间目录节点
+                var currentNode = rootNode
+                var accumulatedPath = rootPath
+                for (index, segment) in segments.enumerated() {
+                    accumulatedPath += "/" + segment
+                    let isLast = index == segments.count - 1
+                    if isLast {
+                        // 叶节点直接挂 event，不再创建子目录节点
+                        currentNode.events.append(event)
+                    } else {
+                        currentNode = findOrCreate(child: segment,
+                                                   fullPath: accumulatedPath,
+                                                   in: currentNode)
+                    }
+                }
+            } else {
+                // 无法匹配任何监控根目录，放到"其他"节点
+                let other = findOrCreate(child: "其他", fullPath: "__other__", in: globalRoot)
+                other.events.append(event)
+            }
+        }
+
+        // 剪枝：移除空子树，并对子节点按名称排序
+        prune(globalRoot)
+        return globalRoot.children
+    }
+
+    @discardableResult
+    private static func findOrCreate(child name: String, fullPath: String, in parent: EventTreeNode) -> EventTreeNode {
+        if let existing = parent.children.first(where: { $0.path == fullPath }) {
+            return existing
+        }
+        let node = EventTreeNode(path: fullPath, name: name)
+        parent.children.append(node)
+        return node
+    }
+
+    @discardableResult
+    private static func prune(_ node: EventTreeNode) -> Bool {
+        node.children = node.children.filter { prune($0) }
+        node.children.sort { $0.name.localizedCompare($1.name) == .orderedAscending }
+        return node.totalCount > 0
+    }
+}
+
+/// 树状视图容器
+struct EventTreeView: View {
+    let events: [FileEvent]
+    @Binding var selectedEventID: UUID?
+
+    // 已展开的节点路径集合
+    @State private var expandedPaths: Set<String> = []
+    @State private var roots: [EventTreeNode] = []
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 2) {
+                ForEach(roots) { node in
+                    TreeNodeView(
+                        node: node,
+                        depth: 0,
+                        expandedPaths: $expandedPaths,
+                        selectedEventID: $selectedEventID
+                    )
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+        }
+        .onAppear { rebuildTree() }
+        .onChange(of: events.map(\.id)) { _, _ in rebuildTree() }
+        .onChange(of: events.map(\.isSynced)) { _, _ in rebuildTree() }
+    }
+
+    private func rebuildTree() {
+        let monitoredPaths = FileMonitorService.shared.monitoredPaths
+        let newRoots = EventTreeBuilder.build(events: events, monitoredPaths: monitoredPaths)
+        roots = newRoots
+
+        // 默认展开所有根节点（第一层）
+        let rootPaths = Set(newRoots.map(\.path))
+        expandedPaths = expandedPaths.union(rootPaths)
+    }
+}
+
+/// 递归渲染单个节点（目录节点 + 其子节点 / 叶子事件行）
+struct TreeNodeView: View {
+    let node: EventTreeNode
+    let depth: Int
+    @Binding var expandedPaths: Set<String>
+    @Binding var selectedEventID: UUID?
+
+    private var isExpanded: Bool { expandedPaths.contains(node.path) }
+    private let indentUnit: CGFloat = 16
+
+    var body: some View {
+        VStack(spacing: 2) {
+            // 目录节点行
+            TreeDirectoryRow(
+                node: node,
+                isExpanded: isExpanded,
+                depth: depth
+            ) {
+                withAnimation(.snappy(duration: 0.22)) {
+                    if isExpanded {
+                        expandedPaths.remove(node.path)
+                    } else {
+                        expandedPaths.insert(node.path)
+                    }
+                }
+            }
+
+            // 展开时显示：子目录 + 叶子事件
+            if isExpanded {
+                // 子目录
+                ForEach(node.children) { child in
+                    TreeNodeView(
+                        node: child,
+                        depth: depth + 1,
+                        expandedPaths: $expandedPaths,
+                        selectedEventID: $selectedEventID
+                    )
+                }
+
+                // 该节点直接持有的事件（叶节点）
+                ForEach(node.events) { event in
+                    TreeFileEventRow(
+                        event: event,
+                        depth: depth + 1,
+                        isSelected: selectedEventID == event.id
+                    ) {
+                        selectedEventID = event.id
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 目录节点行
+struct TreeDirectoryRow: View {
+    let node: EventTreeNode
+    let isExpanded: Bool
+    let depth: Int
+    let onTap: () -> Void
+
+    @State private var isHovered = false
+    private let indentUnit: CGFloat = 16
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                // 缩进占位
+                Color.clear.frame(width: CGFloat(depth) * indentUnit, height: 1)
+
+                // 展开箭头
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color.appMuted)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .animation(.snappy(duration: 0.2), value: isExpanded)
+                    .frame(width: 14)
+
+                // 目录图标
+                Image(systemName: isExpanded ? "folder.open.fill" : "folder.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.appAmber)
+                    .frame(width: 18)
+
+                // 目录名
+                Text(node.name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.appInk)
+                    .lineLimit(1)
+
+                Spacer()
+
+                // 待同步 badge
+                if node.pendingCount > 0 {
+                    Text("\(node.pendingCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(Color.appRose)
+                        )
+                }
+
+                // 总事件数（如果全已同步时换成绿色）
+                let syncedAll = node.pendingCount == 0
+                Text("\(node.totalCount)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(syncedAll ? Color.appMint : Color.appMuted)
+                    .padding(.horizontal, 5)
+                    .frame(minWidth: 18, minHeight: 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(syncedAll ? Color.appMint.opacity(0.12) : Color.appMuted.opacity(0.1))
+                    )
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(isHovered ? Color.appSelection.opacity(0.6) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.snappy(duration: 0.15), value: isHovered)
+    }
+}
+
+/// 文件事件叶子节点行（带缩进）
+struct TreeFileEventRow: View {
+    let event: FileEvent
+    let depth: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+    private let indentUnit: CGFloat = 16
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                // 缩进
+                Color.clear.frame(width: CGFloat(depth) * indentUnit + 14 + 8, height: 1)
+
+                // 事件类型图标
+                Image(systemName: EventVisuals.symbol(for: event.type))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(EventVisuals.color(for: event.type))
+                    .frame(width: 18, height: 18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(EventVisuals.color(for: event.type).opacity(0.1))
+                    )
+
+                // 文件名
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(event.fileName)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.appInk)
+                        .lineLimit(1)
+
+                    Text(event.timestamp.shortActivityTime)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Color.appMuted.opacity(0.85))
+                }
+
+                Spacer()
+
+                // 同步状态指示
+                if !event.isSynced {
+                    if event.remoteId != nil {
+                        LocalizedText("更新")
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.appMint.opacity(0.15))
+                            .foregroundStyle(Color.appMint)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                    }
+                    Circle()
+                        .fill(Color.appAmber)
+                        .frame(width: 6, height: 6)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.appMint.opacity(0.7))
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 36)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(isSelected ? Color.appSelection : (isHovered ? Color.appSelection.opacity(0.4) : Color.clear))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.snappy(duration: 0.15), value: isHovered)
+        .animation(.snappy(duration: 0.15), value: isSelected)
     }
 }

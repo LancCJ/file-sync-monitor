@@ -6,11 +6,11 @@ struct HelpView: View {
             VStack(alignment: .leading, spacing: 48) {
                 // Hero Header
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("帮助与关于")
+                    LocalizedText("帮助与关于")
                         .font(.system(size: 40, weight: .black))
                         .foregroundStyle(Color.appInk)
                     
-                    Text("解锁 FileSyncMonitor 的全部潜力，让您的工作流与 IMA 云端无缝合一。")
+                    LocalizedText("解锁 FileSyncMonitor 的全部潜力，让您的工作流与 IMA 云端无缝合一。")
                         .font(.system(size: 16))
                         .foregroundStyle(Color.appMuted)
                 }
@@ -18,7 +18,7 @@ struct HelpView: View {
 
                 // 1. Intelligent Monitoring
                 VStack(alignment: .leading, spacing: 24) {
-                    HelpImageCard(imagePath: "/Users/chenjian/.gemini/antigravity/brain/7a7dc5fc-3d78-42bb-8607-24d828caf4b4/monitor_concept_1778914952955.png")
+                    HelpImageCard(resourceName: "help-monitoring")
                     
                     HelpSection(title: "实时智能监控", icon: "bolt.shield.fill", color: .appAmber) {
                         HelpItem(title: "全天候变动捕获", description: "利用高性能 FSEvents 技术，秒级感知任何文件的新增、修改或重命名。")
@@ -28,7 +28,7 @@ struct HelpView: View {
 
                 // 2. Bidirectional Cloud Sync
                 VStack(alignment: .leading, spacing: 24) {
-                    HelpImageCard(imagePath: "/Users/chenjian/.gemini/antigravity/brain/7a7dc5fc-3d78-42bb-8607-24d828caf4b4/sync_concept_1778914940343.png")
+                    HelpImageCard(resourceName: "help-sync")
                     
                     HelpSection(title: "IMA 双向同步", icon: "arrow.left.arrow.right.circle.fill", color: .appViolet) {
                         HelpItem(title: "双向拉取尝试", description: "点击「从云端拉取更新」，即可智能识别并下载知识库中的新文件到本地。")
@@ -38,7 +38,7 @@ struct HelpView: View {
 
                 // 3. Interaction Design
                 VStack(alignment: .leading, spacing: 24) {
-                    HelpImageCard(imagePath: "/Users/chenjian/.gemini/antigravity/brain/7a7dc5fc-3d78-42bb-8607-24d828caf4b4/ux_concept_1778914967694.png")
+                    HelpImageCard(resourceName: "help-experience")
                     
                     HelpSection(title: "精品化交互体验", icon: "sparkles", color: .appMint) {
                         HelpItem(title: "极致视觉反馈", description: "每一处按钮与卡片都经过精心调校，支持细腻的悬停动效与平滑的状态转换。")
@@ -51,16 +51,7 @@ struct HelpView: View {
                     Divider()
                     
                     HStack(spacing: 24) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(LinearGradient(colors: [.appMint, .appAccent], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 100, height: 100)
-                                .shadow(color: Color.appMint.opacity(0.3), radius: 20, x: 0, y: 10)
-                            
-                            Text("FSM")
-                                .font(.system(size: 32, weight: .black))
-                                .foregroundStyle(.white)
-                        }
+                        AppBrandIcon(size: 100, cornerRadius: 22)
                         
                         VStack(alignment: .leading, spacing: 6) {
                             Text("FileSyncMonitor")
@@ -98,12 +89,12 @@ struct HelpView: View {
 }
 
 struct HelpImageCard: View {
-    let imagePath: String
+    let resourceName: String
     @State private var isHovered = false
     
     var body: some View {
         Group {
-            if let nsImage = NSImage(contentsOfFile: imagePath) {
+            if let nsImage = loadImage() {
                 Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -113,8 +104,7 @@ struct HelpImageCard: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(Color.appLine.opacity(0.5), lineWidth: 1)
                     )
-                    .shadow(color: Color.black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 30 : 20, x: 0, y: 15)
-                    .scaleEffect(isHovered ? 1.01 : 1)
+                    .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0.045), radius: isHovered ? 18 : 12, x: 0, y: 8)
             } else {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.appControl)
@@ -123,6 +113,19 @@ struct HelpImageCard: View {
         }
         .onHover { isHovered = $0 }
         .animation(.snappy, value: isHovered)
+    }
+
+    private func loadImage() -> NSImage? {
+        let resourceURL = Bundle.module.url(forResource: resourceName, withExtension: "png")
+            ?? Bundle.module.url(
+                forResource: URL(fileURLWithPath: resourceName).lastPathComponent,
+                withExtension: "png"
+            )
+
+        guard let url = resourceURL else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
     }
 }
 
@@ -143,7 +146,7 @@ struct HelpSection<Content: View>: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(color)
                 }
-                Text(title)
+                LocalizedText(title)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(Color.appInk)
             }
@@ -162,10 +165,10 @@ struct HelpItem: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
+            LocalizedText(title)
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Color.appInk)
-            Text(description)
+            LocalizedText(description)
                 .font(.system(size: 14))
                 .foregroundStyle(Color.appMuted)
                 .lineSpacing(6)

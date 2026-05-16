@@ -24,11 +24,11 @@ struct SettingsView: View {
     enum AppearanceMode: String, CaseIterable {
         case system, light, dark
 
-        var title: LocalizedStringKey {
+        var titleKey: String {
             switch self {
-            case .system: "跟随系统"
-            case .light: "浅色"
-            case .dark: "深色"
+            case .system: return "跟随系统"
+            case .light: return "浅色"
+            case .dark: return "深色"
             }
         }
     }
@@ -40,7 +40,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
-                Text("设置")
+                LocalizedText("设置")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(Color.appInk)
                     .padding(.top, 64)
@@ -51,12 +51,18 @@ struct SettingsView: View {
                             ForEach(AppLanguage.allCases, id: \.self) { lang in
                                 Button {
                                     appLanguage = lang
+                                    MenuBarManager.shared.refreshMenu()
                                 } label: {
-                                    Text(lang.title)
+                                    HStack {
+                                        Text(lang.displayTitle)
+                                        if appLanguage == lang {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
                                 }
                             }
                         } label: {
-                            AppMenuValue(text: appLanguage.title)
+                            AppMenuValue(text: appLanguage.displayTitle)
                         }
                         .buttonStyle(.plain)
                         .frame(width: 120)
@@ -64,7 +70,7 @@ struct SettingsView: View {
 
                     IMASettingsRow(title: "外观模式", subtitle: "切换浅色、深色或跟随系统设置") {
                         AppSegmentedControl(
-                            options: AppearanceMode.allCases.map { ($0, $0.title) },
+                            options: AppearanceMode.allCases.map { ($0, $0.titleKey) },
                             selection: $appearance
                         )
                         .frame(width: 240)
@@ -75,7 +81,7 @@ struct SettingsView: View {
                     if FileMonitorService.shared.monitoredPaths.isEmpty {
                         IMASettingsRow(title: "监控文件夹", subtitle: "尚未添加目录") {
                             Button(action: addDirectory) {
-                                Text("添加")
+                                LocalizedText("添加")
                             }
                             .buttonStyle(PillButtonStyle(isPrimary: true))
                         }
@@ -85,7 +91,7 @@ struct SettingsView: View {
                         }
                         IMASettingsRow(title: "添加更多目录", subtitle: "继续监控其他文件夹") {
                             Button(action: addDirectory) {
-                                Text("添加")
+                                LocalizedText("添加")
                             }
                             .buttonStyle(QuietButtonStyle())
                         }
@@ -120,13 +126,17 @@ struct SettingsView: View {
 
                     IMASettingsRow(title: "恢复默认", subtitle: "清空自定义规则，并重新启用默认忽略规则") {
                         Button(action: resetIgnoreRules) {
-                            Text("恢复")
+                            LocalizedText("恢复")
                         }
                         .buttonStyle(QuietButtonStyle())
                     }
                 }
 
-                IMASettingsGroup(title: "IMA 云端") {
+                IMASettingsGroup(title: "同步") {
+                    IMASettingsRow(title: "同步模式", subtitle: autoSync ? "自动同步：文件稳定 30 秒后上传到云端" : "手动同步：点击同步按钮时上传") {
+                        AppToggle(isOn: $autoSync)
+                    }
+
                     IMASettingsTextRow(title: "Client ID", subtitle: "IMA OpenAPI Client ID", text: $clientId)
                     IMASettingsTextRow(title: "API Key", subtitle: "IMA OpenAPI API Key", text: $apiKey, isSecure: true)
                     IMASettingsRow(title: "连接状态", subtitle: imaStatusDetail, isSelectable: true) {
@@ -138,14 +148,14 @@ struct SettingsView: View {
                                     .font(.system(size: 14))
                             }
                             .buttonStyle(QuietButtonStyle())
-                            .help("查看请求日志")
+                            .help("查看请求日志".appLocalized)
                             
                             Button(action: testIMAConnection) {
                                 if isTestingIMA {
                                     ProgressView().controlSize(.small)
                                         .transition(.scale.combined(with: .opacity))
                                 } else {
-                                    Text("测试连接")
+                                    LocalizedText("测试连接")
                                 }
                             }
                             .buttonStyle(QuietButtonStyle())
@@ -169,16 +179,12 @@ struct SettingsView: View {
                         .frame(width: 112)
                     }
 
-                    IMASettingsRow(title: "自动同步", subtitle: "文件变动 30 秒后自动触发同步至云端") {
-                        AppToggle(isOn: $autoSync)
-                    }
-
                     IMASettingsRow(title: "已同步记录保留", subtitle: "未同步记录不会自动清理") {
                         Menu {
-                            Button("30 天") { retentionDays = 30 }
-                            Button("90 天") { retentionDays = 90 }
-                            Button("365 天") { retentionDays = 365 }
-                            Button("永久") { retentionDays = 0 }
+                            Button("30 天".appLocalized) { retentionDays = 30 }
+                            Button("90 天".appLocalized) { retentionDays = 90 }
+                            Button("365 天".appLocalized) { retentionDays = 365 }
+                            Button("永久".appLocalized) { retentionDays = 0 }
                         } label: {
                             AppMenuValue(text: retentionText)
                         }
@@ -222,15 +228,15 @@ struct SettingsView: View {
         .onChange(of: customIgnoredDirectoryNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
     }
 
-    private var retentionText: LocalizedStringKey {
-        retentionDays == 0 ? "永久" : "\(retentionDays) 天"
+    private var retentionText: String {
+        retentionDays == 0 ? "永久" : String(format: "天_format".appLocalized, retentionDays)
     }
 
-    private var defaultIgnoreSummary: LocalizedStringKey {
+    private var defaultIgnoreSummary: String {
         "过滤 .DS_Store、临时文件、系统目录和常见构建缓存"
     }
 
-    private var imaStatusTitle: LocalizedStringKey {
+    private var imaStatusTitle: String {
         switch imaStatus {
         case .idle: return "未测试"
         case .connected: return "连接成功"
@@ -238,14 +244,14 @@ struct SettingsView: View {
         }
     }
 
-    private var imaStatusDetail: LocalizedStringKey {
+    private var imaStatusDetail: String {
         switch imaStatus {
         case .idle:
             return "检查当前凭据是否可用"
         case .connected:
-            return "IMA OpenAPI 连接成功"
+            return String(format: "IMA OpenAPI 连接成功，已获取知识库_format".appLocalized, FileMonitorService.shared.availableKnowledgeBases.count)
         case .failed(let message):
-            return LocalizedStringKey(message)
+            return message
         }
     }
 
@@ -314,7 +320,7 @@ struct MonitoredPathRow: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            IMASettingsRow(title: LocalizedStringKey(URL(fileURLWithPath: path).lastPathComponent), subtitle: LocalizedStringKey(path)) {
+            IMASettingsRow(title: URL(fileURLWithPath: path).lastPathComponent, subtitle: path) {
                 Button(action: { onRemove(path) }) {
                     Image(systemName: "minus.circle.fill")
                         .foregroundStyle(.red)
@@ -324,7 +330,7 @@ struct MonitoredPathRow: View {
             
             // 知识库绑定 Picker & 刷新按钮
             HStack(spacing: 8) {
-                Text("同步至知识库")
+                LocalizedText("同步至知识库")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.appMuted)
                 
@@ -332,10 +338,10 @@ struct MonitoredPathRow: View {
                 
                 HStack(spacing: 4) {
                     Picker("", selection: Binding(
-                        get: { FileMonitorService.shared.getKnowledgeBaseId(for: path) ?? "" },
+                        get: { FileMonitorService.shared.getKnowledgeBaseId(for: path) },
                         set: { FileMonitorService.shared.setKnowledgeBaseId($0, for: path) }
                     )) {
-                        Text("默认 (新建笔记)").tag("")
+                        Text("默认 (新建笔记)".appLocalized).tag("")
                         ForEach(FileMonitorService.shared.availableKnowledgeBases) { kb in
                             Text(kb.name).tag(kb.id)
                         }
@@ -354,7 +360,7 @@ struct MonitoredPathRow: View {
                             .foregroundStyle(Color.appAccent)
                     }
                     .buttonStyle(.plain)
-                    .help("刷新云端知识库列表")
+                    .help("刷新云端知识库列表".appLocalized)
                 }
                 .padding(.leading, 8)
             }
@@ -386,12 +392,12 @@ struct WindowFocusActivator: NSViewRepresentable {
 }
 
 struct IMASettingsGroup<Content: View>: View {
-    let title: LocalizedStringKey
+    let title: String
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
+            LocalizedText(title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.appMuted)
 
@@ -412,20 +418,20 @@ struct IMASettingsGroup<Content: View>: View {
 }
 
 struct IMASettingsRow<Accessory: View>: View {
-    let title: LocalizedStringKey
-    let subtitle: LocalizedStringKey
+    let title: String
+    let subtitle: String
     var isSelectable: Bool = false
     @ViewBuilder let accessory: Accessory
 
     var body: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                LocalizedText(title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.appInk)
                     .lineLimit(1)
                 
-                let text = Text(subtitle)
+                let text = Text(subtitle.appLocalized)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.appMuted)
                     .lineLimit(isSelectable ? 4 : 1)
@@ -455,8 +461,8 @@ struct IMASettingsRow<Accessory: View>: View {
 
 struct IMASettingsTextRow: View {
     @Environment(\.locale) var locale
-    let title: LocalizedStringKey
-    let subtitle: LocalizedStringKey
+    let title: String
+    let subtitle: String
     @Binding var text: String
     var placeholder: String = "未填写"
     var isSecure = false
@@ -544,7 +550,7 @@ struct AppKitSingleLineTextField: NSViewRepresentable {
         if field.stringValue != text {
             field.stringValue = text
         }
-        field.placeholderString = String(localized: String.LocalizationValue(placeholder), locale: locale)
+        field.placeholderString = placeholder.appLocalized
     }
 
     func makeCoordinator() -> Coordinator {
@@ -567,7 +573,7 @@ struct AppKitSingleLineTextField: NSViewRepresentable {
     private func makeField() -> NSTextField {
         let field: NSTextField = isSecure ? FocusableSecureTextField() : FocusableTextField()
         field.stringValue = text
-        field.placeholderString = String(localized: String.LocalizationValue(placeholder), locale: locale)
+        field.placeholderString = placeholder.appLocalized
         field.isBordered = false
         field.isBezeled = false
         field.drawsBackground = false
@@ -632,7 +638,7 @@ private final class FocusableSecureTextField: NSSecureTextField {
 
 struct CredentialToolButton: View {
     let icon: String
-    let help: LocalizedStringKey
+    let help: String
     let action: () -> Void
 
     var body: some View {
@@ -647,6 +653,6 @@ struct CredentialToolButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .help(help)
+        .help(help.appLocalized)
     }
 }

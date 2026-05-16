@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 extension Color {
     static let appAccent = Color(red: 34 / 255, green: 36 / 255, blue: 38 / 255)
@@ -31,13 +32,13 @@ extension Color {
 }
 
 enum EventVisuals {
-    static func title(for type: String) -> LocalizedStringKey {
+    static func title(for type: String) -> String {
         switch type {
-        case "created": return "新增"
-        case "modified": return "修改"
-        case "deleted": return "删除"
-        case "renamed": return "重命名"
-        default: return "变动"
+        case "created": return "新增".appLocalized
+        case "modified": return "修改".appLocalized
+        case "deleted": return "删除".appLocalized
+        case "renamed": return "重命名".appLocalized
+        default: return "变动".appLocalized
         }
     }
 
@@ -87,7 +88,7 @@ extension View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
             )
-            .shadow(color: Color.appMint.opacity(0.04), radius: 14, x: 0, y: 8)
+            .shadow(color: Color.appMint.opacity(0.025), radius: 8, x: 0, y: 4)
             .imaHover()
     }
 
@@ -102,6 +103,116 @@ extension View {
 
     func imaHover() -> some View {
         self.modifier(HoverScale())
+    }
+}
+
+struct LocalizedText: View {
+    let key: String
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
+
+    init(_ key: String) {
+        self.key = key
+    }
+
+    var body: some View {
+        let value = AppLocalization.shared.localized(key, language: appLanguage)
+        let _ = {
+            if key == "设置" || key == "首页" || key == "帮助" {
+                print("[LocalizedText] key=\(key) lang=\(appLanguage.rawValue) locale=\(appLanguage.effectiveLocaleIdentifier) -> \(value)")
+            }
+        }()
+        Text(value)
+    }
+}
+
+extension String {
+    var appLocalized: String {
+        let language = UserDefaults.standard.string(forKey: "appLanguage").flatMap(AppLanguage.init(rawValue:)) ?? .system
+        return AppLocalization.shared.localized(self, language: language)
+    }
+}
+
+private final class AppLocalization {
+    static let shared = AppLocalization()
+
+    private struct Catalog: Decodable {
+        let strings: [String: CatalogEntry]
+    }
+
+    private struct CatalogEntry: Decodable {
+        let localizations: [String: LocalizationUnit]?
+    }
+
+    private struct LocalizationUnit: Decodable {
+        let stringUnit: StringUnit?
+    }
+
+    private struct StringUnit: Decodable {
+        let value: String
+    }
+
+    private lazy var catalog: [String: CatalogEntry] = {
+        guard let url = Bundle.module.url(forResource: "Localizable", withExtension: "xcstrings") else {
+            print("[AppLocalization] Error: Localizable.xcstrings URL not found in Bundle.module (\(Bundle.module.bundlePath))")
+            return [:]
+        }
+        
+        do {
+            let data = try Data(contentsOf: url)
+            let catalog = try JSONDecoder().decode(Catalog.self, from: data)
+            print("[AppLocalization] Success: Loaded \(catalog.strings.count) keys from \(url.path)")
+            return catalog.strings
+        } catch {
+            print("[AppLocalization] Error: Failed to load or decode data: \(error)")
+            return [:]
+        }
+    }()
+
+    var debugCatalogCount: Int {
+        return catalog.count
+    }
+
+    func localized(_ key: String, language: AppLanguage) -> String {
+        let locale = language.effectiveLocaleIdentifier
+
+        // 1. 如果手动解析的 xcstrings catalog 存在（纯 SPM build 时）
+        if !catalog.isEmpty {
+            if let entry = catalog[key]?.localizations {
+                if locale == "zh-Hans" {
+                    return entry["zh-Hans"]?.stringUnit?.value ?? key
+                }
+                if let exact = entry[locale]?.stringUnit?.value { return exact }
+                if locale.hasPrefix("zh-Hant"), let traditional = entry["zh-Hant"]?.stringUnit?.value { return traditional }
+                if locale.hasPrefix("en"), let english = entry["en"]?.stringUnit?.value { return english }
+            }
+        }
+
+        // 2. 如果被 Xcode 编译成了 .lproj 文件夹 (SPM module bundle 或 Main app bundle)
+        let lprojName: String
+        switch locale {
+        case "zh-Hans": lprojName = "zh-Hans"
+        case "zh-Hant": lprojName = "zh-Hant"
+        case "en": lprojName = "en"
+        default: lprojName = "Base"
+        }
+
+        let bundlesToSearch = [Bundle.module, Bundle.main]
+        for searchBundle in bundlesToSearch {
+            if let bundlePath = searchBundle.path(forResource: lprojName, ofType: "lproj"),
+               let bundle = Bundle(path: bundlePath) {
+                let result = bundle.localizedString(forKey: key, value: nil, table: nil)
+                if result != key {
+                    return result
+                }
+            }
+        }
+        
+        // 特别处理 zh-Hans，因为源代码是中文，可能没有显式的 zh-Hans.lproj 翻译
+        if locale == "zh-Hans" {
+            return key
+        }
+
+        return key
     }
 }
 
@@ -174,6 +285,53 @@ struct AppIconBadge: View {
     }
 }
 
+struct AppBrandIcon: View {
+    var size: CGFloat = 48
+    var cornerRadius: CGFloat? = nil
+
+    var body: some View {
+        Group {
+            if let image = Self.loadImage() {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
+            } else {
+                RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
+                    .fill(LinearGradient(colors: [.appInk, .appMint], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .overlay {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: size * 0.34, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
+        .shadow(color: Color.appInk.opacity(size > 60 ? 0.16 : 0.08), radius: size > 60 ? 18 : 8, x: 0, y: size > 60 ? 10 : 4)
+        .accessibilityLabel("FileSyncMonitor")
+    }
+
+    private var resolvedCornerRadius: CGFloat {
+        cornerRadius ?? max(8, size * 0.22)
+    }
+
+    private static func loadImage() -> NSImage? {
+        for resource in [
+            ("AppBrandIcon", "png"),
+            ("AppMenuBarIcon", "png"),
+            ("AppIcon", "icns")
+        ] {
+            if let url = Bundle.module.url(forResource: resource.0, withExtension: resource.1),
+               let image = NSImage(contentsOf: url) {
+                return image
+            }
+        }
+
+        return nil
+    }
+}
+
 struct AppSectionHeader: View {
     let title: String
     var subtitle: String?
@@ -187,10 +345,10 @@ struct AppSectionHeader: View {
                     .foregroundStyle(Color.appAccent)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
+                LocalizedText(title)
                     .font(.system(size: 15, weight: .semibold))
                 if let subtitle {
-                    Text(subtitle)
+                    LocalizedText(subtitle)
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -235,7 +393,7 @@ struct PillButtonStyle: ButtonStyle {
                         )
                 )
                 .foregroundStyle(isPrimary ? .white : Color.appInk)
-                .scaleEffect(configuration.isPressed ? 0.97 : (isHovered ? 1.02 : 1))
+                .scaleEffect(configuration.isPressed ? 0.98 : 1)
                 .onHover { isHovered = $0 }
                 .animation(.snappy(duration: 0.15), value: isHovered)
                 .animation(.snappy(duration: 0.1), value: configuration.isPressed)
@@ -278,7 +436,7 @@ struct QuietButtonStyle: ButtonStyle {
                         )
                 )
                 .foregroundStyle(isHovered ? Color.appInk : Color.appInk.opacity(0.85))
-                .scaleEffect(configuration.isPressed ? 0.97 : (isHovered ? 1.02 : 1))
+                .scaleEffect(configuration.isPressed ? 0.98 : 1)
                 .onHover { isHovered = $0 }
                 .animation(.snappy(duration: 0.15), value: isHovered)
         }
@@ -298,9 +456,9 @@ struct EmptyStateView: View {
         VStack(spacing: 14) {
             AppIconBadge(symbol: icon, color: .appAccent, size: 52)
             VStack(spacing: 5) {
-                Text(title)
+                LocalizedText(title)
                     .font(.system(size: 15, weight: .semibold))
-                Text(subtitle)
+                LocalizedText(subtitle)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -314,7 +472,7 @@ struct EmptyStateView: View {
 
 struct SmoothSearchField: View {
     @Binding var text: String
-    let placeholder: LocalizedStringKey
+    let placeholder: String
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -322,7 +480,7 @@ struct SmoothSearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(isFocused ? Color.appMint : .secondary)
-            TextField(placeholder, text: $text)
+            TextField(placeholder.appLocalized, text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused($isFocused)
@@ -350,7 +508,7 @@ struct SmoothSearchField: View {
 }
 
 struct StatusPill: View {
-    let text: LocalizedStringKey
+    let text: String
     let symbol: String
     let color: Color
 
@@ -358,7 +516,7 @@ struct StatusPill: View {
         HStack(spacing: 5) {
             Image(systemName: symbol)
                 .font(.system(size: 10, weight: .bold))
-            Text(text)
+            LocalizedText(text)
                 .font(.system(size: 11, weight: .semibold))
         }
         .padding(.horizontal, 8)
@@ -396,11 +554,11 @@ struct AppToggle: View {
 }
 
 struct AppMenuValue: View {
-    let text: LocalizedStringKey
+    let text: String
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(text)
+            LocalizedText(text)
                 .font(.system(size: 12, weight: .semibold))
             Image(systemName: "chevron.down")
                 .font(.system(size: 9, weight: .bold))
@@ -420,7 +578,7 @@ struct AppMenuValue: View {
 }
 
 struct AppSegmentedControl<Value: Hashable>: View {
-    let options: [(Value, LocalizedStringKey)]
+    let options: [(Value, String)]
     @Binding var selection: Value
 
     var body: some View {
@@ -431,7 +589,7 @@ struct AppSegmentedControl<Value: Hashable>: View {
                         selection = option.0
                     }
                 } label: {
-                    Text(option.1)
+                    LocalizedText(option.1)
                         .font(.system(size: 12, weight: .bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
@@ -499,8 +657,7 @@ struct HoverScale: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isHovered ? 1.012 : 1)
-            .shadow(color: isHovered ? Color.appMint.opacity(0.08) : Color.clear, radius: isHovered ? 12 : 0, x: 0, y: 6)
+            .shadow(color: isHovered ? Color.appMint.opacity(0.045) : Color.clear, radius: isHovered ? 8 : 0, x: 0, y: 4)
             .onHover { isHovered = $0 }
             .animation(.snappy(duration: 0.22), value: isHovered)
     }
@@ -524,6 +681,30 @@ enum AppLanguage: String, CaseIterable {
         case .en: return "en"
         case .zhHans: return "zh-Hans"
         case .zhHant: return "zh-Hant"
+        }
+    }
+
+    var effectiveLocaleIdentifier: String {
+        if let localeIdentifier {
+            return localeIdentifier
+        }
+
+        let current = Locale.current.identifier
+        if current.hasPrefix("zh-Hant") {
+            return "zh-Hant"
+        }
+        if current.hasPrefix("zh") {
+            return "zh-Hans"
+        }
+        return "en"
+    }
+
+    var displayTitle: String {
+        switch self {
+        case .system: return "跟随系统".appLocalized
+        case .en: return "English"
+        case .zhHans: return "简体中文".appLocalized
+        case .zhHant: return "繁体中文".appLocalized
         }
     }
 }

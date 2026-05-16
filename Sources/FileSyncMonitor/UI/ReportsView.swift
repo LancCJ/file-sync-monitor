@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct ReportsView: View {
     @Query(sort: \FileEvent.timestamp, order: .reverse) private var events: [FileEvent]
+    @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
     @State private var timeRange: TimeRange = .week
 
     enum TimeRange: String, CaseIterable, Identifiable {
@@ -14,12 +15,12 @@ struct ReportsView: View {
 
         var id: String { rawValue }
 
-        var title: LocalizedStringKey {
+        var titleKey: String {
             switch self {
-            case .today: "今天"
-            case .week: "近 7 天"
-            case .month: "近 30 天"
-            case .all: "全部"
+            case .today: return "今天"
+            case .week: return "近 7 天"
+            case .month: return "近 30 天"
+            case .all: return "全部"
             }
         }
 
@@ -50,15 +51,10 @@ struct ReportsView: View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Text("file.sync")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.appMint)
-                        Text("报告")
-                            .font(.system(size: 25, weight: .bold))
-                            .foregroundStyle(Color.appInk)
-                    }
-                    Text("低频查看统计和导出记录。日常处理请回到待同步。")
+                    LocalizedText("报告")
+                        .font(.system(size: 25, weight: .bold))
+                        .foregroundStyle(Color.appInk)
+                    LocalizedText("低频查看统计和导出记录。日常处理请回到待同步。")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
@@ -66,7 +62,7 @@ struct ReportsView: View {
                 Spacer()
 
                 AppSegmentedControl(
-                    options: TimeRange.allCases.map { ($0, $0.title) },
+                    options: TimeRange.allCases.map { ($0, $0.titleKey) },
                     selection: $timeRange
                 )
                 .frame(width: 280)
@@ -131,7 +127,7 @@ private struct SimpleReportCard: View {
                 Text("\(value)")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(color)
-                Text(title)
+                LocalizedText(title)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
@@ -160,7 +156,7 @@ private struct ReportBreakdown: View {
                 ForEach(rows, id: \.0) { row in
                     HStack(spacing: 10) {
                         AppIconBadge(symbol: EventVisuals.symbol(for: row.1), color: row.3, size: 28)
-                        Text(row.0)
+                        LocalizedText(row.0)
                             .font(.system(size: 13, weight: .medium))
                         Spacer()
                         Text("\(row.2)")
@@ -181,7 +177,11 @@ private struct ReportExportPanel: View {
                 Button {
                     export(format: .csv)
                 } label: {
-                    Label("导出 CSV", systemImage: "tablecells")
+                    Label {
+                        LocalizedText("导出 CSV")
+                    } icon: {
+                        Image(systemName: "tablecells")
+                    }
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(QuietButtonStyle())
@@ -189,7 +189,11 @@ private struct ReportExportPanel: View {
                 Button {
                     export(format: .json)
                 } label: {
-                    Label("导出 JSON", systemImage: "curlybraces")
+                    Label {
+                        LocalizedText("导出 JSON")
+                    } icon: {
+                        Image(systemName: "curlybraces")
+                    }
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(QuietButtonStyle())
