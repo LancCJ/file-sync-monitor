@@ -225,66 +225,66 @@
         }
       }
     },
-    "双向拉取尝试": {
+    "双向拉取与删除决策": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bidirectional Pull"
+            "value": "Bidirectional Pull & Deletion Decision"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "雙向拉取嘗試"
+            "value": "雙向拉取與刪除決策"
           }
         }
       }
     },
-    "点击「从云端拉取更新」，即可智能识别并下载知识库中的新文件到本地。": {
+    "点击「从云端拉取更新」以合并云端更改。若本地已被删除的文件仍存于云端，会弹框提示您选择重新拉回或保持本地删除。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Click 'Pull from Cloud' to intelligently identify and download new files from the knowledge base to local."
+            "value": "Click 'Pull from Cloud' to merge cloud changes. If locally deleted files still exist on the cloud, a dialog will ask whether you want to pull them back or keep them deleted."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "點擊「從雲端拉取更新」，即可智能識別並下載知識庫中的新文件到本地。"
+            "value": "點擊「從雲端拉取更新」以合併雲端更改。若本地已被刪除的文件仍存於雲端，會彈框提示您選擇重新拉回或保持本地刪除。"
           }
         }
       }
     },
-    "自动化推送流程": {
+    "自动推送与删除同步": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Automated Push Flow"
+            "value": "Auto Push & Deletion Sync"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "自動化推送流程"
+            "value": "自動推送與刪除同步"
           }
         }
       }
     },
-    "开启自动同步后，应用会在您保存文件 30 秒后自动完成云端备份。": {
+    "开启自动同步后 30 秒自动完成云端备份。对于本地删除事件，应用会自动标记同步成功，并指引您手动清理云端以实现双向一致。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "With auto-sync enabled, the app will automatically back up to the cloud 30 seconds after you save a file."
+            "value": "Auto backup completes 30 seconds after saving. For local deletion events, the app automatically marks them synced and guides you to manually clean the cloud for full consistency."
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "開啟自動同步後，應用會在您保存文件 30 秒後自動完成雲端備份。"
+            "value": "開啟自動同步後 30 秒自動完成雲端備份。對於本地刪除事件，應用會自動標記同步成功，並指引您手動清理雲端以實現雙向一致。"
           }
         }
       }
