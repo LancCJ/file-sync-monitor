@@ -1,5 +1,6 @@
 # FileSyncMonitor
 
+[English](README_en.md) | [中文](README.md)
 FileSyncMonitor 是一款 macOS 文件变动监控与同步确认工具。它可以监控指定目录的文件变化，记录新增、修改、删除、重命名事件，并通过主窗口、菜单栏角标和系统通知提醒用户处理待同步文件。
 
 当前版本使用 SwiftUI + SwiftData 构建，底层监控基于 macOS FSEvents，支持本地报告导出和可选的腾讯 IMA 云端上传。
