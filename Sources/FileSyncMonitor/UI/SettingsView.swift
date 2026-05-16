@@ -1,14 +1,21 @@
 import SwiftUI
 import SwiftData
+import AppKit
 
 struct SettingsView: View {
     @AppStorage("appearance") private var appearance: AppearanceMode = .system
-    @AppStorage("language") private var language: String = "zh-Hans"
-    @AppStorage("clientId") private var clientId: String = ""
-    @AppStorage("apiKey") private var apiKey: String = ""
+    @AppStorage("notifyOnChanges") private var notifyOnChanges = true
+    @AppStorage("retentionDays") private var retentionDays = 365
+    @AppStorage("defaultExportFormat") private var defaultExportFormat = "csv"
+    @AppStorage("imaClientId") private var clientId = ""
+    @AppStorage("imaApiKey") private var apiKey = ""
+
+    @State private var isTestingIMA = false
+    @State private var imaStatus: IMAStatus = .idle
 
     enum AppearanceMode: String, CaseIterable {
         case system, light, dark
+
         var title: LocalizedStringKey {
             switch self {
             case .system: "跟随系统"
@@ -18,136 +25,142 @@ struct SettingsView: View {
         }
     }
 
-    var body: some View {
-        TabView {
-            GeneralSettingsView()
-                .tabItem { Label("常规", systemImage: "gearshape") }
-
-            IMACloudSettingsView()
-                .tabItem { Label("IMA 云端", systemImage: "cloud") }
-
-            ProUpgradeView()
-                .tabItem { Label("高级版", systemImage: "star") }
-        }
-        .frame(width: 520, height: 420)
+    enum IMAStatus: Equatable {
+        case idle, connected, failed
     }
-}
-
-// MARK: - General Settings
-struct GeneralSettingsView: View {
-    @AppStorage("appearance") private var appearance: SettingsView.AppearanceMode = .system
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 28) {
-                // Appearance Section
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionHeader(icon: "paintpalette", title: "外观")
+            VStack(alignment: .leading, spacing: 32) {
+                Text("设置")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(Color.appInk)
+                    .padding(.top, 64)
 
-                    VStack(spacing: 16) {
-                        HStack {
-                            Image(systemName: "sun.max.fill")
-                                .foregroundStyle(Color.warningOrange)
-                                .frame(width: 24)
-                            Text("主题模式")
-                                .font(.system(size: 14))
-                            Spacer()
-                            Picker("", selection: $appearance) {
-                                ForEach(SettingsView.AppearanceMode.allCases, id: \.self) { mode in
-                                    Text(mode.title).tag(mode)
+                IMASettingsGroup(title: "监控目录") {
+                    if FileMonitorService.shared.monitoredPaths.isEmpty {
+                        IMASettingsRow(title: "监控文件夹", subtitle: "尚未添加目录") {
+                            Button(action: addDirectory) {
+                                Text("添加")
+                            }
+                            .buttonStyle(PillButtonStyle(isPrimary: true))
+                        }
+                    } else {
+                        ForEach(FileMonitorService.shared.monitoredPaths, id: \.self) { path in
+                            IMASettingsRow(title: URL(fileURLWithPath: path).lastPathComponent, subtitle: path) {
+                                Button(role: .destructive) {
+                                    FileMonitorService.shared.removeDirectory(at: path)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        IMASettingsRow(title: "添加更多目录", subtitle: "继续监控其他文件夹") {
+                            Button(action: addDirectory) {
+                                Text("添加")
+                            }
+                            .buttonStyle(QuietButtonStyle())
+                        }
+                    }
+                }
+
+                IMASettingsGroup(title: "IMA 云端") {
+                    IMASettingsTextRow(title: "Client ID", subtitle: "IMA OpenAPI Client ID", text: $clientId)
+                    IMASettingsTextRow(title: "API Key", subtitle: "IMA OpenAPI API Key", text: $apiKey, isSecure: true)
+                    IMASettingsRow(title: "连接测试", subtitle: "检查当前凭据是否可用") {
+                        HStack(spacing: 10) {
+                            StatusPill(text: imaStatusTitle, symbol: imaStatusIcon, color: imaStatusColor)
+                            Button(action: testIMAConnection) {
+                                if isTestingIMA {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Text("测试")
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .frame(width: 140)
+                            .buttonStyle(QuietButtonStyle())
+                            .disabled(clientId.isEmpty || apiKey.isEmpty || isTestingIMA)
                         }
                     }
-                    .imaCard()
                 }
 
-                // Monitor Section
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionHeader(icon: "folder.badge.gear", title: "监控目录")
+                IMASettingsGroup(title: "通知与导出") {
+                    IMASettingsRow(title: "允许消息通知", subtitle: "新文件变动时发送系统通知") {
+                        AppToggle(isOn: $notifyOnChanges)
+                    }
 
-                    MonitoredDirectoriesCard()
+                    IMASettingsRow(title: "默认导出格式", subtitle: "报告与记录导出的默认格式") {
+                        AppSegmentedControl(
+                            options: [("csv", "CSV"), ("json", "JSON")],
+                            selection: $defaultExportFormat
+                        )
+                        .frame(width: 112)
+                    }
+
+                    IMASettingsRow(title: "已同步记录保留", subtitle: "未同步记录不会自动清理") {
+                        Menu {
+                            Button("30 天") { retentionDays = 30 }
+                            Button("90 天") { retentionDays = 90 }
+                            Button("365 天") { retentionDays = 365 }
+                            Button("永久") { retentionDays = 0 }
+                        } label: {
+                            AppMenuValue(text: retentionText)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
-                Spacer(minLength: 20)
+                IMASettingsGroup(title: "高级版") {
+                    IMASettingsRow(
+                        title: StoreManager.shared.isPro ? "高级版已激活" : "升级到高级版",
+                        subtitle: StoreManager.shared.isPro ? "所有高级功能已经可用" : "解锁无限监控、自动同步和高级报告"
+                    ) {
+                        if StoreManager.shared.isPro {
+                            StatusPill(text: "已激活", symbol: "checkmark", color: .appMint)
+                        } else {
+                            Button {
+                                Task { try? await StoreManager.shared.purchase() }
+                            } label: {
+                                Label("¥9.9", systemImage: "bag")
+                            }
+                            .buttonStyle(PillButtonStyle(isPrimary: true))
+                        }
+                    }
+                }
             }
-            .padding(24)
+            .frame(width: 760, alignment: .leading)
+            .padding(.bottom, 80)
+            .frame(maxWidth: .infinity)
+        }
+        .background(IMAClientSurfaceBackground())
+    }
+
+    private var retentionText: String {
+        retentionDays == 0 ? "永久" : "\(retentionDays) 天"
+    }
+
+    private var imaStatusTitle: String {
+        switch imaStatus {
+        case .idle: return "未测试"
+        case .connected: return "可用"
+        case .failed: return "失败"
         }
     }
-}
 
-struct MonitoredDirectoriesCard: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            if FileMonitorService.shared.monitoredPaths.isEmpty {
-                HStack(spacing: 10) {
-                    Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 24))
-                        .foregroundStyle(Color.tencentBlue.opacity(0.5))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("尚未添加监控目录")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("点击下方按钮添加需要监控的文件夹")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                .padding(16)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(FileMonitorService.shared.monitoredPaths, id: \.self) { path in
-                        HStack(spacing: 10) {
-                            Image(systemName: "folder")
-                                .foregroundStyle(Color.tencentBlue)
-                                .frame(width: 20)
-                            Text(path)
-                                .font(.system(size: 13))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer()
-                            Button(role: .destructive) {
-                                FileMonitorService.shared.removeDirectory(at: path)
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(.red.opacity(0.7))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-
-                        if path != FileMonitorService.shared.monitoredPaths.last {
-                            Divider()
-                                .padding(.leading, 46)
-                        }
-                    }
-                }
-            }
-
-            Divider()
-
-            Button(action: addDirectory) {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 14))
-                    Text("添加监控目录")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundStyle(Color.tencentBlue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+    private var imaStatusIcon: String {
+        switch imaStatus {
+        case .idle: return "circle"
+        case .connected: return "checkmark"
+        case .failed: return "xmark"
         }
-        .background(.ultraThinMaterial)
-        .background(Color.primary.opacity(0.02))
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+    }
+
+    private var imaStatusColor: Color {
+        switch imaStatus {
+        case .idle: return .secondary
+        case .connected: return .appMint
+        case .failed: return .appRose
+        }
     }
 
     private func addDirectory() {
@@ -160,301 +173,255 @@ struct MonitoredDirectoriesCard: View {
             FileMonitorService.shared.addDirectory(at: url)
         }
     }
-}
 
-// MARK: - IMA Cloud Settings
-struct IMACloudSettingsView: View {
-    @AppStorage("imaClientId") private var clientId: String = ""
-    @AppStorage("imaApiKey") private var apiKey: String = ""
-    @State private var isTesting = false
-    @State private var testResult: TestResult? = nil
-
-    enum TestResult: Equatable {
-        case connected, failed(String)
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 28) {
-                // API Config Section
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionHeader(icon: "key.horizontal", title: "API 配置")
-
-                    VStack(spacing: 0) {
-                        IconTextField(
-                            icon: "person.text.rectangle",
-                            iconColor: Color.tencentBlue,
-                            title: "Client ID",
-                            text: $clientId,
-                            prompt: "输入 Client ID"
-                        )
-
-                        Divider()
-                            .padding(.leading, 44)
-
-                        IconTextField(
-                            icon: "lock.shield",
-                            iconColor: Color.warningOrange,
-                            title: "API Key",
-                            text: $apiKey,
-                            prompt: "输入 API Key",
-                            isSecure: true
-                        )
-                    }
-                    .imaCard()
-                }
-
-                // Connection Test
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionHeader(icon: "antenna.radiowaves.left.and.right", title: "连接测试")
-
-                    Button(action: testConnection) {
-                        HStack(spacing: 8) {
-                            if isTesting {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .scaleEffect(0.8)
-                            } else {
-                                Image(systemName: testResultIcon)
-                                    .font(.system(size: 14))
-                            }
-                            Text(buttonTitle)
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(PillButtonStyle(isPrimary: testResult == nil))
-                    .disabled(clientId.isEmpty || apiKey.isEmpty || isTesting)
-
-                    if let result = testResult {
-                        HStack(spacing: 8) {
-                            Image(systemName: result == .connected ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            Text(resultMessage(for: result))
-                                .font(.system(size: 13))
-                            Spacer()
-                        }
-                        .foregroundStyle(result == .connected ? Color.successGreen : .red)
-                        .padding(.horizontal, 4)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                }
-
-                Spacer(minLength: 20)
-            }
-            .padding(24)
-        }
-    }
-
-    private var buttonTitle: String {
-        if isTesting { return "测试中..." }
-        switch testResult {
-        case .connected: return "连接成功"
-        case .failed: return "重试连接"
-        case .none: return "测试连接"
-        }
-    }
-
-    private var testResultIcon: String {
-        switch testResult {
-        case .connected: return "checkmark.circle.fill"
-        case .failed: return "arrow.clockwise"
-        case .none: return "bolt.fill"
-        }
-    }
-
-    private func resultMessage(for result: TestResult) -> String {
-        switch result {
-        case .connected: return "API 连接正常，可以正常使用同步功能"
-        case .failed(let msg): return msg
-        }
-    }
-
-    func testConnection() {
-        isTesting = true
-        testResult = nil
+    private func testIMAConnection() {
+        isTestingIMA = true
+        imaStatus = .idle
         Task {
             IMASyncService.shared.clientId = clientId
             IMASyncService.shared.apiKey = apiKey
             do {
                 _ = try await IMASyncService.shared.getKnowledgeBases()
-                withAnimation {
-                    testResult = .connected
-                }
+                imaStatus = .connected
             } catch {
-                withAnimation {
-                    testResult = .failed("连接失败：请检查 Client ID 和 API Key 是否正确")
-                }
+                imaStatus = .failed
             }
-            isTesting = false
+            isTestingIMA = false
         }
     }
 }
 
-// MARK: - Icon Text Field
-struct IconTextField: View {
-    let icon: String
-    let iconColor: Color
+struct IMASettingsGroup<Content: View>: View {
     let title: String
-    @Binding var text: String
-    let prompt: String
-    var isSecure: Bool = false
-    @FocusState private var isFocused: Bool
+    @ViewBuilder let content: Content
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(iconColor)
-                .frame(width: 24)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.appMuted)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                if isSecure {
-                    SecureField(prompt, text: $text)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 14))
-                        .focused($isFocused)
-                        .frame(maxWidth: .infinity, minHeight: 18)
-                } else {
-                    TextField(prompt, text: $text)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 14))
-                        .focused($isFocused)
-                        .frame(maxWidth: .infinity, minHeight: 18)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(isFocused ? Color.tencentBlue.opacity(0.04) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .animation(.easeInOut(duration: 0.2), value: isFocused)
-    }
-}
-
-// MARK: - Pro Upgrade
-struct ProUpgradeView: View {
-    let store = StoreManager.shared
-
-    var body: some View {
-        ScrollView {
             VStack(spacing: 0) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.15, green: 0.25, blue: 0.55),
-                                    Color(red: 0.08, green: 0.12, blue: 0.35)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                content
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.appSurface.opacity(0.86))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.appLine.opacity(0.62), lineWidth: 1)
+                    )
+            )
+            .shadow(color: Color.appMint.opacity(0.035), radius: 14, x: 0, y: 8)
+        }
+    }
+}
 
-                    VStack(spacing: 20) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.white.opacity(0.1))
-                                .frame(width: 80, height: 80)
-                            Image(systemName: "crown.fill")
-                                .font(.system(size: 36))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.yellow, .orange],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .shadow(color: .orange.opacity(0.4), radius: 10, x: 0, y: 4)
-                        }
+struct IMASettingsRow<Accessory: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder let accessory: Accessory
 
-                        if store.isPro {
-                            VStack(spacing: 8) {
-                                Text("您已是专业版用户")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundStyle(.white)
-                                Text("感谢您的支持，所有高级功能已解锁")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                    .multilineTextAlignment(.center)
-
-                                HStack(spacing: 6) {
-                                    Image(systemName: "checkmark.seal.fill")
-                                        .font(.system(size: 14))
-                                    Text("已激活")
-                                        .font(.system(size: 13, weight: .medium))
-                                }
-                                .foregroundStyle(.green)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 6)
-                                .background(Color.green.opacity(0.15))
-                                .clipShape(Capsule())
-                                .padding(.top, 8)
-                            }
-                        } else {
-                            VStack(spacing: 8) {
-                                Text("升级到专业版")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundStyle(.white)
-                                Text("一次性解锁无限监控、自动同步等高级功能")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                    .multilineTextAlignment(.center)
-                            }
-
-                            // Features
-                            VStack(alignment: .leading, spacing: 10) {
-                                FeatureRow(icon: "infinity", text: "无限监控目录")
-                                FeatureRow(icon: "arrow.triangle.2.circlepath", text: "自动云端同步")
-                                FeatureRow(icon: "bell.badge", text: "实时推送通知")
-                                FeatureRow(icon: "chart.line.uptrend.xyaxis", text: "高级数据报表")
-                            }
-                            .padding(.vertical, 8)
-
-                            Button(action: {
-                                Task { try? await store.purchase() }
-                            }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "bag.fill")
-                                    Text("立即购买 - ¥9.9")
-                                        .font(.system(size: 15, weight: .bold))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                            }
-                            .buttonStyle(PillButtonStyle(isPrimary: true))
-                            .padding(.horizontal, 20)
-                        }
-                    }
-                    .padding(28)
+    var body: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.appInk)
+                    .lineLimit(1)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.appMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                .padding(24)
+            }
+            Spacer()
+            accessory
+        }
+        .padding(.horizontal, 18)
+        .frame(minHeight: 58)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.appLine.opacity(0.64))
+                .frame(height: 1)
+                .padding(.leading, 18)
+        }
+    }
+}
 
-                Spacer(minLength: 20)
+struct IMASettingsTextRow: View {
+    let title: String
+    let subtitle: String
+    @Binding var text: String
+    var isSecure = false
+    @State private var isRevealed = false
+    @State private var isFocused = false
+
+    var body: some View {
+        IMASettingsRow(title: title, subtitle: subtitle) {
+            HStack(spacing: 6) {
+                AppKitCredentialField(
+                    text: $text,
+                    placeholder: "未填写",
+                    isSecure: isSecure && !isRevealed,
+                    isFocused: $isFocused
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: 24)
+
+                if isSecure {
+                    CredentialToolButton(
+                        icon: isRevealed ? "eye.slash" : "eye",
+                        help: isRevealed ? "隐藏" : "显示"
+                    ) {
+                        isRevealed.toggle()
+                    }
+                }
+
+                CredentialToolButton(icon: "doc.on.doc", help: "复制") {
+                    copyToPasteboard()
+                }
+                .disabled(text.isEmpty)
+
+                CredentialToolButton(icon: "doc.on.clipboard", help: "粘贴") {
+                    pasteFromPasteboard()
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(width: 380, height: 36)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.appControl.opacity(0.94))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(isFocused ? Color.appMint.opacity(0.65) : Color.appLine.opacity(0.72), lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    private func copyToPasteboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func pasteFromPasteboard() {
+        if let value = NSPasteboard.general.string(forType: .string) {
+            text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+}
+
+struct AppKitCredentialField: NSViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    let isSecure: Bool
+    @Binding var isFocused: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
+        installField(in: container, context: context)
+        return container
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        let currentField = nsView.subviews.first as? NSTextField
+        if currentField == nil || ((currentField is NSSecureTextField) != isSecure) {
+            nsView.subviews.forEach { $0.removeFromSuperview() }
+            installField(in: nsView, context: context)
+        }
+
+        guard let field = nsView.subviews.first as? NSTextField else { return }
+        if field.stringValue != text {
+            field.stringValue = text
+        }
+        field.placeholderString = placeholder
+    }
+
+    private func installField(in container: NSView, context: Context) {
+        let field = makeField()
+        field.delegate = context.coordinator
+        field.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(field)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            field.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            field.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+        if let height = field.cell?.cellSize.height {
+            field.heightAnchor.constraint(greaterThanOrEqualToConstant: height).isActive = true
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, isFocused: $isFocused)
+    }
+
+    private func makeField() -> NSTextField {
+        let field: NSTextField = isSecure ? NSSecureTextField() : NSTextField()
+        field.stringValue = text
+        field.placeholderString = placeholder
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.isEditable = true
+        field.isSelectable = true
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: 13, weight: .medium)
+        field.textColor = NSColor.labelColor
+        field.lineBreakMode = .byTruncatingMiddle
+        field.cell?.usesSingleLineMode = true
+        field.cell?.wraps = false
+        return field
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        @Binding var text: String
+        @Binding var isFocused: Bool
+
+        init(text: Binding<String>, isFocused: Binding<Bool>) {
+            _text = text
+            _isFocused = isFocused
+        }
+
+        func controlTextDidBeginEditing(_ obj: Notification) {
+            isFocused = true
+        }
+
+        func controlTextDidEndEditing(_ obj: Notification) {
+            isFocused = false
+            if let field = obj.object as? NSTextField {
+                text = field.stringValue
+            }
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            if let field = obj.object as? NSTextField {
+                text = field.stringValue
             }
         }
     }
 }
 
-struct FeatureRow: View {
+struct CredentialToolButton: View {
     let icon: String
-    let text: String
+    let help: String
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
-                .frame(width: 20)
-            Text(text)
-                .font(.system(size: 13))
-                .foregroundStyle(.white.opacity(0.85))
-            Spacer()
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.appMuted)
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.appControlPressed.opacity(0.9))
+                )
         }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }

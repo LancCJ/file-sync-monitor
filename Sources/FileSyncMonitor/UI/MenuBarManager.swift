@@ -40,7 +40,6 @@ final class MenuBarManager: NSObject {
     private func setupMenu() {
         let menu = NSMenu()
 
-        // Header info
         let headerItem = NSMenuItem()
         headerItem.attributedTitle = NSAttributedString(
             string: "FileSyncMonitor",
@@ -55,7 +54,7 @@ final class MenuBarManager: NSObject {
         let statusMenuItem = NSMenuItem()
         let unsyncedCount = getUnsyncedCount()
         statusMenuItem.attributedTitle = NSAttributedString(
-            string: unsyncedCount > 0 ? "待同步: \(unsyncedCount) 个文件" : "所有文件已同步",
+            string: unsyncedCount > 0 ? "\(unsyncedCount) 条待同步" : "没有待同步文件",
             attributes: [
                 .font: NSFont.systemFont(ofSize: 11),
                 .foregroundColor: NSColor.secondaryLabelColor
@@ -66,9 +65,24 @@ final class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Open Main Window
+        for event in getRecentUnsyncedEvents() {
+            let item = NSMenuItem(
+                title: "\(eventTypeLabel(event.type)) · \(event.fileName)",
+                action: #selector(markMenuEventSynced(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = event.id.uuidString
+            item.image = NSImage(systemSymbolName: eventTypeSymbol(event.type), accessibilityDescription: nil)
+            menu.addItem(item)
+        }
+
+        if unsyncedCount > 0 {
+            menu.addItem(NSMenuItem.separator())
+        }
+
         let openItem = NSMenuItem(
-            title: "打开主窗口",
+            title: "打开待同步文件",
             action: #selector(openMainWindow),
             keyEquivalent: "m"
         )
@@ -78,9 +92,8 @@ final class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Sync All
         let syncItem = NSMenuItem(
-            title: "全部标记为已同步",
+            title: "全部完成",
             action: #selector(syncAll),
             keyEquivalent: "s"
         )
@@ -88,7 +101,6 @@ final class MenuBarManager: NSObject {
         syncItem.image = NSImage(systemSymbolName: "checkmark.circle", accessibilityDescription: nil)
         menu.addItem(syncItem)
 
-        // Export submenu
         let exportMenu = NSMenu(title: "导出")
         let csvItem = NSMenuItem(title: "导出 CSV...", action: #selector(exportCSV), keyEquivalent: "")
         csvItem.target = self
@@ -107,7 +119,6 @@ final class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Settings
         let settingsItem = NSMenuItem(
             title: "设置...",
             action: #selector(openSettings),
@@ -154,7 +165,25 @@ final class MenuBarManager: NSObject {
                 }
                 try? context.save()
                 updateBadge(count: 0)
+                setupMenu()
             }
+        }
+    }
+
+    @objc private func markMenuEventSynced(_ sender: NSMenuItem) {
+        guard let idString = sender.representedObject as? String,
+              let id = UUID(uuidString: idString) else { return }
+
+        Task { @MainActor in
+            let context = PersistenceController.shared.makeBackgroundContext()
+            let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.id == id })
+            if let event = try? context.fetch(descriptor).first {
+                event.isSynced = true
+                try? context.save()
+            }
+            let count = getUnsyncedCount()
+            updateBadge(count: count)
+            setupMenu()
         }
     }
 
@@ -189,5 +218,35 @@ final class MenuBarManager: NSObject {
         let context = PersistenceController.shared.makeBackgroundContext()
         let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
         return (try? context.fetchCount(descriptor)) ?? 0
+    }
+
+    private func getRecentUnsyncedEvents() -> [FileEvent] {
+        let context = PersistenceController.shared.makeBackgroundContext()
+        var descriptor = FetchDescriptor<FileEvent>(
+            predicate: #Predicate<FileEvent> { $0.isSynced == false },
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        descriptor.fetchLimit = 5
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    private func eventTypeLabel(_ type: String) -> String {
+        switch type {
+        case "created": return "新增"
+        case "modified": return "修改"
+        case "deleted": return "删除"
+        case "renamed": return "重命名"
+        default: return "变动"
+        }
+    }
+
+    private func eventTypeSymbol(_ type: String) -> String {
+        switch type {
+        case "created": return "plus.circle"
+        case "modified": return "pencil.circle"
+        case "deleted": return "trash.circle"
+        case "renamed": return "arrow.left.arrow.right.circle"
+        default: return "doc"
+        }
     }
 }
