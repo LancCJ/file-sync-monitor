@@ -30,7 +30,7 @@ struct SettingsView: View {
     }
 
     enum IMAStatus: Equatable {
-        case idle, connected, failed
+        case idle, connected, failed(String)
     }
 
     var body: some View {
@@ -74,25 +74,25 @@ struct SettingsView: View {
                         AppToggle(isOn: $enableDefaultIgnoreRules)
                     }
 
-                    IMASettingsEditorRow(
+                    IMASettingsTextRow(
                         title: "忽略文件名",
-                        subtitle: "每行一个文件名，例如 .DS_Store 或 debug.log",
+                        subtitle: "用逗号、分号或换行分隔，例如 .DS_Store, debug.log",
                         text: $customIgnoredFileNames,
-                        placeholder: ".DS_Store\ndebug.log"
+                        placeholder: ".DS_Store, debug.log"
                     )
 
-                    IMASettingsEditorRow(
+                    IMASettingsTextRow(
                         title: "忽略后缀",
-                        subtitle: "每行一个后缀，例如 .log、.tmp",
+                        subtitle: "用逗号、分号或换行分隔，例如 .log, .tmp",
                         text: $customIgnoredExtensions,
-                        placeholder: ".log\n.tmp"
+                        placeholder: ".log, .tmp"
                     )
 
-                    IMASettingsEditorRow(
+                    IMASettingsTextRow(
                         title: "忽略目录名",
-                        subtitle: "每行一个目录名，例如 node_modules 或 DerivedData",
+                        subtitle: "用逗号、分号或换行分隔，例如 node_modules, DerivedData",
                         text: $customIgnoredDirectoryNames,
-                        placeholder: "node_modules\nDerivedData"
+                        placeholder: "node_modules, DerivedData"
                     )
 
                     IMASettingsRow(title: "恢复默认", subtitle: "清空自定义规则，并重新启用默认忽略规则") {
@@ -106,7 +106,7 @@ struct SettingsView: View {
                 IMASettingsGroup(title: "IMA 云端") {
                     IMASettingsTextRow(title: "Client ID", subtitle: "IMA OpenAPI Client ID", text: $clientId)
                     IMASettingsTextRow(title: "API Key", subtitle: "IMA OpenAPI API Key", text: $apiKey, isSecure: true)
-                    IMASettingsRow(title: "连接测试", subtitle: "检查当前凭据是否可用") {
+                    IMASettingsRow(title: "连接测试", subtitle: imaStatusDetail) {
                         HStack(spacing: 10) {
                             StatusPill(text: imaStatusTitle, symbol: imaStatusIcon, color: imaStatusColor)
                             Button(action: testIMAConnection) {
@@ -117,7 +117,7 @@ struct SettingsView: View {
                                 }
                             }
                             .buttonStyle(QuietButtonStyle())
-                            .disabled(clientId.isEmpty || apiKey.isEmpty || isTestingIMA)
+                            .disabled(clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isTestingIMA)
                         }
                     }
                 }
@@ -171,6 +171,7 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity)
         }
         .background(IMAClientSurfaceBackground())
+        .background(WindowFocusActivator())
     }
 
     private var retentionText: String {
@@ -186,6 +187,17 @@ struct SettingsView: View {
         case .idle: return "未测试"
         case .connected: return "可用"
         case .failed: return "失败"
+        }
+    }
+
+    private var imaStatusDetail: String {
+        switch imaStatus {
+        case .idle:
+            return "检查当前凭据是否可用"
+        case .connected:
+            return "IMA OpenAPI 连接成功"
+        case .failed(let message):
+            return message
         }
     }
 
@@ -220,15 +232,24 @@ struct SettingsView: View {
         isTestingIMA = true
         imaStatus = .idle
         Task {
-            IMASyncService.shared.clientId = clientId
-            IMASyncService.shared.apiKey = apiKey
+            let trimmedClientId = clientId.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedApiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            IMASyncService.shared.clientId = trimmedClientId
+            IMASyncService.shared.apiKey = trimmedApiKey
             do {
                 _ = try await IMASyncService.shared.getKnowledgeBases()
-                imaStatus = .connected
+                await MainActor.run {
+                    clientId = trimmedClientId
+                    apiKey = trimmedApiKey
+                    imaStatus = .connected
+                    isTestingIMA = false
+                }
             } catch {
-                imaStatus = .failed
+                await MainActor.run {
+                    imaStatus = .failed(error.localizedDescription)
+                    isTestingIMA = false
+                }
             }
-            isTestingIMA = false
         }
     }
 
@@ -237,6 +258,23 @@ struct SettingsView: View {
         customIgnoredFileNames = ""
         customIgnoredExtensions = ""
         customIgnoredDirectoryNames = ""
+    }
+}
+
+struct WindowFocusActivator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            view.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            nsView.window?.makeKeyAndOrderFront(nil)
+        }
     }
 }
 
@@ -304,6 +342,7 @@ struct IMASettingsTextRow: View {
     let title: String
     let subtitle: String
     @Binding var text: String
+    var placeholder = "未填写"
     var isSecure = false
     @State private var isRevealed = false
     @State private var isFocused = false
@@ -311,9 +350,9 @@ struct IMASettingsTextRow: View {
     var body: some View {
         IMASettingsRow(title: title, subtitle: subtitle) {
             HStack(spacing: 6) {
-                AppKitCredentialField(
+                AppKitSingleLineTextField(
                     text: $text,
-                    placeholder: "未填写",
+                    placeholder: placeholder,
                     isSecure: isSecure && !isRevealed,
                     isFocused: $isFocused
                 )
@@ -358,52 +397,12 @@ struct IMASettingsTextRow: View {
 
     private func pasteFromPasteboard() {
         if let value = NSPasteboard.general.string(forType: .string) {
-            text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            text = value
         }
     }
 }
 
-struct IMASettingsEditorRow: View {
-    let title: String
-    let subtitle: String
-    @Binding var text: String
-    let placeholder: String
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        IMASettingsRow(title: title, subtitle: subtitle) {
-            ZStack(alignment: .topLeading) {
-                if text.isEmpty {
-                    Text(placeholder)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.appMuted.opacity(0.55))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 7)
-                        .allowsHitTesting(false)
-                }
-
-                TextEditor(text: $text)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.appInk)
-                    .scrollContentBackground(.hidden)
-                    .focused($isFocused)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 3)
-            }
-            .frame(width: 380, height: 74)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.appControl.opacity(0.94))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(isFocused ? Color.appMint.opacity(0.65) : Color.appLine.opacity(0.72), lineWidth: 1)
-                    )
-            )
-        }
-    }
-}
-
-struct AppKitCredentialField: NSViewRepresentable {
+struct AppKitSingleLineTextField: NSViewRepresentable {
     @Binding var text: String
     let placeholder: String
     let isSecure: Bool
@@ -416,8 +415,8 @@ struct AppKitCredentialField: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        let currentField = nsView.subviews.first as? NSTextField
-        if currentField == nil || ((currentField is NSSecureTextField) != isSecure) {
+        let field = nsView.subviews.first as? NSTextField
+        if field == nil || ((field is NSSecureTextField) != isSecure) {
             nsView.subviews.forEach { $0.removeFromSuperview() }
             installField(in: nsView, context: context)
         }
@@ -429,6 +428,10 @@ struct AppKitCredentialField: NSViewRepresentable {
         field.placeholderString = placeholder
     }
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, isFocused: $isFocused)
+    }
+
     private func installField(in container: NSView, context: Context) {
         let field = makeField()
         field.delegate = context.coordinator
@@ -437,19 +440,13 @@ struct AppKitCredentialField: NSViewRepresentable {
         NSLayoutConstraint.activate([
             field.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             field.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            field.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+            field.topAnchor.constraint(equalTo: container.topAnchor),
+            field.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         ])
-        if let height = field.cell?.cellSize.height {
-            field.heightAnchor.constraint(greaterThanOrEqualToConstant: height).isActive = true
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, isFocused: $isFocused)
     }
 
     private func makeField() -> NSTextField {
-        let field: NSTextField = isSecure ? NSSecureTextField() : NSTextField()
+        let field: NSTextField = isSecure ? FocusableSecureTextField() : FocusableTextField()
         field.stringValue = text
         field.placeholderString = placeholder
         field.isBordered = false
@@ -459,7 +456,7 @@ struct AppKitCredentialField: NSViewRepresentable {
         field.isSelectable = true
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 13, weight: .medium)
-        field.textColor = NSColor.labelColor
+        field.textColor = .labelColor
         field.lineBreakMode = .byTruncatingMiddle
         field.cell?.usesSingleLineMode = true
         field.cell?.wraps = false
@@ -491,6 +488,26 @@ struct AppKitCredentialField: NSViewRepresentable {
                 text = field.stringValue
             }
         }
+    }
+}
+
+private final class FocusableTextField: NSTextField {
+    override var acceptsFirstResponder: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeKey()
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
+    }
+}
+
+private final class FocusableSecureTextField: NSSecureTextField {
+    override var acceptsFirstResponder: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeKey()
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
     }
 }
 

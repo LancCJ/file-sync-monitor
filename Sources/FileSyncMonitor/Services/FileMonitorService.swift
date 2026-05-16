@@ -22,6 +22,9 @@ final class FileMonitorService {
     /// 当前正在监控的目录路径
     private(set) var monitoredPaths: [String] = []
     
+    /// 追踪已授权的安全作用域 URL 对象
+    private var securityScopedURLs: [String: URL] = [:]
+    
     private init() {
         loadBookmarks()
         restartMonitoring()
@@ -40,6 +43,7 @@ final class FileMonitorService {
                 let url = try URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
                 if url.startAccessingSecurityScopedResource() {
                     paths.append(url.path)
+                    securityScopedURLs[url.path] = url
                 }
             } catch {
                 print("Failed to resolve bookmark: \(error)")
@@ -66,22 +70,30 @@ final class FileMonitorService {
                 UserDefaults.standard.set(encoded, forKey: bookmarksKey)
             }
             
-            monitoredPaths.append(url.path)
-            restartMonitoring()
+            if url.startAccessingSecurityScopedResource() {
+                monitoredPaths.append(url.path)
+                securityScopedURLs[url.path] = url
+                restartMonitoring()
+            }
         } catch {
             print("Failed to create bookmark: \(error)")
         }
     }
     
     func removeDirectory(at path: String) {
+        if let url = securityScopedURLs.removeValue(forKey: path) {
+            url.stopAccessingSecurityScopedResource()
+        }
+        
         monitoredPaths.removeAll { $0 == path }
         
         // 更新存储
         var remainingBookmarks: [Data] = []
         for p in monitoredPaths {
-            let url = URL(fileURLWithPath: p)
-            if let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
-                remainingBookmarks.append(bookmark)
+            if let url = securityScopedURLs[p] {
+                if let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+                    remainingBookmarks.append(bookmark)
+                }
             }
         }
         

@@ -17,7 +17,8 @@ let package = Package(
             path: "Sources/FileSyncMonitor",
             resources: [
                 .process("Resources")
-            ]
+            ],
+            exclude: ["Info.plist", "FileSyncMonitor.entitlements"]
         )
     ]
 )

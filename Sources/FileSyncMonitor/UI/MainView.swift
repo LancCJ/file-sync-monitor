@@ -13,7 +13,7 @@ struct MainView: View {
     @State private var typeFilter: EventTypeFilter = .all
 
     enum SidebarItem: String, CaseIterable, Identifiable {
-        case home, pendingSync, allEvents, reports, settings
+        case home, pendingSync, allEvents, reports, settings, help
         var id: String { rawValue }
 
         var title: String {
@@ -23,6 +23,7 @@ struct MainView: View {
             case .allEvents: "全部记录"
             case .reports: "报告"
             case .settings: "设置"
+            case .help: "帮助"
             }
         }
 
@@ -33,6 +34,7 @@ struct MainView: View {
             case .allEvents: "doc.text"
             case .reports: "chart.bar"
             case .settings: "gearshape"
+            case .help: "questionmark.circle"
             }
         }
     }
@@ -80,56 +82,73 @@ struct MainView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            IMARailView(
-                selection: $selectedSidebarItem,
-                pendingCount: pendingEvents.count
-            )
+        GeometryReader { proxy in
+            let layout = MainLayoutMetrics(size: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
 
-            switch selectedSidebarItem {
-            case .home:
-                FileSyncHomeView(
-                    events: events,
-                    pendingEvents: pendingEvents,
-                    addDirectory: addDirectory,
-                    showPending: { selectedSidebarItem = .pendingSync },
-                    showAllRecords: { selectedSidebarItem = .allEvents },
-                    showReports: { selectedSidebarItem = .reports },
-                    markAllPendingSynced: markAllPendingSynced
-                )
+            VStack(spacing: 0) {
+                Color.clear
+                    .frame(height: layout.titleBarInset)
+
+                HStack(spacing: 0) {
+                    IMARailView(
+                        selection: $selectedSidebarItem,
+                        pendingCount: pendingEvents.count,
+                        layout: layout
+                    )
+
+                    switch selectedSidebarItem {
+                    case .home:
+                        FileSyncHomeView(
+                            events: events,
+                            pendingEvents: pendingEvents,
+                            addDirectory: addDirectory,
+                            showPending: { selectedSidebarItem = .pendingSync },
+                            showAllRecords: { selectedSidebarItem = .allEvents },
+                            showReports: { selectedSidebarItem = .reports },
+                            markAllPendingSynced: markAllPendingSynced
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .pendingSync, .allEvents:
+                        IMASecondarySidebar(
+                            mode: selectedSidebarItem,
+                            events: filteredEvents,
+                            pendingCount: pendingEvents.count,
+                            selectedEventID: $selectedEventID,
+                            searchText: $searchText,
+                            typeFilter: $typeFilter,
+                            markAllPendingSynced: markAllPendingSynced,
+                            layout: layout
+                        )
+
+                        EventDetailView(
+                            event: selectedEvent,
+                            mode: selectedSidebarItem,
+                            visibleEvents: filteredEvents,
+                            showAllRecords: { selectedSidebarItem = .allEvents },
+                            addDirectory: addDirectory,
+                            layout: layout
+                        )
+                    case .reports:
+                        ReportsView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .settings:
+                        SettingsView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .help:
+                        HelpView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .pendingSync, .allEvents:
-                IMASecondarySidebar(
-                    mode: selectedSidebarItem,
-                    events: filteredEvents,
-                    pendingCount: pendingEvents.count,
-                    selectedEventID: $selectedEventID,
-                    searchText: $searchText,
-                    typeFilter: $typeFilter,
-                    markAllPendingSynced: markAllPendingSynced
-                )
-
-                EventDetailView(
-                    event: selectedEvent,
-                    mode: selectedSidebarItem,
-                    visibleEvents: filteredEvents,
-                    showAllRecords: { selectedSidebarItem = .allEvents },
-                    addDirectory: addDirectory
-                )
-            case .reports:
-                ReportsView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .settings:
-                SettingsView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }
-        .background(IMAWindowBackground())
-        .tint(.appMint)
-        .onChange(of: selectedSidebarItem) { _, _ in
-            selectedEventID = nil
-            searchText = ""
-            typeFilter = .all
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(IMAWindowBackground())
+            .tint(.appMint)
+            .onChange(of: selectedSidebarItem) { _, _ in
+                selectedEventID = nil
+                searchText = ""
+                typeFilter = .all
+            }
         }
     }
 
@@ -168,9 +187,39 @@ struct MainView: View {
     }
 }
 
+struct MainLayoutMetrics {
+    let size: CGSize
+    let safeAreaInsets: EdgeInsets
+
+    var railWidth: CGFloat {
+        min(max(size.width * 0.045, 64), 72)
+    }
+
+    var secondarySidebarWidth: CGFloat {
+        min(max(size.width * 0.2, 278), 340)
+    }
+
+    var titleBarInset: CGFloat {
+        max(safeAreaInsets.top, 28)
+    }
+
+    var topContentPadding: CGFloat {
+        24
+    }
+
+    var sidebarHeaderPadding: CGFloat {
+        24
+    }
+
+    var detailToolbarHeight: CGFloat {
+        54
+    }
+}
+
 struct IMARailView: View {
     @Binding var selection: MainView.SidebarItem
     let pendingCount: Int
+    let layout: MainLayoutMetrics
 
     var body: some View {
         VStack(spacing: 18) {
@@ -182,10 +231,10 @@ struct IMARailView: View {
                         .font(.system(size: 10, weight: .black))
                         .foregroundStyle(Color.appInk)
                 }
-                .padding(.top, 52)
+                .padding(.top, layout.topContentPadding)
 
             VStack(spacing: 18) {
-                ForEach(MainView.SidebarItem.allCases) { item in
+                ForEach(MainView.SidebarItem.allCases.filter { $0 != .settings && $0 != .help }) { item in
                     IMARailButton(
                         item: item,
                         isSelected: selection == item,
@@ -199,6 +248,16 @@ struct IMARailView: View {
 
             Spacer()
 
+            VStack(spacing: 18) {
+                IMARailButton(item: .help, isSelected: selection == .help, badgeCount: 0) {
+                    selection = .help
+                }
+                
+                IMARailButton(item: .settings, isSelected: selection == .settings, badgeCount: 0) {
+                    selection = .settings
+                }
+            }
+
             Button {
                 NSApp.terminate(nil)
             } label: {
@@ -208,7 +267,7 @@ struct IMARailView: View {
             .help("退出")
             .padding(.bottom, 18)
         }
-        .frame(width: 64)
+        .frame(width: layout.railWidth)
         .background(
             LinearGradient(
                 colors: [
@@ -244,6 +303,8 @@ struct IMARailButton: View {
     let isSelected: Bool
     let badgeCount: Int
     let action: () -> Void
+    
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -254,7 +315,7 @@ struct IMARailButton: View {
                     .frame(width: 40, height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isSelected ? Color.appSurface.opacity(0.95) : Color.clear)
+                            .fill(isSelected ? Color.appSurface.opacity(0.95) : (isHovered ? Color.appSurface.opacity(0.5) : Color.clear))
                     )
 
                 if badgeCount > 0 {
@@ -269,6 +330,7 @@ struct IMARailButton: View {
             }
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
         .help(item.title)
     }
 }
@@ -486,6 +548,7 @@ struct IMASecondarySidebar: View {
     @Binding var searchText: String
     @Binding var typeFilter: MainView.EventTypeFilter
     let markAllPendingSynced: () -> Void
+    let layout: MainLayoutMetrics
 
     var body: some View {
         VStack(spacing: 0) {
@@ -517,7 +580,7 @@ struct IMASecondarySidebar: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.top, 24)
+            .padding(.top, layout.sidebarHeaderPadding)
             .padding(.bottom, 14)
             .clipped()
 
@@ -553,7 +616,7 @@ struct IMASecondarySidebar: View {
                 }
             }
         }
-        .frame(width: 278)
+        .frame(width: layout.secondarySidebarWidth)
         .background(
             LinearGradient(
                 colors: [
@@ -630,6 +693,7 @@ struct EventDetailView: View {
     let visibleEvents: [FileEvent]
     let showAllRecords: () -> Void
     let addDirectory: () -> Void
+    let layout: MainLayoutMetrics
 
     @State private var isSyncing = false
 
@@ -642,7 +706,8 @@ struct EventDetailView: View {
                     EventDetailToolbar(
                         event: event,
                         visibleEvents: visibleEvents,
-                        export: export
+                        export: export,
+                        layout: layout
                     )
 
                     Divider()
@@ -778,6 +843,7 @@ struct EventDetailToolbar: View {
     let event: FileEvent
     let visibleEvents: [FileEvent]
     let export: (ExportService.ExportFormat) -> Void
+    let layout: MainLayoutMetrics
 
     var body: some View {
         HStack(spacing: 12) {
@@ -809,7 +875,7 @@ struct EventDetailToolbar: View {
         .font(.system(size: 13, weight: .medium))
         .foregroundStyle(Color.appInk)
         .padding(.horizontal, 28)
-        .frame(height: 54)
+        .frame(height: layout.detailToolbarHeight)
         .background(Color.white.opacity(0.82))
     }
 }

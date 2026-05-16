@@ -84,5 +84,5 @@ swift build -c release
 - FSEvents uses 2.0s latency for event coalescing — rapid changes to same file within 2s produce single event
 - Tests directory exists but is empty — test target is wired in Package.swift
 - IMA API credentials stored in `@AppStorage` (UserDefaults), not Keychain despite code comments suggesting otherwise
-- Not a sandboxed app — Security-Scoped Bookmarks pattern described in design.md but not yet implemented in code
+- Sandboxed app — Uses App Sandbox with `user-selected.read-write` and `network.client` entitlements. Security-Scoped Bookmarks are fully implemented.
 - Tree view (`EventTreeView`) is a stub — just renders placeholder text
