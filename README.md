@@ -7,17 +7,25 @@ FileSyncMonitor 是一款 macOS 文件变动监控与同步确认工具。它可
 
 ## 🖥️ 界面预览
 
+### 📊 核心看板与同步流
 | 首页 (Dashboard) | 待同步 (Pending Sync) |
 | --- | --- |
 | ![首页](docs/screenshot/首页.png) | ![待同步](docs/screenshot/待同步.png) |
 
+### 📈 记录明细与统计分析
 | 全部记录 (All Records) | 统计报告 (Reports) |
 | --- | --- |
 | ![全部记录](docs/screenshot/全部记录.png) | ![报告](docs/screenshot/报告.png) |
 
-| 帮助与关于 (FAQ) | 功能设置 (Settings) |
+### ⚙️ 系统设置与同步规则
+| 常规设置 (Settings) | 规则与云端配置 (Settings 2) |
 | --- | --- |
-| ![帮助与关于](docs/screenshot/帮助与关于.png) | ![设置](docs/screenshot/设置.png) |
+| ![设置](docs/screenshot/设置.png) | ![设置2](docs/screenshot/设置2.png) |
+
+### ❓ 新手指引与帮助关于
+| 帮助与关于 (FAQ & About) | 新手指引 - 第一步 (Onboarding 1) | 新手指引 - 第二步 (Onboarding 2) |
+| --- | --- | --- |
+| ![帮助与关于](docs/screenshot/帮助与关于.png) | ![引导1](docs/screenshot/引导1.png) | ![引导2](docs/screenshot/引导2.png) |
 
 ## 功能特性
 
