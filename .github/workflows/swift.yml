@@ -23,15 +23,15 @@ jobs:
     - name: Package Release Assets
       run: |
         cd .build/release
-        # Compress executable binary and multi-language assets package
-        zip -r ../../FileSyncMonitor-macOS.zip FileSyncMonitor FileSyncMonitor_FileSyncMonitor.bundle
-        cd ../..
+        # Compress executable binary and multi-language assets package into absolute path
+        zip -r ${{ github.workspace }}/FileSyncMonitor-macOS.zip FileSyncMonitor FileSyncMonitor_FileSyncMonitor.bundle
 
     - name: Create GitHub Release and Upload Assets
       uses: softprops/action-gh-release@v2
       with:
-        files: FileSyncMonitor-macOS.zip
+        files: ${{ github.workspace }}/FileSyncMonitor-macOS.zip
         draft: false
         prerelease: false
+        fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
