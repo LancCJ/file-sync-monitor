@@ -149,3 +149,13 @@ After configuration, you can test the connection and click "Upload to IMA" in th
 - FSEvents will coalesce high-frequency events in a short period; the event granularity depends on system callbacks.
 - Historical records already in the database will not be automatically deleted due to newly added ignore rules.
 - IMA API credentials have not yet been migrated to Keychain.
+
+## 💖 Donation & Support
+
+FileSyncMonitor is fully open-source and free to use. If it has saved you time and boosted your productivity, feel free to support its active development via donation. Your contribution is the best fuel to keep this project growing!
+
+| WeChat Pay | Alipay |
+| --- | --- |
+| ![WeChat Pay](docs/pay/wechat.jpg) | ![Alipay](docs/pay/alipay.jpg) |
+
+> 💡 Donation is entirely voluntary, and all features remain fully unlocked. Thank you for your support!
