@@ -36,6 +36,14 @@ struct FileSyncMonitorApp: App {
         .onChange(of: appearance) { _, newValue in
             applyAppearance(newValue)
         }
+        .commands {
+            // 清除系统默认注入但对本工具无实际功能的菜单项，保持菜单栏精简专业
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .saveItem) {}
+            CommandGroup(replacing: .importExport) {}
+            CommandGroup(replacing: .sidebar) {}
+            CommandGroup(replacing: .toolbar) {}
+        }
         
         Settings {
             SettingsView()
