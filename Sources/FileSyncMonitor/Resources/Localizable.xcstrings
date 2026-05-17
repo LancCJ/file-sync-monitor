@@ -193,6 +193,22 @@
         }
       }
     },
+    "重新开启新手指引": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Onboarding Guide"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新開啟新手指引"
+          }
+        }
+      }
+    },
     "云端同步配置未完成": {
       "localizations": {
         "en": {
