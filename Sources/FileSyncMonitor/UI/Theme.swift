@@ -656,16 +656,28 @@ struct AppSegmentedControl<Value: Hashable>: View {
     let options: [(Value, String)]
     @Binding var selection: Value
     @Namespace private var animation
+    @State private var localSelection: Value
+
+    init(options: [(Value, String)], selection: Binding<Value>) {
+        self.options = options
+        self._selection = selection
+        self._localSelection = State(initialValue: selection.wrappedValue)
+    }
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(options, id: \.0) { option in
                 Button {
-                    withAnimation(.snappy(duration: 0.22, extraBounce: 0.05)) {
-                        selection = option.0
+                    if localSelection != option.0 {
+                        withAnimation(.snappy(duration: 0.22, extraBounce: 0.05)) {
+                            localSelection = option.0
+                        }
+                        DispatchQueue.main.async {
+                            selection = option.0
+                        }
                     }
                 } label: {
-                    SegmentOptionView(option: option, isSelected: selection == option.0, animationNamespace: animation)
+                    SegmentOptionView(option: option, isSelected: localSelection == option.0, animationNamespace: animation)
                 }
                 .buttonStyle(.plain)
             }
@@ -680,6 +692,13 @@ struct AppSegmentedControl<Value: Hashable>: View {
                         .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
                 )
         )
+        .onChange(of: selection) { _, newValue in
+            if localSelection != newValue {
+                withAnimation(.snappy(duration: 0.22, extraBounce: 0.05)) {
+                    localSelection = newValue
+                }
+            }
+        }
     }
 }
 
