@@ -156,6 +156,6 @@ FileSyncMonitor is fully open-source and free to use. If it has saved you time a
 
 | WeChat Pay | Alipay |
 | --- | --- |
-| ![WeChat Pay](docs/pay/wechat.jpg) | ![Alipay](docs/pay/alipay.jpg) |
+| <img src="docs/pay/wechat.jpg" width="260" alt="WeChat Pay" /> | <img src="docs/pay/alipay.jpg" width="260" alt="Alipay" /> |
 
 > 💡 Donation is entirely voluntary, and all features remain fully unlocked. Thank you for your support!
