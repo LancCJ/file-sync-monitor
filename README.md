@@ -149,3 +149,13 @@ swift build -c release
 - 已入库的历史记录不会因后续新增忽略规则而自动删除。
 - IMA API 凭据尚未迁移到 Keychain。
 
+## 💖 捐赠与支持
+
+FileSyncMonitor 是一款完全开源且自愿使用的工具。如果它为您节省了时间，提升了工作效率，欢迎通过扫码进行捐赠支持，您的支持将是维护本项目持续更新的最佳动力！
+
+| 微信捐赠 (WeChat Pay) | 支付宝捐赠 (Alipay) |
+| --- | --- |
+| ![微信](docs/pay/wechat.jpg) | ![支付宝](docs/pay/alipay.jpg) |
+
+> 💡 捐赠完全自愿，所有功能均无限制提供。感谢您的支持！
+
