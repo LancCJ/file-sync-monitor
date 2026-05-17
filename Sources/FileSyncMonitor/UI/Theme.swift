@@ -655,26 +655,17 @@ struct AppMenuValue: View {
 struct AppSegmentedControl<Value: Hashable>: View {
     let options: [(Value, String)]
     @Binding var selection: Value
+    @Namespace private var animation
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(options, id: \.0) { option in
                 Button {
-                    withAnimation(.snappy(duration: 0.18)) {
+                    withAnimation(.snappy(duration: 0.22, extraBounce: 0.05)) {
                         selection = option.0
                     }
                 } label: {
-                    LocalizedText(option.1)
-                        .font(.system(size: 12, weight: .bold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(selection == option.0 ? Color.appInk : Color.clear)
-                        )
-                        .foregroundStyle(selection == option.0 ? .white : Color.appMuted)
+                    SegmentOptionView(option: option, isSelected: selection == option.0, animationNamespace: animation)
                 }
                 .buttonStyle(.plain)
             }
@@ -689,6 +680,38 @@ struct AppSegmentedControl<Value: Hashable>: View {
                         .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
                 )
         )
+    }
+}
+
+private struct SegmentOptionView<Value: Hashable>: View {
+    let option: (Value, String)
+    let isSelected: Bool
+    let animationNamespace: Namespace.ID
+    @State private var isHovered = false
+
+    var body: some View {
+        LocalizedText(option.1)
+            .font(.system(size: 12, weight: .bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
+            .background(
+                ZStack {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.appInk)
+                            .matchedGeometryEffect(id: "activeTab", in: animationNamespace)
+                    } else if isHovered {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.appInk.opacity(0.06))
+                    }
+                }
+            )
+            .foregroundStyle(isSelected ? .white : (isHovered ? Color.appInk : Color.appMuted))
+            .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+            .animation(.snappy(duration: 0.15), value: isHovered)
     }
 }
 
