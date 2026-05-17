@@ -5,6 +5,20 @@ FileSyncMonitor 是一款 macOS 文件变动监控与同步确认工具。它可
 
 当前版本使用 SwiftUI + SwiftData 构建，底层监控基于 macOS FSEvents，支持本地报告导出和可选的腾讯 IMA 云端上传。
 
+## 🖥️ 界面预览
+
+| 首页 (Dashboard) | 待同步 (Pending Sync) |
+| --- | --- |
+| ![首页](docs/screenshot/首页.png) | ![待同步](docs/screenshot/待同步.png) |
+
+| 全部记录 (All Records) | 统计报告 (Reports) |
+| --- | --- |
+| ![全部记录](docs/screenshot/全部记录.png) | ![报告](docs/screenshot/报告.png) |
+
+| 帮助与关于 (FAQ) | 功能设置 (Settings) |
+| --- | --- |
+| ![帮助与关于](docs/screenshot/帮助与关于.png) | ![设置](docs/screenshot/设置.png) |
+
 ## 功能特性
 
 - **目录监控**：支持添加多个目录，递归监控文件和文件夹变动。

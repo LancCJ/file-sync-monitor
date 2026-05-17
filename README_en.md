@@ -6,6 +6,20 @@ FileSyncMonitor is a macOS file change monitoring and sync confirmation tool. It
 
 The current version is built with SwiftUI + SwiftData, with underlying monitoring based on macOS FSEvents. It supports local report exporting and optional Tencent IMA cloud uploading.
 
+## 🖥️ UI Screenshots
+
+| Dashboard (Home) | Pending Sync |
+| --- | --- |
+| ![Dashboard](docs/screenshot/首页.png) | ![Pending Sync](docs/screenshot/待同步.png) |
+
+| All Records | Reports & Stats |
+| --- | --- |
+| ![All Records](docs/screenshot/全部记录.png) | ![Reports](docs/screenshot/报告.png) |
+
+| Help & FAQ | Settings |
+| --- | --- |
+| ![Help & FAQ](docs/screenshot/帮助与关于.png) | ![Settings](docs/screenshot/设置.png) |
+
 ## Features
 
 - **Directory Monitoring**: Add multiple directories and recursively monitor file and folder changes.
