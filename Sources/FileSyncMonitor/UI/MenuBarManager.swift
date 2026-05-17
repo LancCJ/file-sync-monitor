@@ -22,7 +22,7 @@ final class MenuBarManager: NSObject {
     }
 
     private func makeStatusBarImage() -> NSImage? {
-        if let url = Bundle.module.url(forResource: "AppMenuBarIcon", withExtension: "png"),
+        if let url = AppResourceLoader.url(forResource: "AppMenuBarIcon", withExtension: "png"),
            let image = NSImage(contentsOf: url) {
             image.size = NSSize(width: 18, height: 18)
             image.isTemplate = false

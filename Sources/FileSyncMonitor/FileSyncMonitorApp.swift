@@ -1,9 +1,11 @@
 import SwiftUI
 import SwiftData
 import QuartzCore
+import ServiceManagement
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        cleanupInvalidLaunchAtLoginRegistrationIfNeeded()
         NSApp.setActivationPolicy(.accessory)
         NotificationManager.shared.requestAuthorization()
         MenuBarManager.shared.setupMenuBar()
@@ -21,6 +23,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         return true
+    }
+
+    private func cleanupInvalidLaunchAtLoginRegistrationIfNeeded() {
+        let isPackagedApp = Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil
+        guard !isPackagedApp, SMAppService.mainApp.status == .enabled else { return }
+        try? SMAppService.mainApp.unregister()
     }
 }
 

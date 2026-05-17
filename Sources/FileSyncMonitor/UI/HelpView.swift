@@ -706,7 +706,7 @@ private struct DonationQRCode: View {
     }
 
     private func loadImage() -> NSImage? {
-        guard let url = Bundle.module.url(forResource: resourceName, withExtension: "jpg") else {
+        guard let url = AppResourceLoader.url(forResource: resourceName, withExtension: "jpg") else {
             return nil
         }
         return NSImage(contentsOf: url)

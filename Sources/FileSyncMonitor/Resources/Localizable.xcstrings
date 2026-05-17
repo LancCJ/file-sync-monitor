@@ -6670,6 +6670,150 @@
           }
         }
       }
+    },
+    "开机自动运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Launch at Login"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開機自動執行"
+          }
+        }
+      }
+    },
+    "登录 macOS 后自动启动 FileSyncMonitor 并继续监控目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatically start FileSyncMonitor after logging in to macOS and continue monitoring folders."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登入 macOS 後自動啟動 FileSyncMonitor 並繼續監控目錄。"
+          }
+        }
+      }
+    },
+    "已加入 macOS 登录项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added to macOS login items."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加入 macOS 登入項目。"
+          }
+        }
+      }
+    },
+    "已从 macOS 登录项移除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removed from macOS login items."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已從 macOS 登入項目移除。"
+          }
+        }
+      }
+    },
+    "无法更新登录项：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to update login item: %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法更新登入項目：%@"
+          }
+        }
+      }
+    },
+    "过滤 .DS_Store、Office 临时文件、系统目录和常见构建缓存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filters .DS_Store, Office temporary files, system folders, and common build caches."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "過濾 .DS_Store、Office 臨時文件、系統目錄和常見建置快取。"
+          }
+        }
+      }
+    },
+    "同步失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync Failed"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步失敗"
+          }
+        }
+      }
+    },
+    "当前是 Xcode/命令行调试运行，不能注册开机自启；请使用 .app 应用包运行后再开启。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Launch at login is unavailable while running from Xcode or the command line. Run the .app bundle before enabling it."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前是 Xcode/命令列除錯執行，無法註冊開機自啟；請使用 .app 應用程式包執行後再開啟。"
+          }
+        }
+      }
+    },
+    "当前运行的不是 .app 应用包，已阻止注册开机自启，避免重启后打开终端窗口。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current process is not a .app bundle, so launch-at-login registration was blocked to avoid opening a Terminal window after restart."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前執行的不是 .app 應用程式包，已阻止註冊開機自啟，避免重啟後開啟終端機視窗。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

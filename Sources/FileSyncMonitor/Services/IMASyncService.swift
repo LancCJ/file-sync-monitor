@@ -11,10 +11,11 @@ final class IMASyncService {
 
     /// 同步文件到指定目标（知识库或笔记）
     @discardableResult
-    func syncFile(fileURL: URL, knowledgeBaseId: String?) async throws -> String {
+    func syncFile(fileURL: URL, knowledgeBaseId: String?, relativeFolderPath: String? = nil) async throws -> String {
         if let kbId = knowledgeBaseId, !kbId.isEmpty && kbId != "default" {
             // 如果指定了具体知识库 ID，走 Wiki 上传流
-            return try await uploadToWiki(fileURL: fileURL, knowledgeBaseId: kbId)
+            let folderId = try await resolveFolderIdIfNeeded(knowledgeBaseId: kbId, relativeFolderPath: relativeFolderPath)
+            return try await uploadToWiki(fileURL: fileURL, knowledgeBaseId: kbId, folderId: folderId)
         } else {
             // 默认走笔记导入流
             return try await importDoc(fileURL: fileURL, knowledgeBaseId: "default")
@@ -42,12 +43,14 @@ final class IMASyncService {
 
     /// 获取知识库内容列表
     func getKnowledgeList(knowledgeBaseId: String, folderId: String? = nil, cursor: String = "") async throws -> (items: [KnowledgeInfo], isEnd: Bool, nextCursor: String) {
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "knowledge_base_id": knowledgeBaseId,
-            "folder_id": folderId ?? "",
             "cursor": cursor,
             "limit": 50
         ]
+        if let folderId, !folderId.isEmpty {
+            body["folder_id"] = folderId
+        }
         
         let response: IMAResponse<KnowledgeListPayload> = try await postJson(
             path: "openapi/wiki/v1/get_knowledge_list",
@@ -107,25 +110,32 @@ final class IMASyncService {
 
     /// 知识库模块：上传文件 (Wiki Flow)
     @discardableResult
-    func uploadToWiki(fileURL: URL, knowledgeBaseId: String) async throws -> String {
-        let fileName = fileURL.lastPathComponent
+    func uploadToWiki(fileURL: URL, knowledgeBaseId: String, folderId: String? = nil) async throws -> String {
+        let originalFileName = fileURL.lastPathComponent
         let fileSize = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         let fileExt = fileURL.pathExtension.lowercased()
         
         // 1. Preflight Check (获取 media_type 和 content_type)
         guard let (mediaType, contentType) = IMAMediaType.resolve(extension: fileExt) else {
             let errorMsg = "不支持的文件类型 (.\(fileExt))。IMA 知识库目前不支持以文件形式同步 HTML 或视频。"
-            let logId = IMALogService.shared.logRequest(method: "PREFLIGHT", url: "wiki/v1/upload", headers: nil, body: "File: \(fileName)")
+            let logId = IMALogService.shared.logRequest(method: "PREFLIGHT", url: "wiki/v1/upload", headers: nil, body: "File: \(originalFileName)")
             IMALogService.shared.logError(id: logId, code: nil, error: errorMsg, requestId: nil)
             throw IMASyncError.apiError(errorMsg)
         }
+
+        let uploadFileName = try await resolvedUploadFileName(
+            originalFileName: originalFileName,
+            mediaType: mediaType,
+            knowledgeBaseId: knowledgeBaseId,
+            folderId: folderId
+        )
         
         // 2. Create Media (获取 COS 凭据)
         let step1LogId = IMALogService.shared.logRequest(method: "STEP 1", url: "create_media", headers: nil, body: "开始请求 COS 凭据...")
         let createResp: IMAResponse<CreateMediaPayload> = try await postJson(
             path: "openapi/wiki/v1/create_media",
             body: [
-                "file_name": fileName,
+                "file_name": uploadFileName,
                 "file_size": fileSize,
                 "content_type": contentType,
                 "media_type": mediaType,
@@ -144,24 +154,136 @@ final class IMASyncService {
         
         // 4. Add Knowledge (正式关联)
         let step3LogId = IMALogService.shared.logRequest(method: "STEP 3", url: "add_knowledge", headers: nil, body: "开始将媒体关联到知识库...")
+        var addKnowledgeBody: [String: Any] = [
+            "media_type": mediaType,
+            "media_id": payload.mediaId,
+            "title": uploadFileName,
+            "knowledge_base_id": knowledgeBaseId,
+            "file_info": [
+                "cos_key": payload.cosCredential.cosKey,
+                "file_size": fileSize,
+                "file_name": uploadFileName
+            ]
+        ]
+        if let folderId, !folderId.isEmpty {
+            addKnowledgeBody["folder_id"] = folderId
+        }
+
         let addResp: IMAResponse<EmptyPayload> = try await postJson(
             path: "openapi/wiki/v1/add_knowledge",
-            body: [
-                "media_type": mediaType,
-                "media_id": payload.mediaId,
-                "title": fileName,
-                "knowledge_base_id": knowledgeBaseId,
-                "file_info": [
-                    "cos_key": payload.cosCredential.cosKey,
-                    "file_size": fileSize,
-                    "file_name": fileName
-                ]
-            ]
+            body: addKnowledgeBody
         )
         try validate(addResp)
         IMALogService.shared.logResponse(id: step3LogId, code: 200, body: "关联成功！同步完成。", requestId: addResp.requestId)
         
         return payload.mediaId
+    }
+
+    private func resolvedUploadFileName(originalFileName: String, mediaType: Int, knowledgeBaseId: String, folderId: String?) async throws -> String {
+        let logId = IMALogService.shared.logRequest(method: "PRECHECK", url: "check_repeated_names", headers: nil, body: "检查同目录同名文件：\(originalFileName)")
+        var body: [String: Any] = [
+            "params": [
+                [
+                    "name": originalFileName,
+                    "media_type": mediaType
+                ]
+            ],
+            "knowledge_base_id": knowledgeBaseId
+        ]
+
+        if let folderId, !folderId.isEmpty {
+            body["folder_id"] = folderId
+        }
+
+        let response: IMAResponse<CheckRepeatedNamesPayload> = try await postJson(
+            path: "openapi/wiki/v1/check_repeated_names",
+            body: body
+        )
+        try validate(response)
+
+        let isRepeated = response.data?.results.contains { result in
+            result.name == originalFileName && result.isRepeated
+        } ?? false
+
+        if isRepeated {
+            let timestampedName = timestampedFileName(originalFileName)
+            IMALogService.shared.logResponse(
+                id: logId,
+                code: 200,
+                body: "发现同名文件，自动改名上传：\(timestampedName)",
+                requestId: response.requestId
+            )
+            return timestampedName
+        }
+
+        IMALogService.shared.logResponse(id: logId, code: 200, body: "未发现同名文件，可以继续上传。", requestId: response.requestId)
+        return originalFileName
+    }
+
+    private func timestampedFileName(_ fileName: String) -> String {
+        let url = URL(fileURLWithPath: fileName)
+        let ext = url.pathExtension
+        let baseName = ext.isEmpty ? fileName : url.deletingPathExtension().lastPathComponent
+
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyyMMddHHmmss"
+
+        let timestamp = formatter.string(from: Date())
+        if ext.isEmpty {
+            return "\(baseName)_\(timestamp)"
+        }
+        return "\(baseName)_\(timestamp).\(ext)"
+    }
+
+    private func resolveFolderIdIfNeeded(knowledgeBaseId: String, relativeFolderPath: String?) async throws -> String? {
+        guard let relativeFolderPath,
+              !relativeFolderPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        let segments = relativeFolderPath
+            .split(separator: "/")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+
+        guard !segments.isEmpty else { return nil }
+
+        var parentFolderId: String?
+        var traversed: [String] = []
+
+        for segment in segments {
+            let children = try await fetchAllKnowledgeItems(knowledgeBaseId: knowledgeBaseId, folderId: parentFolderId)
+            if let folder = children.first(where: { $0.isFolder && $0.displayName == segment }) {
+                parentFolderId = folder.folderIdentifier
+                traversed.append(segment)
+                continue
+            }
+
+            let currentPath = traversed.isEmpty ? "/" : traversed.joined(separator: "/")
+            throw IMASyncError.apiError("IMA 知识库中未找到本地子目录对应的文件夹：\(segment)（当前位置：\(currentPath)）。请先在 IMA 中创建同名文件夹，或把该文件移动到已存在的目录后再同步。")
+        }
+
+        return parentFolderId
+    }
+
+    private func fetchAllKnowledgeItems(knowledgeBaseId: String, folderId: String?) async throws -> [KnowledgeInfo] {
+        var allItems: [KnowledgeInfo] = []
+        var cursor = ""
+
+        while true {
+            let page = try await getKnowledgeList(knowledgeBaseId: knowledgeBaseId, folderId: folderId, cursor: cursor)
+            allItems.append(contentsOf: page.items)
+
+            if page.isEnd || page.nextCursor.isEmpty {
+                break
+            }
+            cursor = page.nextCursor
+        }
+
+        return allItems
     }
 
     private func uploadToCOS(fileURL: URL, payload: CreateMediaPayload, contentType: String, fileSize: Int) async throws {
@@ -409,6 +531,20 @@ struct KnowledgeBaseListPayload: Decodable {
     }
 }
 
+struct CheckRepeatedNamesPayload: Decodable {
+    let results: [CheckRepeatedNamesResult]
+}
+
+struct CheckRepeatedNamesResult: Decodable {
+    let name: String
+    let isRepeated: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case isRepeated = "is_repeated"
+    }
+}
+
 struct KnowledgeBase: Codable, Identifiable, Hashable {
     let id: String
     let name: String
@@ -502,21 +638,86 @@ struct KnowledgeListPayload: Decodable {
     
     enum CodingKeys: String, CodingKey {
         case knowledgeList = "knowledge_list"
+        case folderList = "folder_list"
+        case infoList = "info_list"
+        case list
+        case items
         case isEnd = "is_end"
         case nextCursor = "next_cursor"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        var items: [KnowledgeInfo] = []
+        items.append(contentsOf: (try? container.decode([KnowledgeInfo].self, forKey: .knowledgeList)) ?? [])
+        items.append(contentsOf: (try? container.decode([KnowledgeInfo].self, forKey: .folderList)) ?? [])
+
+        if items.isEmpty {
+            items = (try? container.decode([KnowledgeInfo].self, forKey: .infoList))
+                ?? (try? container.decode([KnowledgeInfo].self, forKey: .list))
+                ?? (try? container.decode([KnowledgeInfo].self, forKey: .items))
+                ?? []
+        }
+
+        knowledgeList = items
+        isEnd = (try? container.decode(Bool.self, forKey: .isEnd)) ?? true
+        nextCursor = (try? container.decode(String.self, forKey: .nextCursor)) ?? ""
     }
 }
 
 struct KnowledgeInfo: Codable, Identifiable, Hashable {
-    var id: String { mediaId }
+    var id: String { folderIdentifier ?? mediaId }
     let mediaId: String
     let title: String
     let parentFolderId: String?
+    let folderId: String?
+    let name: String?
+
+    var displayName: String {
+        name?.isEmpty == false ? name! : title
+    }
+
+    var folderIdentifier: String? {
+        if let folderId, !folderId.isEmpty {
+            return folderId
+        }
+        if mediaId.hasPrefix("folder_") {
+            return mediaId
+        }
+        return nil
+    }
+
+    var isFolder: Bool {
+        folderIdentifier != nil
+    }
     
     enum CodingKeys: String, CodingKey {
         case mediaId = "media_id"
+        case folderId = "folder_id"
         case title
+        case name
         case parentFolderId = "parent_folder_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        folderId = try? container.decode(String.self, forKey: .folderId)
+        mediaId = (try? container.decode(String.self, forKey: .mediaId)) ?? folderId ?? ""
+        title = (try? container.decode(String.self, forKey: .title))
+            ?? (try? container.decode(String.self, forKey: .name))
+            ?? ""
+        name = try? container.decode(String.self, forKey: .name)
+        parentFolderId = try? container.decode(String.self, forKey: .parentFolderId)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(mediaId, forKey: .mediaId)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(parentFolderId, forKey: .parentFolderId)
+        try container.encodeIfPresent(folderId, forKey: .folderId)
+        try container.encodeIfPresent(name, forKey: .name)
     }
 }
 
