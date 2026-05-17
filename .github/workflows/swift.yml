@@ -1,20 +1,37 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
-
-name: Swift
+name: Build and Release
 
 on:
   push:
-    branches: [ "ci-build" ]
-  pull_request:
-    branches: [ "ci-build" ]
+    tags:
+      - 'v*' # Trigger on new tags starting with v (e.g. v1.2.0)
+  workflow_dispatch: # Allow manually triggering the release build from GitHub UI
 
 jobs:
-  build:
-
+  release:
     runs-on: macos-latest
+    permissions:
+      contents: write # Required to create a release and upload assets
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: swift build -v
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build in Release mode
+      run: |
+        swift build -c release
+
+    - name: Package Release Assets
+      run: |
+        cd .build/release
+        # Compress executable binary and multi-language assets package
+        zip -r ../../FileSyncMonitor-macOS.zip FileSyncMonitor FileSyncMonitor_FileSyncMonitor.bundle
+        cd ../..
+
+    - name: Create GitHub Release and Upload Assets
+      uses: softprops/action-gh-release@v2
+      with:
+        files: FileSyncMonitor-macOS.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
