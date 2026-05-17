@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import QuartzCore
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -45,6 +46,17 @@ struct FileSyncMonitorApp: App {
     }
 
     private func applyAppearance(_ mode: SettingsView.AppearanceMode) {
+        for window in NSApp.windows {
+            if let contentView = window.contentView {
+                contentView.wantsLayer = true
+                let transition = CATransition()
+                transition.duration = 0.32
+                transition.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeInEaseOut)
+                transition.type = CATransitionType.fade
+                contentView.layer?.add(transition, forKey: "appearanceTransition")
+            }
+        }
+
         switch mode {
         case .light:
             NSApp.appearance = NSAppearance(named: .aqua)
