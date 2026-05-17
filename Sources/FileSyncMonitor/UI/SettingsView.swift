@@ -53,7 +53,7 @@ struct SettingsView: View {
                             label: AppMenuValue(text: appLanguage.displayTitle)
                         )
                         .frame(width: 120)
-                        .onChange(of: appLanguage) { _ in
+                        .onChange(of: appLanguage) { _, _ in
                             MenuBarManager.shared.refreshMenu()
                         }
                     }
@@ -184,21 +184,24 @@ struct SettingsView: View {
                     }
                 }
 
-                IMASettingsGroup(title: "高级版") {
-                    IMASettingsRow(
-                        title: StoreManager.shared.isPro ? "高级版已激活" : "升级到高级版",
-                        subtitle: StoreManager.shared.isPro ? "所有高级功能已经可用" : "解锁无限监控、自动同步和高级报告"
-                    ) {
-                        if StoreManager.shared.isPro {
-                            StatusPill(text: "已激活", symbol: "checkmark", color: .appMint)
-                        } else {
-                            Button {
-                                Task { try? await StoreManager.shared.purchase() }
-                            } label: {
-                                Label("¥9.9", systemImage: "bag")
+                IMASettingsGroup(title: "关于与开发") {
+                    IMASettingsRow(title: "关于 FileSyncMonitor", subtitle: "版本 v1.0.0-beta • 基于 macOS Sonoma") {
+                        Text("FileSyncMonitor")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.appMuted)
+                    }
+                    
+                    IMASettingsRow(title: "开发者", subtitle: "作者: LancCJ (GitHub)") {
+                        Link(destination: URL(string: "https://github.com/LancCJ")!) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "link")
+                                    .font(.system(size: 11))
+                                Text("@LancCJ")
+                                    .font(.system(size: 13, weight: .bold))
                             }
-                            .buttonStyle(PillButtonStyle(isPrimary: true))
+                            .foregroundStyle(Color.appMint)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
