@@ -406,13 +406,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pull from Cloud"
+            "value": "Pull Updates from Cloud"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
             "value": "從雲端拉取更新"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从云端拉取更新"
           }
         }
       }
@@ -503,22 +509,6 @@
         }
       }
     },
-    "高级版": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pro Version"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "高級版"
-          }
-        }
-      }
-    },
     "版本": {
       "localizations": {
         "en": {
@@ -546,7 +536,13 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "測試連接"
+            "value": "測試連線"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试连接"
           }
         }
       }
@@ -1736,6 +1732,12 @@
             "state": "translated",
             "value": "自動同步"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动同步"
+          }
         }
       }
     },
@@ -1751,6 +1753,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "手動同步"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动同步"
           }
         }
       }
@@ -2867,94 +2875,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "365 天"
-          }
-        }
-      }
-    },
-    "高级版已激活": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pro Activated"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "高級版已啟用"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "高级版已激活"
-          }
-        }
-      }
-    },
-    "升级到高级版": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Upgrade to Pro"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "升級到高級版"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "升级到高级版"
-          }
-        }
-      }
-    },
-    "所有高级功能已经可用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "All pro features are available."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "所有高級功能已可用"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "所有高级功能已经可用"
-          }
-        }
-      }
-    },
-    "解锁无限监控、自动同步和高级报告": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unlock unlimited monitoring, auto sync, and advanced reports."
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "解鎖無限監控、自動同步和高級報告"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "解锁无限监控、自动同步和高级报告"
           }
         }
       }
@@ -4161,6 +4081,2336 @@
           "stringUnit": {
             "state": "translated",
             "value": "歡迎使用"
+          }
+        }
+      }
+    },
+    "按功能场景查看 FileSyncMonitor 的监控、同步、导出与设置能力。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explore FileSyncMonitor by workflow: monitoring, sync, export, and settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按功能场景查看 FileSyncMonitor 的监控、同步、导出与设置能力。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按功能場景查看 FileSyncMonitor 的監控、同步、匯出與設定能力。"
+          }
+        }
+      }
+    },
+    "清新、轻量、面向日常同步工作流。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fresh, lightweight, and built for everyday sync workflows."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清新、轻量、面向日常同步工作流。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清新、輕量、面向日常同步工作流。"
+          }
+        }
+      }
+    },
+    "本工具用于监控本地文件变动，并辅助同步到 IMA 云端。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This tool monitors local file changes and helps sync them to IMA Cloud."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本工具用于监控本地文件变动，并辅助同步到 IMA 云端。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本工具用於監控本地檔案變動，並輔助同步到 IMA 雲端。"
+          }
+        }
+      }
+    },
+    "监控与过滤": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monitoring & Filtering"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "监控与过滤"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "監控與過濾"
+          }
+        }
+      }
+    },
+    "从选择目录到过滤噪声文件，保证记录列表干净可用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From folder selection to noise filtering, keep your records clean and useful."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从选择目录到过滤噪声文件，保证记录列表干净可用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從選擇目錄到過濾雜訊檔案，保證記錄列表乾淨可用。"
+          }
+        }
+      }
+    },
+    "添加监控目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Monitored Folders"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加监控目录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增監控目錄"
+          }
+        }
+      }
+    },
+    "在首页或设置中添加文件夹，应用会保存授权并在下次启动后继续监控。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add folders from Home or Settings. The app saves permission and keeps monitoring after restart."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在首页或设置中添加文件夹，应用会保存授权并在下次启动后继续监控。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在首頁或設定中新增資料夾，應用會保存授權並在下次啟動後繼續監控。"
+          }
+        }
+      }
+    },
+    "实时捕获变动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture Changes in Real Time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时捕获变动"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "即時捕獲變動"
+          }
+        }
+      }
+    },
+    "通过 macOS FSEvents 捕获新增、修改、删除和重命名，变动会自动进入记录列表。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses macOS FSEvents to capture created, modified, deleted, and renamed files automatically."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 macOS FSEvents 捕获新增、修改、删除和重命名，变动会自动进入记录列表。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透過 macOS FSEvents 捕獲新增、修改、刪除和重新命名，變動會自動進入記錄列表。"
+          }
+        }
+      }
+    },
+    "默认忽略规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default Ignore Rules"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认忽略规则"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設忽略規則"
+          }
+        }
+      }
+    },
+    "默认过滤 .DS_Store、临时文件、系统目录、构建产物和常见缓存目录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filters .DS_Store, temporary files, system folders, build outputs, and common caches by default."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认过滤 .DS_Store、临时文件、系统目录、构建产物和常见缓存目录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設過濾 .DS_Store、暫存檔、系統目錄、建置產物和常見快取目錄。"
+          }
+        }
+      }
+    },
+    "自定义忽略项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom Ignore Items"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义忽略项"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自訂忽略項"
+          }
+        }
+      }
+    },
+    "可在设置中维护忽略文件名、后缀和目录名，让监控范围更贴合你的项目。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintain ignored file names, extensions, and folder names in Settings to fit each project."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可在设置中维护忽略文件名、后缀和目录名，让监控范围更贴合你的项目。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可在設定中維護忽略檔名、副檔名和目錄名，讓監控範圍更貼合你的專案。"
+          }
+        }
+      }
+    },
+    "记录处理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record Handling"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录处理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄處理"
+          }
+        }
+      }
+    },
+    "围绕待同步和全部记录进行查看、筛选、确认与清理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review, filter, confirm, and clean up Pending and All Records."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "围绕待同步和全部记录进行查看、筛选、确认与清理。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圍繞待同步和全部記錄進行查看、篩選、確認與清理。"
+          }
+        }
+      }
+    },
+    "待同步队列": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pending Queue"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待同步队列"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待同步佇列"
+          }
+        }
+      }
+    },
+    "左侧第二个入口集中展示未处理变动，可搜索路径、按类型筛选并批量处理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The second rail item lists unhandled changes with path search, type filters, and batch actions."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左侧第二个入口集中展示未处理变动，可搜索路径、按类型筛选并批量处理。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左側第二個入口集中展示未處理變動，可搜尋路徑、按類型篩選並批次處理。"
+          }
+        }
+      }
+    },
+    "全部记录视图": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Records View"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部记录视图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部記錄視圖"
+          }
+        }
+      }
+    },
+    "保留所有已同步和未同步记录，适合回溯历史、查找文件变动轨迹。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keeps synced and unsynced records for history review and change tracing."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留所有已同步和未同步记录，适合回溯历史、查找文件变动轨迹。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留所有已同步和未同步記錄，適合回溯歷史、查找檔案變動軌跡。"
+          }
+        }
+      }
+    },
+    "列表与树状模式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List & Tree Modes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "列表与树状模式"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "列表與樹狀模式"
+          }
+        }
+      }
+    },
+    "二级侧栏支持列表和树状视图切换，既能快速扫列表，也能按目录结构定位。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The secondary sidebar switches between list and tree views for scanning or folder-based navigation."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "二级侧栏支持列表和树状视图切换，既能快速扫列表，也能按目录结构定位。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "二級側欄支援列表和樹狀視圖切換，既能快速掃列表，也能按目錄結構定位。"
+          }
+        }
+      }
+    },
+    "详情与快捷操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details & Quick Actions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详情与快捷操作"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳情與快捷操作"
+          }
+        }
+      }
+    },
+    "选中记录后可查看路径、时间、状态，并执行同步、标记完成、Finder 显示或删除记录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a record to view path, time, status, and run sync, mark done, show in Finder, or delete."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选中记录后可查看路径、时间、状态，并执行同步、标记完成、Finder 显示或删除记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選中記錄後可查看路徑、時間、狀態，並執行同步、標記完成、Finder 顯示或刪除記錄。"
+          }
+        }
+      }
+    },
+    "批量删除记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batch Delete Records"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批量删除记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批次刪除記錄"
+          }
+        }
+      }
+    },
+    "在待同步或全部记录页可清理当前筛选结果，只删除应用内记录，不影响真实文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clean the current filtered result in Pending or All Records. This only removes app records, not real files."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在待同步或全部记录页可清理当前筛选结果，只删除应用内记录，不影响真实文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在待同步或全部記錄頁可清理目前篩選結果，只刪除應用內記錄，不影響真實檔案。"
+          }
+        }
+      }
+    },
+    "IMA 云端同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMA Cloud Sync"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMA 云端同步"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMA 雲端同步"
+          }
+        }
+      }
+    },
+    "支持手动上传、自动上传、知识库绑定和云端拉取。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supports manual upload, auto upload, knowledge-base binding, and cloud pull."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持手动上传、自动上传、知识库绑定和云端拉取。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支援手動上傳、自動上傳、知識庫綁定和雲端拉取。"
+          }
+        }
+      }
+    },
+    "默认采用手动模式，点击单条“同步到 IMA”或首页“全部同步”后再上传。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual mode is the default. Upload by clicking Sync to IMA on one item or Sync All on Home."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认采用手动模式，点击单条“同步到 IMA”或首页“全部同步”后再上传。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設採用手動模式，點擊單筆「同步到 IMA」或首頁「全部同步」後再上傳。"
+          }
+        }
+      }
+    },
+    "开启后，文件稳定 30 秒会自动上传，减少频繁保存造成的重复同步。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When enabled, files upload after staying stable for 30 seconds, reducing duplicate syncs."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启后，文件稳定 30 秒会自动上传，减少频繁保存造成的重复同步。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟後，檔案穩定 30 秒會自動上傳，減少頻繁保存造成的重複同步。"
+          }
+        }
+      }
+    },
+    "目录绑定知识库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bind Folders to Knowledge Bases"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目录绑定知识库"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目錄綁定知識庫"
+          }
+        }
+      }
+    },
+    "每个监控目录都可以绑定不同 IMA 知识库；不绑定时默认导入为新笔记。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each monitored folder can bind to a different IMA knowledge base; unbound folders import as new notes."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个监控目录都可以绑定不同 IMA 知识库；不绑定时默认导入为新笔记。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個監控目錄都可以綁定不同 IMA 知識庫；不綁定時預設匯入為新筆記。"
+          }
+        }
+      }
+    },
+    "待同步页可从 IMA 拉取云端新增内容，并下载到对应本地目录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Pending page can pull new IMA cloud content and download it to the matching local folder."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待同步页可从 IMA 拉取云端新增内容，并下载到对应本地目录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待同步頁可從 IMA 拉取雲端新增內容，並下載到對應本地目錄。"
+          }
+        }
+      }
+    },
+    "删除事件同步提示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deletion Sync Notice"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除事件同步提示"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除事件同步提示"
+          }
+        }
+      }
+    },
+    "本地删除会在应用内标记已同步；由于 IMA 未开放云端删除 API，云端文档需手动清理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local deletions are marked synced in the app. Since IMA has no cloud delete API, cloud documents require manual cleanup."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地删除会在应用内标记已同步；由于 IMA 未开放云端删除 API，云端文档需手动清理。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地刪除會在應用內標記已同步；由於 IMA 未開放雲端刪除 API，雲端文件需手動清理。"
+          }
+        }
+      }
+    },
+    "请求日志排查": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request Log Troubleshooting"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求日志排查"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求日誌排查"
+          }
+        }
+      }
+    },
+    "连接测试和同步请求会记录在 IMA 请求日志中，方便排查凭据、接口和网络问题。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection tests and sync requests are recorded in IMA logs for credential, API, and network debugging."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接测试和同步请求会记录在 IMA 请求日志中，方便排查凭据、接口和网络问题。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線測試和同步請求會記錄在 IMA 請求日誌中，方便排查憑證、介面和網路問題。"
+          }
+        }
+      }
+    },
+    "报告、通知与菜单栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reports, Notifications & Menu Bar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "报告、通知与菜单栏"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "報告、通知與選單列"
+          }
+        }
+      }
+    },
+    "把同步状态从主窗口延伸到菜单栏、通知和导出文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extend sync status from the main window to the menu bar, notifications, and export files."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把同步状态从主窗口延伸到菜单栏、通知和导出文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把同步狀態從主視窗延伸到選單列、通知和匯出檔案。"
+          }
+        }
+      }
+    },
+    "统计报告": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistics Reports"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "统计报告"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "統計報告"
+          }
+        }
+      }
+    },
+    "报告页按今天、近 7 天、近 30 天或全部范围统计记录、待同步和已完成数量。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reports summarize records, pending items, and completed items for Today, 7 days, 30 days, or All."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "报告页按今天、近 7 天、近 30 天或全部范围统计记录、待同步和已完成数量。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "報告頁按今天、近 7 天、近 30 天或全部範圍統計記錄、待同步和已完成數量。"
+          }
+        }
+      }
+    },
+    "CSV / JSON 导出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV / JSON Export"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV / JSON 导出"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV / JSON 匯出"
+          }
+        }
+      }
+    },
+    "可导出当前记录或报告范围，便于留档、分析或给其他工具继续处理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export current records or report ranges for archiving, analysis, or other tools."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可导出当前记录或报告范围，便于留档、分析或给其他工具继续处理。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可匯出目前記錄或報告範圍，便於留檔、分析或給其他工具繼續處理。"
+          }
+        }
+      }
+    },
+    "系统通知提醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System Notifications"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统通知提醒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系統通知提醒"
+          }
+        }
+      }
+    },
+    "新文件变动出现时可发送 macOS 通知，避免待同步事项被遗忘。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send macOS notifications when file changes appear so pending work is not missed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新文件变动出现时可发送 macOS 通知，避免待同步事项被遗忘。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新檔案變動出現時可發送 macOS 通知，避免待同步事項被遺忘。"
+          }
+        }
+      }
+    },
+    "菜单栏状态": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu Bar Status"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "菜单栏状态"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選單列狀態"
+          }
+        }
+      }
+    },
+    "菜单栏图标会显示待同步数量，可快速打开窗口、标记完成或退出应用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The menu bar icon shows pending count and lets you open the window, mark done, or quit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "菜单栏图标会显示待同步数量，可快速打开窗口、标记完成或退出应用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選單列圖示會顯示待同步數量，可快速開啟視窗、標記完成或退出應用。"
+          }
+        }
+      }
+    },
+    "设置与体验": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings & Experience"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置与体验"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定與體驗"
+          }
+        }
+      }
+    },
+    "让界面语言、外观、凭据与高级能力保持可控。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep language, appearance, credentials, and pro capabilities under control."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让界面语言、外观、凭据与高级能力保持可控。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讓介面語言、外觀、憑證與高級能力保持可控。"
+          }
+        }
+      }
+    },
+    "多语言界面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Multilingual UI"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多语言界面"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多語言介面"
+          }
+        }
+      }
+    },
+    "支持跟随系统、English、简体中文和繁体中文，切换后主界面和菜单栏同步刷新。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supports System, English, Simplified Chinese, and Traditional Chinese; the main UI and menu bar refresh together."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持跟随系统、English、简体中文和繁体中文，切换后主界面和菜单栏同步刷新。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支援跟隨系統、English、簡體中文和繁體中文，切換後主介面和選單列同步刷新。"
+          }
+        }
+      }
+    },
+    "浅色与深色模式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light & Dark Modes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浅色与深色模式"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "淺色與深色模式"
+          }
+        }
+      }
+    },
+    "可跟随系统，也可手动选择浅色或深色，整体保持清新简约风格。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow the system or manually choose light or dark while keeping the interface clean and fresh."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可跟随系统，也可手动选择浅色或深色，整体保持清新简约风格。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可跟隨系統，也可手動選擇淺色或深色，整體保持清新簡約風格。"
+          }
+        }
+      }
+    },
+    "凭据输入与复制粘贴": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Credential Editing & Paste"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "凭据输入与复制粘贴"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "憑證輸入與複製貼上"
+          }
+        }
+      }
+    },
+    "Client ID 和 API Key 支持键盘输入、复制、粘贴与隐藏显示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Client ID and API Key support keyboard input, copy, paste, and reveal/hide."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Client ID 和 API Key 支持键盘输入、复制、粘贴与隐藏显示。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Client ID 和 API Key 支援鍵盤輸入、複製、貼上與隱藏顯示。"
+          }
+        }
+      }
+    },
+    "引导进度_format": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step %d of %d"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引导进度_format"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %d / %d 步"
+          }
+        }
+      }
+    },
+    "跳过": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跳过"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跳過"
+          }
+        }
+      }
+    },
+    "上一步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一步"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一步"
+          }
+        }
+      }
+    },
+    "下一步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一步"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一步"
+          }
+        }
+      }
+    },
+    "完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
+    },
+    "先认识左侧导航": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start with the left navigation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先认识左侧导航"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先認識左側導航"
+          }
+        }
+      }
+    },
+    "左侧图标栏是主要入口：首页、待同步、全部记录、报告、帮助和设置都在这里切换。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The left icon rail is your main navigation: Home, Pending, All Records, Reports, Help, and Settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左侧图标栏是主要入口：首页、待同步、全部记录、报告、帮助和设置都在这里切换。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左側圖示欄是主要入口：首頁、待同步、全部記錄、報告、幫助和設定都在這裡切換。"
+          }
+        }
+      }
+    },
+    "第一步：添加监控目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step 1: Add a monitored folder"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第一步：添加监控目录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第一步：新增監控目錄"
+          }
+        }
+      }
+    },
+    "点击“添加目录”选择你要关注的文件夹。授权后，文件新增、修改、删除和重命名都会被自动记录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click “Add Folder” and choose a folder to watch. After permission is granted, created, modified, deleted, and renamed files are recorded automatically."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击“添加目录”选择你要关注的文件夹。授权后，文件新增、修改、删除和重命名都会被自动记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點擊「新增目錄」選擇你要關注的資料夾。授權後，檔案新增、修改、刪除和重新命名都會被自動記錄。"
+          }
+        }
+      }
+    },
+    "选择手动或自动同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose manual or auto sync"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择手动或自动同步"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇手動或自動同步"
+          }
+        }
+      }
+    },
+    "默认是手动同步。开启自动同步后，文件稳定 30 秒会自动上传到 IMA，适合持续写作或频繁保存的目录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual sync is the default. Turn on auto sync and files upload to IMA after staying stable for 30 seconds, which is useful for frequent saves."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认是手动同步。开启自动同步后，文件稳定 30 秒会自动上传到 IMA，适合持续写作或频繁保存的目录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設是手動同步。開啟自動同步後，檔案穩定 30 秒會自動上傳到 IMA，適合持續寫作或頻繁保存的目錄。"
+          }
+        }
+      }
+    },
+    "处理待同步与历史记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handle pending and history"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "处理待同步与历史记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "處理待同步與歷史記錄"
+          }
+        }
+      }
+    },
+    "第二个图标查看待同步队列，第三个图标查看全部记录。你可以搜索、筛选、切换树状视图、同步或清理记录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the second icon for Pending and the third for All Records. You can search, filter, switch to tree view, sync, or clean records."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第二个图标查看待同步队列，第三个图标查看全部记录。你可以搜索、筛选、切换树状视图、同步或清理记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第二個圖示查看待同步佇列，第三個圖示查看全部記錄。你可以搜尋、篩選、切換樹狀視圖、同步或清理記錄。"
+          }
+        }
+      }
+    },
+    "最后配置云端和偏好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configure cloud and preferences"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最后配置云端和偏好"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最後設定雲端和偏好"
+          }
+        }
+      }
+    },
+    "底部区域可以进入帮助、设置、切换语言和退出。建议先到设置里填写 IMA Client ID / API Key，并按需配置忽略规则。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bottom area opens Help, Settings, language switching, and Quit. Fill in IMA Client ID / API Key in Settings and adjust ignore rules as needed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "底部区域可以进入帮助、设置、切换语言和退出。建议先到设置里填写 IMA Client ID / API Key，并按需配置忽略规则。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "底部區域可以進入幫助、設定、切換語言和退出。建議先到設定裡填寫 IMA Client ID / API Key，並按需配置忽略規則。"
+          }
+        }
+      }
+    },
+    "获取 IMA API 凭据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get IMA API Credentials"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "获取 IMA API 凭据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取得 IMA API 憑證"
+          }
+        }
+      }
+    },
+    "完成 Client ID 和 API Key 配置后，才能测试连接、同步文件和读取知识库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configure Client ID and API Key before testing connection, syncing files, or reading knowledge bases."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成 Client ID 和 API Key 配置后，才能测试连接、同步文件和读取知识库。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成 Client ID 和 API Key 設定後，才能測試連線、同步檔案和讀取知識庫。"
+          }
+        }
+      }
+    },
+    "打开凭据页面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the credentials page"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开凭据页面"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟憑證頁面"
+          }
+        }
+      }
+    },
+    "在浏览器访问 ima.qq.com/agent-interface，并使用你的腾讯 IMA 账号登录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visit ima.qq.com/agent-interface in your browser and sign in with your Tencent IMA account."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在浏览器访问 ima.qq.com/agent-interface，并使用你的腾讯 IMA 账号登录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在瀏覽器訪問 ima.qq.com/agent-interface，並使用你的騰訊 IMA 帳號登入。"
+          }
+        }
+      }
+    },
+    "复制 Client ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Client ID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制 Client ID"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製 Client ID"
+          }
+        }
+      }
+    },
+    "在页面中找到 Client ID，复制后回到本应用的“设置 > 同步”区域粘贴到 Client ID 输入框。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find Client ID on the page, copy it, then paste it into the Client ID field in Settings > Sync."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在页面中找到 Client ID，复制后回到本应用的“设置 > 同步”区域粘贴到 Client ID 输入框。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在頁面中找到 Client ID，複製後回到本應用的「設定 > 同步」區域貼到 Client ID 輸入框。"
+          }
+        }
+      }
+    },
+    "复制 API Key": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy API Key"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制 API Key"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製 API Key"
+          }
+        }
+      }
+    },
+    "继续复制 API Key，粘贴到 API Key 输入框。API Key 属于敏感凭据，请不要发给他人或提交到代码仓库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy API Key and paste it into the API Key field. API Key is sensitive, so do not share it or commit it to a repository."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续复制 API Key，粘贴到 API Key 输入框。API Key 属于敏感凭据，请不要发给他人或提交到代码仓库。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "繼續複製 API Key，貼到 API Key 輸入框。API Key 屬於敏感憑證，請不要發給他人或提交到程式碼倉庫。"
+          }
+        }
+      }
+    },
+    "点击“测试连接”。如果连接成功，应用会获取 IMA 知识库列表，并允许你给监控目录绑定目标知识库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click “Test Connection”. If successful, the app fetches IMA knowledge bases and lets you bind folders to targets."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击“测试连接”。如果连接成功，应用会获取 IMA 知识库列表，并允许你给监控目录绑定目标知识库。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點擊「測試連線」。如果連線成功，應用會取得 IMA 知識庫列表，並允許你給監控目錄綁定目標知識庫。"
+          }
+        }
+      }
+    },
+    "凭据失效时重新生成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regenerate if credentials expire"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "凭据失效时重新生成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "憑證失效時重新生成"
+          }
+        }
+      }
+    },
+    "如果测试失败，请确认账号是否登录正确、凭据是否完整；必要时回到 IMA 页面重新生成或复制新的凭据。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If the test fails, confirm the account and credentials are correct; regenerate or copy new credentials from IMA if needed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果测试失败，请确认账号是否登录正确、凭据是否完整；必要时回到 IMA 页面重新生成或复制新的凭据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果測試失敗，請確認帳號是否登入正確、憑證是否完整；必要時回到 IMA 頁面重新生成或複製新的憑證。"
+          }
+        }
+      }
+    },
+    "支持开源项目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support the Open Source Project"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持开源项目"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持開源專案"
+          }
+        }
+      }
+    },
+    "FileSyncMonitor 将以开源方式提供。如果它帮你节省了时间，欢迎扫码捐赠支持后续维护。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FileSyncMonitor will be provided as open source. If it saves you time, scan a QR code to support ongoing maintenance."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FileSyncMonitor 将以开源方式提供。如果它帮你节省了时间，欢迎扫码捐赠支持后续维护。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FileSyncMonitor 將以開源方式提供。如果它幫你節省了時間，歡迎掃碼捐贈支持後續維護。"
+          }
+        }
+      }
+    },
+    "微信捐赠": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WeChat Donation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "微信捐赠"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "微信捐贈"
+          }
+        }
+      }
+    },
+    "支付宝捐赠": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alipay Donation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支付宝捐赠"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支付寶捐贈"
+          }
+        }
+      }
+    },
+    "捐赠说明": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Donation Notes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捐赠说明"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捐贈說明"
+          }
+        }
+      }
+    },
+    "捐赠完全自愿，不影响任何功能使用。感谢每一份支持，它会用于持续适配 macOS、维护 IMA 同步能力和完善文档。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Donations are fully optional and do not affect any features. Every contribution helps with macOS compatibility, IMA sync maintenance, and documentation."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捐赠完全自愿，不影响任何功能使用。感谢每一份支持，它会用于持续适配 macOS、维护 IMA 同步能力和完善文档。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "捐贈完全自願，不影響任何功能使用。感謝每一份支持，它會用於持續適配 macOS、維護 IMA 同步能力和完善文件。"
+          }
+        }
+      }
+    },
+    "让界面语言、外观与凭据配置保持可控。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep language, appearance, and credentials under control."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让界面语言、外观与凭据配置保持可控。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讓介面語言、外觀與憑證配置保持可控。"
+          }
+        }
+      }
+    },
+    "本地操作同步逻辑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local Operation Sync Logic"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地操作同步邏輯"
+          }
+        }
+      }
+    },
+    "理解每种文件操作会如何进入待同步列表、自动同步和历史记录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Understand how each file operation enters pending sync, auto sync, and history."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "理解每種文件操作會如何進入待同步列表、自動同步和歷史記錄。"
+          }
+        }
+      }
+    },
+    "本地操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local Operation"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地操作"
+          }
+        }
+      }
+    },
+    "记录类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record Type"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄類型"
+          }
+        }
+      }
+    },
+    "同步处理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync Handling"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步處理"
+          }
+        }
+      }
+    },
+    "用户需要知道": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What to Know"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用者需要知道"
+          }
+        }
+      }
+    },
+    "新增文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New File"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增文件"
+          }
+        }
+      }
+    },
+    "生成一条待同步记录；手动模式等待点击同步，自动模式在文件稳定 30 秒后上传。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creates one pending record. Manual mode waits for you to sync; auto mode uploads after the file is stable for 30 seconds."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "產生一條待同步記錄；手動模式等待點擊同步，自動模式在文件穩定 30 秒後上傳。"
+          }
+        }
+      }
+    },
+    "如果新建后又立即删除，应用会抵消这次短暂变动，不再产生待同步事项。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If the file is created and then deleted immediately, the app cancels that short-lived change and creates no pending item."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果新建後又立即刪除，應用會抵消這次短暫變動，不再產生待同步事項。"
+          }
+        }
+      }
+    },
+    "修改文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modified File"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改文件"
+          }
+        }
+      }
+    },
+    "同一路径已有未同步记录时只更新时间，避免反复保存产生多条记录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When the same path already has an unsynced record, only the timestamp is refreshed to avoid repeated save noise."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一路徑已有未同步記錄時只更新時間，避免反覆儲存產生多條記錄。"
+          }
+        }
+      }
+    },
+    "自动同步会在最后一次修改后重新等待 30 秒。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto sync waits another 30 seconds after the last modification."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動同步會在最後一次修改後重新等待 30 秒。"
+          }
+        }
+      }
+    },
+    "删除文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted File"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除文件"
+          }
+        }
+      }
+    },
+    "删除会生成删除记录；同步时仅在本地标记完成。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deletion creates a deleted record. Syncing marks it complete locally."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除會產生刪除記錄；同步時僅在本地標記完成。"
+          }
+        }
+      }
+    },
+    "当前 IMA 未开放云端删除接口，云端已有文档需要用户按需手动清理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMA currently does not provide a cloud deletion API, so existing cloud documents need to be cleaned manually when needed."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前 IMA 未開放雲端刪除接口，雲端已有文件需要使用者按需手動清理。"
+          }
+        }
+      }
+    },
+    "重命名文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renamed File"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新命名文件"
+          }
+        }
+      }
+    },
+    "已存在文件重命名会生成重命名记录，并在详情里保留原路径。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renaming an existing file creates a renamed record and keeps the old path in the detail view."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已存在文件重新命名會產生重新命名記錄，並在詳情中保留原路徑。"
+          }
+        }
+      }
+    },
+    "如果是刚新建的文件又重命名，应用会合并为最终路径的一条新增记录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If a newly created file is renamed before sync, the app merges it into one created record at the final path."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果是剛新建的文件又重新命名，應用會合併為最終路徑的一條新增記錄。"
+          }
+        }
+      }
+    },
+    "快速新建后删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Then Delete Quickly"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速新建後刪除"
+          }
+        }
+      }
+    },
+    "未同步前创建又删除会被视为一次无效临时变动。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creating and deleting before sync is treated as a temporary no-op change."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未同步前建立又刪除會被視為一次無效臨時變動。"
+          }
+        }
+      }
+    },
+    "适合过滤编辑器临时文件和误操作，不会增加角标或通知。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This helps filter editor temporary files and accidental operations without increasing badges or notifications."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "適合過濾編輯器臨時文件和誤操作，不會增加角標或通知。"
+          }
+        }
+      }
+    },
+    "点击单条“同步到 IMA”或首页“全部同步”后才上传。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploads only after you click “Sync to IMA” for one record or “Sync All” on the home page."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點擊單條「同步到 IMA」或首頁「全部同步」後才上傳。"
+          }
+        }
+      }
+    },
+    "这是默认模式，适合确认后再同步。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the default mode and is best when you want to review changes first."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這是預設模式，適合確認後再同步。"
+          }
+        }
+      }
+    },
+    "开启后，文件变动稳定 30 秒再上传到绑定知识库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When enabled, changes upload to the bound knowledge base after staying stable for 30 seconds."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟後，文件變動穩定 30 秒再上傳到綁定知識庫。"
+          }
+        }
+      }
+    },
+    "频繁保存会重置等待时间，避免上传半成品。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frequent saves reset the wait time to avoid uploading half-finished files."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "頻繁儲存會重置等待時間，避免上傳半成品。"
+          }
+        }
+      }
+    },
+    "忽略规则会先于记录入库执行；被忽略的文件不会产生记录、通知、角标或同步任务。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignore rules run before records are saved. Ignored files do not create records, notifications, badges, or sync tasks."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "忽略規則會先於記錄入庫執行；被忽略的文件不會產生記錄、通知、角標或同步任務。"
           }
         }
       }
