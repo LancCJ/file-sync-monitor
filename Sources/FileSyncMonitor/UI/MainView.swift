@@ -2408,14 +2408,7 @@ struct IMAConfigReminderBanner: View {
             Spacer()
             
             // Action Button
-            Button(action: {
-                NSApp.activate(ignoringOtherApps: true)
-                if #available(macOS 13.0, *) {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                } else {
-                    NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-                }
-            }) {
+            SettingsLink {
                 HStack(spacing: 4) {
                     LocalizedText("去配置")
                     Image(systemName: "arrow.right")
