@@ -447,14 +447,18 @@ struct PillButtonStyle: ButtonStyle {
 
         private var background: Color {
             if isPrimary {
-                return configuration.isPressed ? Color.appInk.opacity(0.8) : (isHovered ? Color.appInk.opacity(0.92) : Color.appInk)
+                return configuration.isPressed ? Color.appMint.opacity(0.8) : (isHovered ? Color.appMint : Color.appInk)
             } else {
-                return configuration.isPressed ? Color.appControlPressed : (isHovered ? Color.appSelection.opacity(0.4) : Color.appControl)
+                return configuration.isPressed ? Color.appControlPressed : (isHovered ? Color.appSelection : Color.appControl)
             }
         }
 
         private var stroke: Color {
-            isPrimary ? Color.appInk : (isHovered ? Color.appMint.opacity(0.3) : Color.appLine.opacity(0.72))
+            if isPrimary {
+                return isHovered ? Color.appMint : Color.appInk
+            } else {
+                return isHovered ? Color.appMint.opacity(0.48) : Color.appLine.opacity(0.72)
+            }
         }
     }
 }
@@ -478,7 +482,7 @@ struct QuietButtonStyle: ButtonStyle {
                         .fill(background)
                         .overlay(
                             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .stroke(Color.appLine.opacity(isHovered ? 0.9 : 0.72), lineWidth: 1)
+                                .stroke(stroke, lineWidth: 1)
                         )
                 )
                 .contentShape(Rectangle())
@@ -489,7 +493,11 @@ struct QuietButtonStyle: ButtonStyle {
         }
 
         private var background: Color {
-            configuration.isPressed ? Color.appControlPressed : (isHovered ? Color.appSelection.opacity(0.5) : Color.appControl.opacity(0.92))
+            configuration.isPressed ? Color.appControlPressed : (isHovered ? Color.appSelection : Color.appControl.opacity(0.92))
+        }
+
+        private var stroke: Color {
+            isHovered ? Color.appMint.opacity(0.48) : Color.appLine.opacity(0.72)
         }
     }
 }
