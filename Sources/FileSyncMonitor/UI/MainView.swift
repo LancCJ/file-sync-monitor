@@ -9,6 +9,7 @@ struct MainView: View {
 
     // 观测语言变化，确保切换语言时 body 重新执行，所有 LocalizedText / .appLocalized 使用新语言
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     @State private var selectedSidebarItem: SidebarItem = .home
     @State private var selectedEventID: UUID?
@@ -17,6 +18,8 @@ struct MainView: View {
     @State private var isSyncing = false
     @State private var isShowingQuitConfirmation = false
     @State private var isShowingBatchDeleteConfirmation = false
+    @State private var isShowingOnboarding = false
+    @State private var onboardingStep = 0
 
     enum SidebarItem: String, CaseIterable, Identifiable {
         case home, pendingSync, allEvents, reports, settings, help
@@ -209,17 +212,44 @@ struct MainView: View {
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
+
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(IMAWindowBackground())
             .tint(.appMint)
+            .overlayPreferenceValue(OnboardingTargetPreferenceKey.self) { anchors in
+                GeometryReader { proxy in
+                    if isShowingOnboarding {
+                        OnboardingOverlay(
+                            stepIndex: $onboardingStep,
+                            layout: layout,
+                            targetRects: anchors.mapValues { proxy[$0] },
+                            dismiss: {
+                                hasCompletedOnboarding = true
+                                isShowingOnboarding = false
+                            }
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        .zIndex(10)
+                    }
+                }
+            }
             .onChange(of: selectedSidebarItem) { _, _ in
                 selectedEventID = nil
                 searchText = ""
                 typeFilter = .all
             }
             .onAppear {
-                setupAutoSyncListener()
+                if !hasCompletedOnboarding {
+                    selectedSidebarItem = .home
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                        if !hasCompletedOnboarding {
+                            withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+                                isShowingOnboarding = true
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -288,6 +318,30 @@ struct MainLayoutMetrics {
     }
 }
 
+private enum OnboardingTarget: Hashable {
+    case rail
+    case addDirectory
+    case syncMode
+    case pending
+    case settings
+}
+
+private struct OnboardingTargetPreferenceKey: PreferenceKey {
+    static var defaultValue: [OnboardingTarget: Anchor<CGRect>] = [:]
+
+    static func reduce(value: inout [OnboardingTarget: Anchor<CGRect>], nextValue: () -> [OnboardingTarget: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, newValue in newValue })
+    }
+}
+
+private extension View {
+    func onboardingTarget(_ target: OnboardingTarget) -> some View {
+        anchorPreference(key: OnboardingTargetPreferenceKey.self, value: .bounds) { anchor in
+            [target: anchor]
+        }
+    }
+}
+
 struct IMARailView: View {
     @Binding var selection: MainView.SidebarItem
     let pendingCount: Int
@@ -309,32 +363,37 @@ struct IMARailView: View {
                     ) {
                         selection = item
                     }
+                    .modifier(OnboardingTargetMarker(target: item == .pendingSync ? .pending : nil))
                 }
             }
             .padding(.top, 22)
+            .onboardingTarget(.rail)
 
             Spacer()
 
             VStack(spacing: 18) {
-                IMARailButton(item: .help, isSelected: selection == .help, badgeCount: 0) {
-                    selection = .help
-                }
-                
-                IMARailButton(item: .settings, isSelected: selection == .settings, badgeCount: 0) {
-                    selection = .settings
-                }
-            }
+                VStack(spacing: 18) {
+                    IMARailButton(item: .help, isSelected: selection == .help, badgeCount: 0) {
+                        selection = .help
+                    }
 
-            VStack(spacing: 18) {
-                IMARailLanguageButton()
-
-                Button(action: requestQuit) {
-                    IMARailExitButton()
+                    IMARailButton(item: .settings, isSelected: selection == .settings, badgeCount: 0) {
+                        selection = .settings
+                    }
                 }
-                .buttonStyle(.plain)
-                .help("退出".appLocalized)
+
+                VStack(spacing: 18) {
+                    IMARailLanguageButton()
+
+                    Button(action: requestQuit) {
+                        IMARailExitButton()
+                    }
+                    .buttonStyle(.plain)
+                    .help("退出".appLocalized)
+                }
             }
             .padding(.bottom, 18)
+            .onboardingTarget(.settings)
         }
         .frame(width: layout.railWidth)
         .background(
@@ -351,6 +410,18 @@ struct IMARailView: View {
     }
 }
 
+private struct OnboardingTargetMarker: ViewModifier {
+    let target: OnboardingTarget?
+
+    func body(content: Content) -> some View {
+        if let target {
+            content.onboardingTarget(target)
+        } else {
+            content
+        }
+    }
+}
+
 struct IMARailExitButton: View {
     @State private var isHovered = false
 
@@ -361,7 +432,7 @@ struct IMARailExitButton: View {
             .frame(width: 40, height: 40)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isHovered ? Color.appSurface.opacity(0.9) : Color.clear)
+                    .fill(isHovered ? Color.appInk.opacity(0.08) : Color.clear)
             )
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
@@ -407,6 +478,7 @@ struct QuitConfirmationOverlay: View {
                         }
                     }
                     .buttonStyle(PillButtonStyle(isPrimary: true))
+                    .onboardingTarget(.addDirectory)
                 }
             }
             .padding(24)
@@ -483,6 +555,290 @@ struct BatchDeleteConfirmationOverlay: View {
     }
 }
 
+private struct OnboardingOverlay: View {
+    @Binding var stepIndex: Int
+    let layout: MainLayoutMetrics
+    let targetRects: [OnboardingTarget: CGRect]
+    let dismiss: () -> Void
+
+    private let steps = OnboardingStep.all
+
+    private var step: OnboardingStep {
+        steps[min(max(stepIndex, 0), steps.count - 1)]
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.appInk.opacity(0.34)
+                .ignoresSafeArea()
+
+            highlightLayer
+
+            OnboardingCard(
+                step: step,
+                stepIndex: stepIndex,
+                total: steps.count,
+                canGoBack: stepIndex > 0,
+                isLast: stepIndex == steps.count - 1,
+                back: {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        stepIndex = max(0, stepIndex - 1)
+                    }
+                },
+                next: {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        if stepIndex == steps.count - 1 {
+                            dismiss()
+                        } else {
+                            stepIndex += 1
+                        }
+                    }
+                },
+                skip: dismiss
+            )
+            .frame(width: 360)
+            .position(cardPosition)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var highlightLayer: some View {
+        let rect = targetRect
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: step.cornerRadius, style: .continuous)
+                .fill(Color.appSurface.opacity(0.18))
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+                .shadow(color: Color.appMint.opacity(0.28), radius: 22, x: 0, y: 8)
+
+            RoundedRectangle(cornerRadius: step.cornerRadius, style: .continuous)
+                .stroke(Color.appMint, lineWidth: 2)
+                .frame(width: rect.width, height: rect.height)
+                .position(x: rect.midX, y: rect.midY)
+
+            Image(systemName: step.pointerSymbol)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(Color.appMint)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.appSurface))
+                .overlay(Circle().stroke(Color.appMint.opacity(0.28), lineWidth: 1))
+                .position(x: pointerPosition.x, y: pointerPosition.y)
+        }
+    }
+
+    private var targetRect: CGRect {
+        if let rect = targetRects[step.kind.target] {
+            return rect.insetBy(dx: -8, dy: -8)
+        }
+        return fallbackTargetRect
+    }
+
+    private var fallbackTargetRect: CGRect {
+        let titleTop = layout.titleBarInset
+        let rail = layout.railWidth
+        let width = layout.size.width
+        let height = layout.size.height
+
+        switch step.kind {
+        case .rail:
+            return CGRect(x: 10, y: titleTop + 78, width: max(44, rail - 20), height: 214)
+        case .addDirectory:
+            return CGRect(x: rail + 46, y: titleTop + 130, width: 138, height: 46)
+        case .syncMode:
+            return CGRect(x: max(rail + 430, width - 246), y: titleTop + 118, width: 166, height: 66)
+        case .pending:
+            return CGRect(x: 10, y: titleTop + 116, width: max(44, rail - 20), height: 96)
+        case .settings:
+            return CGRect(x: 10, y: max(titleTop + 350, height - 280), width: max(44, rail - 20), height: 154)
+        }
+    }
+
+    private var pointerPosition: CGPoint {
+        let rect = targetRect
+        switch step.kind {
+        case .syncMode:
+            return CGPoint(x: rect.minX - 13, y: rect.midY)
+        default:
+            return CGPoint(x: rect.maxX + 14, y: rect.midY)
+        }
+    }
+
+    private var cardPosition: CGPoint {
+        let rect = targetRect
+        let width = layout.size.width
+        let height = layout.size.height
+        let cardHalfWidth: CGFloat = 180
+        let cardHalfHeight: CGFloat = 150
+
+        switch step.kind {
+        case .syncMode:
+            return CGPoint(
+                x: min(max(rect.minX - 212, cardHalfWidth + 20), width - cardHalfWidth - 20),
+                y: min(max(rect.midY + 12, cardHalfHeight + layout.titleBarInset), height - cardHalfHeight - 20)
+            )
+        case .settings:
+            return CGPoint(
+                x: min(max(rect.maxX + 210, cardHalfWidth + 20), width - cardHalfWidth - 20),
+                y: min(max(rect.midY - 22, cardHalfHeight + layout.titleBarInset), height - cardHalfHeight - 20)
+            )
+        default:
+            return CGPoint(
+                x: min(max(rect.maxX + 220, cardHalfWidth + 20), width - cardHalfWidth - 20),
+                y: min(max(rect.midY + 8, cardHalfHeight + layout.titleBarInset), height - cardHalfHeight - 20)
+            )
+        }
+    }
+}
+
+private struct OnboardingCard: View {
+    let step: OnboardingStep
+    let stepIndex: Int
+    let total: Int
+    let canGoBack: Bool
+    let isLast: Bool
+    let back: () -> Void
+    let next: () -> Void
+    let skip: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                AppIconBadge(symbol: step.symbol, color: .appMint, size: 38)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(String(format: "引导进度_format".appLocalized, stepIndex + 1, total))
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.appMint)
+                    LocalizedText(step.title)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Color.appInk)
+                }
+
+                Spacer()
+            }
+
+            LocalizedText(step.message)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.appMuted)
+                .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 6) {
+                ForEach(0..<total, id: \.self) { index in
+                    Capsule()
+                        .fill(index == stepIndex ? Color.appMint : Color.appLine)
+                        .frame(width: index == stepIndex ? 20 : 7, height: 7)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button(action: skip) {
+                    LocalizedText("跳过")
+                }
+                .buttonStyle(QuietButtonStyle())
+
+                Spacer()
+
+                if canGoBack {
+                    Button(action: back) {
+                        LocalizedText("上一步")
+                    }
+                    .buttonStyle(QuietButtonStyle())
+                }
+
+                Button(action: next) {
+                    Label {
+                        LocalizedText(isLast ? "完成" : "下一步")
+                    } icon: {
+                        Image(systemName: isLast ? "checkmark" : "arrow.right")
+                    }
+                }
+                .buttonStyle(PillButtonStyle(isPrimary: true))
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.appSurface.opacity(0.98))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.appLine.opacity(0.78), lineWidth: 1)
+                )
+        )
+        .shadow(color: Color.appInk.opacity(0.2), radius: 24, x: 0, y: 16)
+    }
+}
+
+private struct OnboardingStep {
+    enum Kind {
+        case rail
+        case addDirectory
+        case syncMode
+        case pending
+        case settings
+
+        var target: OnboardingTarget {
+            switch self {
+            case .rail: return .rail
+            case .addDirectory: return .addDirectory
+            case .syncMode: return .syncMode
+            case .pending: return .pending
+            case .settings: return .settings
+            }
+        }
+    }
+
+    let kind: Kind
+    let title: String
+    let message: String
+    let symbol: String
+    let pointerSymbol: String
+    let cornerRadius: CGFloat
+
+    static let all: [OnboardingStep] = [
+        OnboardingStep(
+            kind: .rail,
+            title: "先认识左侧导航",
+            message: "左侧图标栏是主要入口：首页、待同步、全部记录、报告、帮助和设置都在这里切换。",
+            symbol: "sidebar.left",
+            pointerSymbol: "arrow.left",
+            cornerRadius: 14
+        ),
+        OnboardingStep(
+            kind: .addDirectory,
+            title: "第一步：添加监控目录",
+            message: "点击“添加目录”选择你要关注的文件夹。授权后，文件新增、修改、删除和重命名都会被自动记录。",
+            symbol: "folder.badge.plus",
+            pointerSymbol: "arrow.left",
+            cornerRadius: 10
+        ),
+        OnboardingStep(
+            kind: .syncMode,
+            title: "选择手动或自动同步",
+            message: "默认是手动同步。开启自动同步后，文件稳定 30 秒会自动上传到 IMA，适合持续写作或频繁保存的目录。",
+            symbol: "arrow.triangle.2.circlepath",
+            pointerSymbol: "arrow.right",
+            cornerRadius: 12
+        ),
+        OnboardingStep(
+            kind: .pending,
+            title: "处理待同步与历史记录",
+            message: "第二个图标查看待同步队列，第三个图标查看全部记录。你可以搜索、筛选、切换树状视图、同步或清理记录。",
+            symbol: "doc.text.magnifyingglass",
+            pointerSymbol: "arrow.left",
+            cornerRadius: 14
+        ),
+        OnboardingStep(
+            kind: .settings,
+            title: "最后配置云端和偏好",
+            message: "底部区域可以进入帮助、设置、切换语言和退出。建议先到设置里填写 IMA Client ID / API Key，并按需配置忽略规则。",
+            symbol: "gearshape",
+            pointerSymbol: "arrow.left",
+            cornerRadius: 14
+        )
+    ]
+}
+
 struct IMARailButton: View {
     let item: MainView.SidebarItem
     let isSelected: Bool
@@ -500,7 +856,7 @@ struct IMARailButton: View {
                     .frame(width: 40, height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isSelected ? Color.appSurface.opacity(0.95) : (isHovered ? Color.appSurface.opacity(0.2) : Color.clear))
+                            .fill(isSelected ? Color.appSurface.opacity(0.95) : (isHovered ? Color.appInk.opacity(0.08) : Color.clear))
                     )
 
                 if badgeCount > 0 {
@@ -594,6 +950,7 @@ struct FileSyncHomeView: View {
                     Spacer()
                     
                     HomeSyncModeControl(isAutoSync: $autoSync)
+                        .onboardingTarget(.syncMode)
                 }
             }
             .padding(.horizontal, 48)
@@ -619,6 +976,7 @@ struct FileSyncHomeView: View {
                                             }
                                         }
                                     }
+                                    .animation(.snappy(duration: 0.28), value: recentEvents)
                                 }
                             }
                         }
@@ -753,6 +1111,7 @@ struct HomeSyncModeControl: View {
 struct HomeRecentEventRow: View {
     let event: FileEvent
     var deleteAction: (() -> Void)? = nil
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -776,7 +1135,13 @@ struct HomeRecentEventRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(Color.white.opacity(0.001))
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isHovered ? Color.appSelection.opacity(0.5) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(.snappy(duration: 0.15), value: isHovered)
         .imaHover()
     }
 }
@@ -1003,6 +1368,7 @@ struct IMASecondarySidebar: View {
                         }
                     }
                     .padding(8)
+                    .animation(.snappy(duration: 0.28), value: events)
                 }
             } else {
                 EventTreeView(
@@ -1033,6 +1399,7 @@ struct IMAEventListRow: View {
     var deleteAction: (() -> Void)? = nil
     var markSyncedAction: (() -> Void)? = nil
     var uploadAction: (() -> Void)? = nil
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -1086,8 +1453,11 @@ struct IMAEventListRow: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? Color.appSelection : Color.clear)
+                    .fill(isSelected ? Color.appSelection : (isHovered ? Color.appSelection.opacity(0.4) : Color.clear))
             )
+            .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+            .animation(.snappy(duration: 0.15), value: isHovered)
             .imaHover()
         }
         .buttonStyle(.plain)
@@ -1283,15 +1653,7 @@ extension MainView {
             }
             
             do {
-                let kbId = FileMonitorService.shared.getKnowledgeBaseId(for: event.path)
-                let remoteId = try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
-                
-                await MainActor.run {
-                    event.isSynced = true
-                    event.remoteId = remoteId
-                    try? modelContext.save()
-                    MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
-                }
+                try await FileMonitorService.shared.syncEventToIMA(event, in: modelContext)
             } catch {
                 print("IMA Sync failed: \(error)")
             }
@@ -1320,15 +1682,7 @@ extension MainView {
                 }
                 
                 do {
-                    let kbId = FileMonitorService.shared.getKnowledgeBaseId(for: event.path)
-                    let remoteId = try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
-                    
-                    await MainActor.run {
-                        event.isSynced = true
-                        event.remoteId = remoteId
-                        try? modelContext.save()
-                        MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
-                    }
+                    try await FileMonitorService.shared.syncEventToIMA(event, in: modelContext)
                 } catch {
                     print("Batch sync failed for \(event.fileName): \(error)")
                 }
@@ -1385,15 +1739,6 @@ extension MainView {
     private func currentUnsyncedCount() -> Int {
         let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
         return (try? modelContext.fetchCount(descriptor)) ?? 0
-    }
-
-    private func setupAutoSyncListener() {
-        FileMonitorService.shared.setupAutoSyncTrigger { event in
-            // 在主线程执行上传，因为它涉及状态更新
-            Task { @MainActor in
-                self.upload(event)
-            }
-        }
     }
 
     private func deleteAllFilteredEvents() {
@@ -1647,14 +1992,14 @@ struct IMARailLanguageButton: View {
             .frame(width: 40, height: 40)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isHovered ? Color.appSurface.opacity(0.9) : Color.clear)
+                    .fill(isHovered ? Color.appInk.opacity(0.08) : Color.clear)
             ),
             arrowEdge: .trailing
         )
         .onHover { isHovered = $0 }
         .help("切换语言".appLocalized)
         .id(appLanguage)
-        .onChange(of: appLanguage) { _ in
+        .onChange(of: appLanguage) { _, _ in
             MenuBarManager.shared.refreshMenu()
         }
     }
