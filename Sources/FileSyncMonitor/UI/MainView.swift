@@ -880,6 +880,9 @@ struct IMARailButton: View {
 struct FileSyncHomeView: View {
     @AppStorage("autoSync") private var autoSync = false
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
+    @AppStorage("imaClientId") private var clientId = ""
+    @AppStorage("imaApiKey") private var apiKey = ""
+    @AppStorage("imaKnowledgeBaseId") private var knowledgeBaseId = ""
 
     let events: [FileEvent]
     let pendingEvents: [FileEvent]
@@ -957,6 +960,12 @@ struct FileSyncHomeView: View {
             .padding(.horizontal, 48)
             .padding(.top, 48)
             .padding(.bottom, 40) // 与主内容区拉开距离
+
+            if clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+               apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+               knowledgeBaseId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                IMAConfigReminderBanner()
+            }
 
             // 2. Main Content Area: 左右分栏，核心展示区
             HStack(alignment: .top, spacing: 28) {
@@ -2366,5 +2375,76 @@ final class MainWindowDelegate: NSObject, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil) // 隐藏窗口而非销毁
         return false // 阻止默认的销毁行为
+    }
+}
+
+struct IMAConfigReminderBanner: View {
+    @State private var isHovered = false
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Left Warning Icon
+            ZStack {
+                Circle()
+                    .fill(Color.appAmber.opacity(0.12))
+                    .frame(width: 40, height: 40)
+                
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.appAmber)
+            }
+            
+            // Text Details
+            VStack(alignment: .leading, spacing: 3) {
+                LocalizedText("云端同步配置未完成")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.appInk)
+                
+                LocalizedText("请在设置中配置 Tencent IMA 的 Client ID、API Key 和 知识库 ID，以开启全自动云端同步备份。")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.appInk.opacity(0.65))
+            }
+            
+            Spacer()
+            
+            // Action Button
+            Button(action: {
+                NSApp.activate(ignoringOtherApps: true)
+                if #available(macOS 13.0, *) {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                } else {
+                    NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                }
+            }) {
+                HStack(spacing: 4) {
+                    LocalizedText("去配置")
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .font(.system(size: 11.5, weight: .semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(Color.appAmber)
+                .foregroundStyle(Color.white)
+                .clipShape(Capsule())
+                .shadow(color: Color.appAmber.opacity(0.15), radius: 3, y: 1.5)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.appAmber.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.appAmber.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .scaleEffect(isHovered ? 1.003 : 1.0)
+        .animation(.snappy(duration: 0.18), value: isHovered)
+        .onHover { isHovered = $0 }
+        .padding(.horizontal, 48)
+        .padding(.bottom, 24)
     }
 }
