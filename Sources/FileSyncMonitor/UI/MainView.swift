@@ -259,6 +259,16 @@ struct MainView: View {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ResetOnboarding"))) { _ in
+                hasCompletedOnboarding = false
+                selectedSidebarItem = .home
+                onboardingStep = 0
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+                        isShowingOnboarding = true
+                    }
+                }
+            }
         }
     }
 
