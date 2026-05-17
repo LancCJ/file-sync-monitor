@@ -16,20 +16,35 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Build in Release mode
+    - name: Build Universal Release Binary (arm64 + x86_64)
       run: |
-        swift build -c release
+        swift build -c release --arch arm64 --arch x86_64
 
-    - name: Package Release Assets
+    - name: Assemble macOS App Bundle
       run: |
-        cd .build/release
-        # Compress executable binary and multi-language assets package into absolute path
-        zip -r ${{ github.workspace }}/FileSyncMonitor-macOS.zip FileSyncMonitor FileSyncMonitor_FileSyncMonitor.bundle
+        # 1. Create .app structure
+        mkdir -p FileSyncMonitor.app/Contents/MacOS
+        mkdir -p FileSyncMonitor.app/Contents/Resources
 
-    - name: Create GitHub Release and Upload Assets
+        # 2. Copy binary and Info.plist
+        cp .build/apple/Products/Release/FileSyncMonitor FileSyncMonitor.app/Contents/MacOS/
+        cp Sources/FileSyncMonitor/Info.plist FileSyncMonitor.app/Contents/Info.plist
+
+        # 3. Copy resource bundle and AppIcon
+        cp -R .build/apple/Products/Release/FileSyncMonitor_FileSyncMonitor.bundle FileSyncMonitor.app/Contents/Resources/
+        cp FileSyncMonitor.app/Contents/Resources/FileSyncMonitor_FileSyncMonitor.bundle/Contents/Resources/AppIcon.icns FileSyncMonitor.app/Contents/Resources/
+
+    - name: Create DMG Installer
+      run: |
+        mkdir -p dmg_root
+        cp -R FileSyncMonitor.app dmg_root/
+        ln -s /Applications dmg_root/Applications
+        hdiutil create -volname "FileSyncMonitor" -srcfolder dmg_root -ov -format UDZO ${{ github.workspace }}/FileSyncMonitor-macOS.dmg
+
+    - name: Create GitHub Release and Upload DMG
       uses: softprops/action-gh-release@v2
       with:
-        files: ${{ github.workspace }}/FileSyncMonitor-macOS.zip
+        files: ${{ github.workspace }}/FileSyncMonitor-macOS.dmg
         draft: false
         prerelease: false
         fail_on_unmatched_files: true
