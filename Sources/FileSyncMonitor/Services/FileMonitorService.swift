@@ -10,7 +10,6 @@ final class FileMonitorService {
     private var stream: FSEventStreamRef?
     private let queue = DispatchQueue(label: "com.filesyncmonitor.monitor", qos: .background)
     private var onEventCallback: (([FileEvent]) -> Void)?
-    private var onAutoSyncTrigger: ((FileEvent) -> Void)?
     private var syncTimers: [String: Timer] = [:]
     
     /// 存储书签数据的 Key
@@ -179,6 +178,12 @@ final class FileMonitorService {
                         // 触发自动同步计时器
                         self.resetSyncTimer(for: existing)
                     } else {
+                        if event.type == "renamed",
+                           let mergedEvent = self.mergeRecentCreatedEventIntoRename(event, context: context) {
+                            self.resetSyncTimer(for: mergedEvent)
+                            continue
+                        }
+
                         // 2. 如果是新记录，尝试从最近一次“已同步”的记录中继承 remoteId
                         var syncedDescriptor = FetchDescriptor<FileEvent>(
                             predicate: #Predicate<FileEvent> { $0.path == path && $0.isSynced == true }
@@ -200,6 +205,42 @@ final class FileMonitorService {
                 try? context.save()
             }
         }
+    }
+
+    private func mergeRecentCreatedEventIntoRename(_ event: FileEvent, context: ModelContext) -> FileEvent? {
+        let newURL = URL(fileURLWithPath: event.path)
+        let directoryPath = newURL.deletingLastPathComponent().path
+        let cutoff = event.timestamp.addingTimeInterval(-30)
+
+        var descriptor = FetchDescriptor<FileEvent>(
+            predicate: #Predicate<FileEvent> {
+                $0.type == "created" &&
+                $0.isSynced == false &&
+                $0.timestamp >= cutoff
+            },
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        descriptor.fetchLimit = 20
+
+        guard let candidates = try? context.fetch(descriptor) else {
+            return nil
+        }
+
+        guard let staleCreated = candidates.first(where: { candidate in
+            let candidateURL = URL(fileURLWithPath: candidate.path)
+            return candidateURL.deletingLastPathComponent().path == directoryPath &&
+                candidate.path != event.path &&
+                !FileManager.default.fileExists(atPath: candidate.path)
+        }) else {
+            return nil
+        }
+
+        staleCreated.oldPath = staleCreated.path
+        staleCreated.path = event.path
+        staleCreated.type = "created"
+        staleCreated.timestamp = event.timestamp
+        staleCreated.isDirectory = event.isDirectory
+        return staleCreated
     }
     
     var pathKnowledgeBaseMapping: [String: String] {
@@ -427,10 +468,6 @@ final class FileMonitorService {
 
     // MARK: - Auto Sync Logic
     
-    func setupAutoSyncTrigger(_ callback: @escaping (FileEvent) -> Void) {
-        self.onAutoSyncTrigger = callback
-    }
-    
     private func resetSyncTimer(for event: FileEvent) {
         guard UserDefaults.standard.bool(forKey: "autoSync") else { return }
         
@@ -450,11 +487,38 @@ final class FileMonitorService {
                         predicate: #Predicate<FileEvent> { $0.id == eventId && $0.isSynced == false }
                     )
                     if let freshEvent = try? context.fetch(descriptor).first {
-                        self.onAutoSyncTrigger?(freshEvent)
+                        do {
+                            try await self.syncEventToIMA(freshEvent, in: context)
+                        } catch {
+                            print("Auto sync failed for \(freshEvent.fileName): \(error)")
+                        }
                     }
                 }
             }
         }
+    }
+
+    @MainActor
+    func syncEventToIMA(_ event: FileEvent, in context: ModelContext) async throws {
+        if event.type == "deleted" {
+            event.isSynced = true
+            try? context.save()
+            MenuBarManager.shared.updateBadge(count: unsyncedCount(in: context))
+            return
+        }
+
+        let kbId = getKnowledgeBaseId(for: event.path)
+        let remoteId = try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
+        event.isSynced = true
+        event.remoteId = remoteId
+        try? context.save()
+        MenuBarManager.shared.updateBadge(count: unsyncedCount(in: context))
+    }
+
+    @MainActor
+    private func unsyncedCount(in context: ModelContext) -> Int {
+        let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
+        return (try? context.fetchCount(descriptor)) ?? 0
     }
 
     /// 开始监控指定目录
@@ -518,12 +582,12 @@ final class FileMonitorService {
             
             // 确定改动类型
             let type: String
-            if flag & UInt32(kFSEventStreamEventFlagItemRenamed) != 0 {
+            if flag & UInt32(kFSEventStreamEventFlagItemRemoved) != 0 {
+                type = "deleted"
+            } else if flag & UInt32(kFSEventStreamEventFlagItemRenamed) != 0 {
                 type = "renamed"
             } else if flag & UInt32(kFSEventStreamEventFlagItemCreated) != 0 {
                 type = "created"
-            } else if flag & UInt32(kFSEventStreamEventFlagItemRemoved) != 0 {
-                type = "deleted"
             } else {
                 type = "modified"
             }
