@@ -72,18 +72,40 @@ private struct HelpHero: View {
 
                 HStack(spacing: 18) {
                     AppBrandIcon(size: 74, cornerRadius: 18)
-                    VStack(alignment: .leading, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 5) {
                         Text("FileSyncMonitor")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(Color.appInk)
                         LocalizedText("清新、轻量、面向日常同步工作流。")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.appMuted)
+                        
+                        HStack(spacing: 6) {
+                            Text("v1.0.0-beta")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Color.appMint)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.appMint.opacity(0.12))
+                                .cornerRadius(4)
+                            
+                            Link(destination: URL(string: "https://github.com/LancCJ")!) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .font(.system(size: 10))
+                                    Text("@LancCJ")
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
+                                .foregroundStyle(Color.appMuted)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.top, 2)
                     }
                 }
                 .padding(22)
             }
-            .frame(width: 360, height: 126)
+            .frame(width: 360, height: 132)
         }
         .padding(.top, 64)
     }

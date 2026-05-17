@@ -120,6 +120,20 @@ final class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
+        let authorItem = NSMenuItem()
+        authorItem.attributedTitle = NSAttributedString(
+            string: "Developed by @LancCJ",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+                .foregroundColor: NSColor.secondaryLabelColor
+            ]
+        )
+        authorItem.image = NSImage(systemSymbolName: "person.crop.circle", accessibilityDescription: nil)
+        authorItem.isEnabled = false
+        menu.addItem(authorItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let settingsItem = NSMenuItem(
             title: "设置...".appLocalized,
             action: #selector(openSettings),
