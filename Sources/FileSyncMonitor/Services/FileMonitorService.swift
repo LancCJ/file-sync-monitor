@@ -279,22 +279,49 @@ final class FileMonitorService {
 
     func setKnowledgeBaseId(_ id: String, for path: String) {
         var mapping = pathKnowledgeBaseMapping
-        mapping[path] = id
+        if id.isEmpty || id == "default" {
+            mapping.removeValue(forKey: path)
+        } else {
+            mapping[path] = id
+        }
         pathKnowledgeBaseMapping = mapping
     }
     
     func getKnowledgeBaseId(for filePath: String) -> String {
+        getKnowledgeBaseTarget(for: filePath).knowledgeBaseId
+    }
+
+    func getKnowledgeBaseTarget(for filePath: String) -> (knowledgeBaseId: String, relativeFolderPath: String?) {
         let mapping = pathKnowledgeBaseMapping
         
         // 寻找最长匹配的监控目录（即所属的最深层监控根目录）
         let sortedPaths = monitoredPaths.sorted { $0.count > $1.count }
         for rootPath in sortedPaths {
             if filePath.hasPrefix(rootPath) {
-                return mapping[rootPath] ?? "default"
+                return (mapping[rootPath] ?? "default", relativeFolderPath(filePath: filePath, rootPath: rootPath))
             }
         }
         
-        return "default"
+        return ("default", nil)
+    }
+
+    private func relativeFolderPath(filePath: String, rootPath: String) -> String? {
+        let fileURL = URL(fileURLWithPath: filePath).standardizedFileURL
+        let rootURL = URL(fileURLWithPath: rootPath).standardizedFileURL
+        let parentURL = fileURL.deletingLastPathComponent()
+
+        let rootComponents = rootURL.pathComponents
+        let parentComponents = parentURL.pathComponents
+        guard parentComponents.count > rootComponents.count,
+              parentComponents.starts(with: rootComponents) else {
+            return nil
+        }
+
+        let relativePath = parentComponents
+            .dropFirst(rootComponents.count)
+            .joined(separator: "/")
+
+        return relativePath.isEmpty ? nil : relativePath
     }
 
     /// 从云端拉取更新（双向同步核心尝试）
@@ -507,8 +534,12 @@ final class FileMonitorService {
             return
         }
 
-        let kbId = getKnowledgeBaseId(for: event.path)
-        let remoteId = try await IMASyncService.shared.syncFile(fileURL: URL(fileURLWithPath: event.path), knowledgeBaseId: kbId)
+        let target = getKnowledgeBaseTarget(for: event.path)
+        let remoteId = try await IMASyncService.shared.syncFile(
+            fileURL: URL(fileURLWithPath: event.path),
+            knowledgeBaseId: target.knowledgeBaseId,
+            relativeFolderPath: target.relativeFolderPath
+        )
         event.isSynced = true
         event.remoteId = remoteId
         try? context.save()
@@ -629,6 +660,9 @@ struct IgnoreRules {
     ]
 
     static let defaultExtensions = [
+        ".asd",
+        ".lck",
+        ".lock",
         ".tmp",
         ".temp",
         ".swp",
@@ -659,7 +693,19 @@ struct IgnoreRules {
         ".cache"
     ]
 
-    private static let defaultFileNamePrefixes = ["~$"]
+    private static let defaultFileNamePrefixes = [
+        "~$",
+        ".~$",
+        "._",
+        ".~lock.",
+        "~WRL",
+        "~DF",
+        "~RF"
+    ]
+
+    private static let defaultFileNameSuffixes = [
+        "#"
+    ]
 
     let enableDefaultRules: Bool
     let customFileNames: [String]
@@ -697,8 +743,18 @@ struct IgnoreRules {
             return true
         }
 
-        if enableDefaultRules && Self.defaultFileNamePrefixes.contains(where: { fileName.hasPrefix($0) }) {
-            return true
+        if enableDefaultRules {
+            if Self.defaultFileNamePrefixes.contains(where: { fileName.hasPrefix($0) }) {
+                return true
+            }
+
+            if Self.defaultFileNamePrefixes.contains(where: { loweredFileName.hasPrefix($0.lowercased()) }) {
+                return true
+            }
+
+            if Self.defaultFileNameSuffixes.contains(where: { fileName.hasSuffix($0) }) {
+                return true
+            }
         }
 
         if !isDirectory {

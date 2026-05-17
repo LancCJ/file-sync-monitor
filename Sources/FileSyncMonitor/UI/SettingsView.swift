@@ -282,7 +282,7 @@ struct SettingsView: View {
     }
 
     private var defaultIgnoreSummary: String {
-        "过滤 .DS_Store、临时文件、系统目录和常见构建缓存"
+        "过滤 .DS_Store、Office 临时文件、系统目录和常见构建缓存"
     }
 
     private var imaStatusTitle: String {
@@ -412,6 +412,29 @@ struct SettingsView: View {
 struct MonitoredPathRow: View {
     let path: String
     let onRemove: (String) -> Void
+    @State private var selectedKnowledgeBaseId: String
+    @State private var knowledgeBases: [KnowledgeBase]
+
+    init(path: String, onRemove: @escaping (String) -> Void) {
+        self.path = path
+        self.onRemove = onRemove
+
+        let initialId = FileMonitorService.shared.getKnowledgeBaseId(for: path)
+        self._selectedKnowledgeBaseId = State(initialValue: initialId == "default" ? "" : initialId)
+        self._knowledgeBases = State(initialValue: FileMonitorService.shared.availableKnowledgeBases)
+    }
+
+    private var knowledgeBaseOptions: [(String, String)] {
+        [("", "默认 (新建笔记)")] + knowledgeBases.map { ($0.id, $0.name) }
+    }
+
+    private var selectedKnowledgeBaseName: String {
+        guard !selectedKnowledgeBaseId.isEmpty else {
+            return "默认 (新建笔记)"
+        }
+
+        return knowledgeBases.first { $0.id == selectedKnowledgeBaseId }?.name ?? "已选择的知识库"
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -434,11 +457,14 @@ struct MonitoredPathRow: View {
                 HStack(spacing: 4) {
                     AppDropdownMenu(
                         selection: Binding(
-                            get: { FileMonitorService.shared.getKnowledgeBaseId(for: path) },
-                            set: { FileMonitorService.shared.setKnowledgeBaseId($0, for: path) }
+                            get: { selectedKnowledgeBaseId },
+                            set: { newValue in
+                                selectedKnowledgeBaseId = newValue
+                                FileMonitorService.shared.setKnowledgeBaseId(newValue, for: path)
+                            }
                         ),
-                        options: [("", "默认 (新建笔记)".appLocalized)] + FileMonitorService.shared.availableKnowledgeBases.map { ($0.id, $0.name) },
-                        label: AppMenuValue(text: FileMonitorService.shared.availableKnowledgeBases.first { $0.id == FileMonitorService.shared.getKnowledgeBaseId(for: path) }?.name ?? "默认 (新建笔记)".appLocalized),
+                        options: knowledgeBaseOptions,
+                        label: AppMenuValue(text: selectedKnowledgeBaseName),
                         maxHeight: 300
                     )
                     .frame(width: 180)
@@ -446,6 +472,11 @@ struct MonitoredPathRow: View {
                     Button(action: {
                         Task {
                             await FileMonitorService.shared.fetchKnowledgeBases()
+                            await MainActor.run {
+                                knowledgeBases = FileMonitorService.shared.availableKnowledgeBases
+                                let savedId = FileMonitorService.shared.getKnowledgeBaseId(for: path)
+                                selectedKnowledgeBaseId = savedId == "default" ? "" : savedId
+                            }
                         }
                     }) {
                         Image(systemName: "arrow.clockwise.circle.fill")
@@ -464,6 +495,11 @@ struct MonitoredPathRow: View {
         }
         .padding(.bottom, 8)
         .imaHover()
+        .onAppear {
+            knowledgeBases = FileMonitorService.shared.availableKnowledgeBases
+            let savedId = FileMonitorService.shared.getKnowledgeBaseId(for: path)
+            selectedKnowledgeBaseId = savedId == "default" ? "" : savedId
+        }
     }
 }
 

@@ -6751,6 +6751,38 @@
         }
       }
     },
+    "过滤 .DS_Store、Office 临时文件、系统目录和常见构建缓存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filters .DS_Store, Office temporary files, system folders, and common build caches."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "過濾 .DS_Store、Office 臨時文件、系統目錄和常見建置快取。"
+          }
+        }
+      }
+    },
+    "同步失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync Failed"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步失敗"
+          }
+        }
+      }
+    },
     "当前是 Xcode/命令行调试运行，不能注册开机自启；请使用 .app 应用包运行后再开启。": {
       "localizations": {
         "en": {

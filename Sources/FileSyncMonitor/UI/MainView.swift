@@ -1683,6 +1683,9 @@ extension MainView {
                 try await FileMonitorService.shared.syncEventToIMA(event, in: modelContext)
             } catch {
                 print("IMA Sync failed: \(error)")
+                await MainActor.run {
+                    showSyncFailureAlert(message: error.localizedDescription)
+                }
             }
         }
     }
@@ -1696,6 +1699,7 @@ extension MainView {
         Task {
             defer { isSyncing = false }
             var hasDeletedEvent = false
+            var failedMessages: [String] = []
             
             for event in targets {
                 if event.type == "deleted" {
@@ -1712,6 +1716,7 @@ extension MainView {
                     try await FileMonitorService.shared.syncEventToIMA(event, in: modelContext)
                 } catch {
                     print("Batch sync failed for \(event.fileName): \(error)")
+                    failedMessages.append("\(event.fileName)：\(error.localizedDescription)")
                 }
             }
             
@@ -1725,7 +1730,23 @@ extension MainView {
                     alert.runModal()
                 }
             }
+
+            if !failedMessages.isEmpty {
+                await MainActor.run {
+                    showSyncFailureAlert(message: failedMessages.prefix(5).joined(separator: "\n\n"))
+                }
+            }
         }
+    }
+
+    @MainActor
+    private func showSyncFailureAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "同步失败".appLocalized
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "我知道了".appLocalized)
+        alert.runModal()
     }
 
     private func deleteEvent(_ event: FileEvent) {
