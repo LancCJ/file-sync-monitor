@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import AppKit
+import ServiceManagement
 
 struct SettingsView: View {
     @AppStorage("appearance") private var appearance: AppearanceMode = .system
@@ -23,6 +24,8 @@ struct SettingsView: View {
     @AppStorage("highlightIMAConfig") private var highlightIMAConfig = false
     @State private var highlightPulse = false
     @State private var isShowingIMAHelp = false
+    @State private var launchAtLoginEnabled = false
+    @State private var launchAtLoginStatusMessage = ""
 
     enum AppearanceMode: String, CaseIterable {
         case system, light, dark
@@ -179,6 +182,17 @@ struct SettingsView: View {
                 .animation(.easeInOut(duration: 0.6), value: highlightPulse)
 
                 IMASettingsGroup(title: "通知与导出") {
+                    IMASettingsRow(title: "开机自动运行", subtitle: launchAtLoginStatusMessage.isEmpty ? "登录 macOS 后自动启动 FileSyncMonitor 并继续监控目录" : launchAtLoginStatusMessage, isSelectable: !launchAtLoginStatusMessage.isEmpty) {
+                        AppToggle(
+                            isOn: Binding(
+                                get: { launchAtLoginEnabled },
+                                set: { setLaunchAtLogin($0) }
+                            )
+                        )
+                        .disabled(!canRegisterLaunchAtLogin)
+                        .opacity(canRegisterLaunchAtLogin ? 1 : 0.42)
+                    }
+
                     IMASettingsRow(title: "允许消息通知", subtitle: "新文件变动时发送系统通知") {
                         AppToggle(isOn: $notifyOnChanges)
                     }
@@ -240,6 +254,7 @@ struct SettingsView: View {
                 IMAConfigHelpDialog(dismiss: { isShowingIMAHelp = false })
             }
             .onAppear {
+                refreshLaunchAtLoginStatus()
                 if highlightIMAConfig {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
@@ -345,6 +360,52 @@ struct SettingsView: View {
         customIgnoredFileNames = ""
         customIgnoredExtensions = ""
         customIgnoredDirectoryNames = ""
+    }
+
+    private func refreshLaunchAtLoginStatus() {
+        guard canRegisterLaunchAtLogin else {
+            launchAtLoginEnabled = false
+            launchAtLoginStatusMessage = "当前是 Xcode/命令行调试运行，不能注册开机自启；请使用 .app 应用包运行后再开启。"
+            if SMAppService.mainApp.status == .enabled {
+                try? SMAppService.mainApp.unregister()
+            }
+            return
+        }
+
+        launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+        launchAtLoginStatusMessage = ""
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        guard canRegisterLaunchAtLogin else {
+            launchAtLoginEnabled = false
+            launchAtLoginStatusMessage = "当前运行的不是 .app 应用包，已阻止注册开机自启，避免重启后打开终端窗口。"
+            if SMAppService.mainApp.status == .enabled {
+                try? SMAppService.mainApp.unregister()
+            }
+            return
+        }
+
+        do {
+            if enabled {
+                if SMAppService.mainApp.status != .enabled {
+                    try SMAppService.mainApp.register()
+                }
+            } else {
+                if SMAppService.mainApp.status == .enabled {
+                    try SMAppService.mainApp.unregister()
+                }
+            }
+            launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+            launchAtLoginStatusMessage = enabled ? "已加入 macOS 登录项" : "已从 macOS 登录项移除"
+        } catch {
+            launchAtLoginEnabled = SMAppService.mainApp.status == .enabled
+            launchAtLoginStatusMessage = String(format: "无法更新登录项：%@", error.localizedDescription)
+        }
+    }
+
+    private var canRegisterLaunchAtLogin: Bool {
+        Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil
     }
 }
 

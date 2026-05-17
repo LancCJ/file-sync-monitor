@@ -1,6 +1,46 @@
 import SwiftUI
 import AppKit
 
+enum AppResourceLoader {
+    static func url(forResource name: String, withExtension ext: String) -> URL? {
+        for directory in candidateDirectories {
+            let directURL = directory.appendingPathComponent("\(name).\(ext)")
+            if FileManager.default.fileExists(atPath: directURL.path) {
+                return directURL
+            }
+
+            let bundleURL = directory.appendingPathComponent("FileSyncMonitor_FileSyncMonitor.bundle")
+            let bundledURL = bundleURL.appendingPathComponent("\(name).\(ext)")
+            if FileManager.default.fileExists(atPath: bundledURL.path) {
+                return bundledURL
+            }
+        }
+
+        return nil
+    }
+
+    private static var candidateDirectories: [URL] {
+        var urls: [URL] = []
+
+        if let resourceURL = Bundle.main.resourceURL {
+            urls.append(resourceURL)
+        }
+
+        urls.append(Bundle.main.bundleURL)
+        urls.append(Bundle.main.bundleURL.deletingLastPathComponent())
+
+        if let executableURL = Bundle.main.executableURL {
+            urls.append(executableURL.deletingLastPathComponent())
+        }
+
+        return urls.reduce(into: []) { result, url in
+            if !result.contains(url) {
+                result.append(url)
+            }
+        }
+    }
+}
+
 extension Color {
     init(light: Color, dark: Color) {
         self.init(nsColor: NSColor(name: nil) { appearance in
@@ -212,8 +252,8 @@ private final class AppLocalization {
     }
 
     private lazy var catalog: [String: CatalogEntry] = {
-        guard let url = Bundle.module.url(forResource: "Localizable", withExtension: "xcstrings") else {
-            print("[AppLocalization] Error: Localizable.xcstrings URL not found in Bundle.module (\(Bundle.module.bundlePath))")
+        guard let url = AppResourceLoader.url(forResource: "Localizable", withExtension: "xcstrings") else {
+            print("[AppLocalization] Error: Localizable.xcstrings URL not found")
             return [:]
         }
         
@@ -256,7 +296,7 @@ private final class AppLocalization {
         default: lprojName = "Base"
         }
 
-        let bundlesToSearch = [Bundle.module, Bundle.main]
+        let bundlesToSearch = [Bundle.main]
         for searchBundle in bundlesToSearch {
             if let bundlePath = searchBundle.path(forResource: lprojName, ofType: "lproj"),
                let bundle = Bundle(path: bundlePath) {
@@ -367,7 +407,7 @@ struct AppBrandIcon: View {
             ("AppMenuBarIcon", "png"),
             ("AppIcon", "icns")
         ] {
-            if let url = Bundle.module.url(forResource: resource.0, withExtension: resource.1),
+            if let url = AppResourceLoader.url(forResource: resource.0, withExtension: resource.1),
                let image = NSImage(contentsOf: url) {
                 return image
             }
