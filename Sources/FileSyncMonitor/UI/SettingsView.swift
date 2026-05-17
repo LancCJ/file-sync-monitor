@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var isTestingIMA = false
     @State private var imaStatus: IMAStatus = .idle
     @State private var isShowingLogs = false
+    @AppStorage("highlightIMAConfig") private var highlightIMAConfig = false
+    @State private var highlightPulse = false
+    @State private var isShowingIMAHelp = false
 
     enum AppearanceMode: String, CaseIterable {
         case system, light, dark
@@ -38,12 +41,13 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                LocalizedText("设置")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(Color.appInk)
-                    .padding(.top, 64)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 32) {
+                    LocalizedText("设置")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(Color.appInk)
+                        .padding(.top, 64)
 
                 IMASettingsGroup(title: "界面") {
                     IMASettingsRow(title: "语言", subtitle: "手动指定界面语言或跟随系统") {
@@ -129,6 +133,17 @@ struct SettingsView: View {
 
                     IMASettingsTextRow(title: "Client ID", subtitle: "IMA OpenAPI Client ID", text: $clientId)
                     IMASettingsTextRow(title: "API Key", subtitle: "IMA OpenAPI API Key", text: $apiKey, isSecure: true)
+                    
+                    IMASettingsRow(title: "获取凭证帮助", subtitle: "了解如何注册并获取 Tencent IMA 凭证") {
+                        Button(action: { isShowingIMAHelp = true }) {
+                            HStack(spacing: 4) {
+                                LocalizedText("查看帮助")
+                                Image(systemName: "questionmark.circle")
+                            }
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                    }
+                    
                     IMASettingsRow(title: "连接状态", subtitle: imaStatusDetail, isSelectable: true) {
                         HStack(spacing: 12) {
                             StatusPill(text: imaStatusTitle, symbol: imaStatusIcon, color: imaStatusColor)
@@ -155,6 +170,13 @@ struct SettingsView: View {
                     }
                     .imaHover()
                 }
+                .id("imaSyncSection")
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.appAmber, lineWidth: highlightPulse ? 2 : 0)
+                        .shadow(color: Color.appAmber.opacity(highlightPulse ? 0.6 : 0), radius: 8)
+                )
+                .animation(.easeInOut(duration: 0.6), value: highlightPulse)
 
                 IMASettingsGroup(title: "通知与导出") {
                     IMASettingsRow(title: "允许消息通知", subtitle: "新文件变动时发送系统通知") {
@@ -204,23 +226,40 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                }
+                .frame(width: 760, alignment: .leading)
+                .padding(.bottom, 80)
+                .frame(maxWidth: .infinity)
             }
-            .frame(width: 760, alignment: .leading)
-            .padding(.bottom, 80)
-            .frame(maxWidth: .infinity)
+            .background(IMAClientSurfaceBackground())
+            .background(WindowFocusActivator())
+            .sheet(isPresented: $isShowingLogs) {
+                IMALogView()
+            }
+            .sheet(isPresented: $isShowingIMAHelp) {
+                IMAConfigHelpDialog(dismiss: { isShowingIMAHelp = false })
+            }
+            .onAppear {
+                if highlightIMAConfig {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
+                            proxy.scrollTo("imaSyncSection", anchor: .center)
+                        }
+                        withAnimation(.easeInOut(duration: 0.6).repeatCount(3, autoreverses: true)) {
+                            highlightPulse = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            highlightIMAConfig = false
+                            highlightPulse = false
+                        }
+                    }
+                }
+            }
+            .onChange(of: enableDefaultIgnoreRules) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
+            .onChange(of: customIgnoredFileNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
+            .onChange(of: customIgnoredExtensions) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
+            .onChange(of: customIgnoredDirectoryNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
         }
-        .background(IMAClientSurfaceBackground())
-        .background(WindowFocusActivator())
-        .sheet(isPresented: $isShowingLogs) {
-            IMALogView()
-        }
-        .onAppear {
-            // 已自动通过 AppStorage 加载
-        }
-        .onChange(of: enableDefaultIgnoreRules) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
-        .onChange(of: customIgnoredFileNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
-        .onChange(of: customIgnoredExtensions) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
-        .onChange(of: customIgnoredDirectoryNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
     }
 
     private var retentionText: String {
@@ -647,5 +686,101 @@ struct CredentialToolButton: View {
         }
         .buttonStyle(.plain)
         .help(help.appLocalized)
+    }
+}
+
+struct IMAConfigHelpDialog: View {
+    let dismiss: () -> Void
+    @State private var isCloseHovered = false
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // Header
+            HStack {
+                LocalizedText("如何获取 Tencent IMA 凭证")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Color.appInk)
+                Spacer()
+                Button(action: dismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(isCloseHovered ? Color.red : Color.appMuted)
+                }
+                .buttonStyle(.plain)
+                .onHover { isCloseHovered = $0 }
+                .animation(.snappy(duration: 0.15), value: isCloseHovered)
+            }
+            .padding(.bottom, 8)
+            
+            Divider()
+            
+            // Steps
+            VStack(alignment: .leading, spacing: 18) {
+                HelpStepRow(
+                    number: "1",
+                    title: "登录并进入控制台".appLocalized,
+                    desc: "登录您的腾讯云账号，访问 Tencent IMA (腾讯云智能知识库) 平台并进入管理控制台。".appLocalized
+                )
+                
+                HelpStepRow(
+                    number: "2",
+                    title: "获取 API 密钥".appLocalized,
+                    desc: "在「API 密钥」或「安全凭证」管理页面，生成并获取您的 Client ID (客户端标识) 和 API Key (接口密钥)。".appLocalized
+                )
+                
+                HelpStepRow(
+                    number: "3",
+                    title: "获取知识库 ID".appLocalized,
+                    desc: "在「知识库管理」中，选择或创建目标知识库，复制其知识库 ID 并填入同步目录设置中。".appLocalized
+                )
+            }
+            
+            Spacer()
+            
+            // Action
+            Button(action: dismiss) {
+                LocalizedText("我知道了")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 38)
+                    .background(Color.appMint)
+                    .foregroundStyle(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(32)
+        .frame(width: 480, height: 400)
+        .background(IMAWindowBackground())
+    }
+}
+
+struct HelpStepRow: View {
+    let number: String
+    let title: String
+    let desc: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(Color.appMint.opacity(0.12))
+                    .frame(width: 24, height: 24)
+                Text(number)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.appMint)
+            }
+            .padding(.top, 2)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.appInk)
+                Text(desc)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.appInk.opacity(0.6))
+                    .lineSpacing(4)
+            }
+        }
     }
 }
