@@ -8,17 +8,25 @@ The current version is built with SwiftUI + SwiftData, with underlying monitorin
 
 ## 🖥️ UI Screenshots
 
+### 📊 Core Dashboards
 | Dashboard (Home) | Pending Sync |
 | --- | --- |
 | ![Dashboard](docs/screenshot/首页.png) | ![Pending Sync](docs/screenshot/待同步.png) |
 
+### 📈 Records & Reports
 | All Records | Reports & Stats |
 | --- | --- |
 | ![All Records](docs/screenshot/全部记录.png) | ![Reports](docs/screenshot/报告.png) |
 
-| Help & FAQ | Settings |
+### ⚙️ System Settings
+| General Settings | Filters & Cloud Settings |
 | --- | --- |
-| ![Help & FAQ](docs/screenshot/帮助与关于.png) | ![Settings](docs/screenshot/设置.png) |
+| ![Settings](docs/screenshot/设置.png) | ![Settings 2](docs/screenshot/设置2.png) |
+
+### ❓ Onboarding & Help
+| Help & FAQ | Onboarding - Step 1 | Onboarding - Step 2 |
+| --- | --- | --- |
+| ![Help & FAQ](docs/screenshot/帮助与关于.png) | ![Onboarding 1](docs/screenshot/引导1.png) | ![Onboarding 2](docs/screenshot/引导2.png) |
 
 ## Features
 
