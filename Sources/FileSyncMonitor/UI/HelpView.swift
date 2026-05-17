@@ -398,16 +398,37 @@ private struct AboutCard: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Color.appMuted)
 
-                HStack(spacing: 6) {
-                    Text("© 2026 Antigravity")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.appMuted.opacity(0.82))
+                HStack(spacing: 12) {
+                    HStack(spacing: 6) {
+                        Text("© 2026 Antigravity")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.appMuted.opacity(0.82))
+                        Text("·")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.appMuted.opacity(0.55))
+                        Link("LancCJ", destination: URL(string: "https://github.com/LancCJ")!)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.appMint)
+                    }
+                    
                     Text("·")
                         .font(.system(size: 12))
                         .foregroundStyle(Color.appMuted.opacity(0.55))
-                    Link("LancCJ", destination: URL(string: "https://github.com/LancCJ")!)
-                        .font(.system(size: 12, weight: .bold))
+                    
+                    Button(action: {
+                        print("[Debug] Resetting onboarding completion status and launching guide tour")
+                        UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
+                        NotificationCenter.default.post(name: NSNotification.Name("ResetOnboarding"), object: nil)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "play.circle")
+                                .font(.system(size: 11))
+                            LocalizedText("重新开启新手指引")
+                                .font(.system(size: 12, weight: .bold))
+                        }
                         .foregroundStyle(Color.appMint)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
