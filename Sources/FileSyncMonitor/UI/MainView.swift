@@ -141,6 +141,13 @@ struct MainView: View {
                                         selectedSidebarItem = .reports 
                                     }
                                 },
+                                showSettings: {
+                                    print("[Debug] Navigating to Settings & Highlighting IMA Config")
+                                    UserDefaults.standard.set(true, forKey: "highlightIMAConfig")
+                                    withAnimation(.snappy(duration: 0.22)) {
+                                        selectedSidebarItem = .settings
+                                    }
+                                },
                                 markAllPendingSynced: markAllPendingSynced,
                                 syncAllToIMA: syncAllToIMA,
                                 deleteEvent: deleteEvent,
@@ -890,6 +897,7 @@ struct FileSyncHomeView: View {
     let showPending: () -> Void
     let showAllRecords: () -> Void
     let showReports: () -> Void
+    let showSettings: () -> Void
     let markAllPendingSynced: () -> Void
     let syncAllToIMA: () -> Void
     let deleteEvent: (FileEvent) -> Void
@@ -962,9 +970,8 @@ struct FileSyncHomeView: View {
             .padding(.bottom, 40) // 与主内容区拉开距离
 
             if clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-               apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-               knowledgeBaseId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                IMAConfigReminderBanner()
+               apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                IMAConfigReminderBanner(action: showSettings)
             }
 
             // 2. Main Content Area: 左右分栏，核心展示区
@@ -2379,6 +2386,7 @@ final class MainWindowDelegate: NSObject, NSWindowDelegate {
 }
 
 struct IMAConfigReminderBanner: View {
+    let action: () -> Void
     @State private var isHovered = false
     
     var body: some View {
@@ -2400,7 +2408,7 @@ struct IMAConfigReminderBanner: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Color.appInk)
                 
-                LocalizedText("请在设置中配置 Tencent IMA 的 Client ID、API Key 和 知识库 ID，以开启全自动云端同步备份。")
+                LocalizedText("请在设置中配置 Tencent IMA 的 Client ID 和 API Key，以开启全自动云端同步备份。")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.appInk.opacity(0.65))
             }
@@ -2408,7 +2416,7 @@ struct IMAConfigReminderBanner: View {
             Spacer()
             
             // Action Button
-            SettingsLink {
+            Button(action: action) {
                 HStack(spacing: 4) {
                     LocalizedText("去配置")
                     Image(systemName: "arrow.right")

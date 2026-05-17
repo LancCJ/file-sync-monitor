@@ -1,6 +1,198 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "请在设置中配置 Tencent IMA 的 Client ID 和 API Key，以开启全自动云端同步备份。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please configure Tencent IMA Client ID and API Key in Settings to enable fully automatic cloud sync backup."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請在設置中配置 Tencent IMA 的 Client ID 和 API Key，以開啟全自動雲端同步備份。"
+          }
+        }
+      }
+    },
+    "如何获取 Tencent IMA 凭证": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How to get Tencent IMA credentials"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如何獲取 Tencent IMA 憑證"
+          }
+        }
+      }
+    },
+    "登录并进入控制台": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log in & Enter Console"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登錄並進入控制台"
+          }
+        }
+      }
+    },
+    "登录您的腾讯云账号，访问 Tencent IMA (腾讯云智能知识库) 平台并进入管理控制台。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log in to your Tencent Cloud account, visit the Tencent IMA platform, and enter the management console."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登錄您的騰訊雲賬號，訪問 Tencent IMA (騰訊雲智能知識庫) 平台並進入管理控制台。"
+          }
+        }
+      }
+    },
+    "获取 API 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get API Keys"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "獲取 API 密鑰"
+          }
+        }
+      }
+    },
+    "在「API 密钥」或「安全凭证」管理页面，生成并获取您的 Client ID (客户端标识) 和 API Key (接口密钥)。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In the 'API Key' or 'Credentials' management page, generate and retrieve your Client ID and API Key."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「API 密鑰」或「安全憑證」管理頁面，生成並獲取您的 Client ID 和 API Key。"
+          }
+        }
+      }
+    },
+    "获取知识库 ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get Knowledge Base ID"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "獲取知識庫 ID"
+          }
+        }
+      }
+    },
+    "在「知识库管理」中，选择或创建目标知识库，复制其知识库 ID 并填入同步目录设置中。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In 'Knowledge Base Management', select or create a target knowledge base, copy its ID, and paste it into monitored path settings."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「知識庫管理」中，選擇或創建目標知識庫，複製其知識庫 ID 並填入同步目錄設置中。"
+          }
+        }
+      }
+    },
+    "获取凭证帮助": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Credentials Help"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "獲取憑證幫助"
+          }
+        }
+      }
+    },
+    "了解如何注册并获取 Tencent IMA 凭证": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Learn how to register and retrieve Tencent IMA credentials"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "了解如何註冊並獲取 Tencent IMA 憑證"
+          }
+        }
+      }
+    },
+    "查看帮助": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View Help"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看幫助"
+          }
+        }
+      }
+    },
+    "我知道了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Got it"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我知道了"
+          }
+        }
+      }
+    },
     "云端同步配置未完成": {
       "localizations": {
         "en": {
