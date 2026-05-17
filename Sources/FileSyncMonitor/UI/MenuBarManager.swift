@@ -56,84 +56,37 @@ final class MenuBarManager: NSObject {
     private func setupMenu() {
         let menu = NSMenu()
 
+        // 1. 状态头部展示 (包含待同步计数)
         let headerItem = NSMenuItem()
+        let unsyncedCount = getUnsyncedCount()
+        let statusText = unsyncedCount > 0 
+            ? "FileSyncMonitor (\(String(format: "条待同步_format".appLocalized, unsyncedCount)))"
+            : "FileSyncMonitor (\("已全部同步".appLocalized))"
+        
         headerItem.attributedTitle = NSAttributedString(
-            string: "FileSyncMonitor",
+            string: statusText,
             attributes: [
-                .font: NSFont.systemFont(ofSize: 13, weight: .bold),
-                .foregroundColor: NSColor.labelColor
+                .font: NSFont.systemFont(ofSize: 12, weight: .bold),
+                .foregroundColor: unsyncedCount > 0 ? NSColor.systemOrange : NSColor.secondaryLabelColor
             ]
         )
         headerItem.image = makeStatusBarImage()
         headerItem.isEnabled = false
         menu.addItem(headerItem)
 
-        let statusMenuItem = NSMenuItem()
-        let unsyncedCount = getUnsyncedCount()
-        statusMenuItem.attributedTitle = NSAttributedString(
-            string: unsyncedCount > 0 ? String(format: "条待同步_format".appLocalized, unsyncedCount) : "没有待同步文件".appLocalized,
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: NSColor.secondaryLabelColor
-            ]
-        )
-        statusMenuItem.isEnabled = false
-        menu.addItem(statusMenuItem)
-
         menu.addItem(NSMenuItem.separator())
 
-        for event in getRecentUnsyncedEvents() {
-            let item = NSMenuItem(
-            title: "\(eventTypeLabel(event.type)) · \(event.fileName)",
-                action: #selector(markMenuEventSynced(_:)),
-                keyEquivalent: ""
-            )
-            item.target = self
-            item.representedObject = event.id.uuidString
-            item.image = NSImage(systemSymbolName: eventTypeSymbol(event.type), accessibilityDescription: nil)
-            menu.addItem(item)
-        }
-
-        if unsyncedCount > 0 {
-            menu.addItem(NSMenuItem.separator())
-        }
-
+        // 2. 打开主界面
         let openItem = NSMenuItem(
-            title: "打开待同步文件".appLocalized,
+            title: "打开主界面".appLocalized,
             action: #selector(openMainWindow),
-            keyEquivalent: "m"
+            keyEquivalent: "o"
         )
         openItem.target = self
         openItem.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: nil)
         menu.addItem(openItem)
 
-        menu.addItem(NSMenuItem.separator())
-
-        let syncItem = NSMenuItem(
-            title: "全部标记完成".appLocalized,
-            action: #selector(syncAll),
-            keyEquivalent: "s"
-        )
-        syncItem.target = self
-        syncItem.image = NSImage(systemSymbolName: "checkmark.circle", accessibilityDescription: nil)
-        menu.addItem(syncItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let authorItem = NSMenuItem()
-        authorItem.attributedTitle = NSAttributedString(
-            string: "Developed by @LancCJ",
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-                .foregroundColor: NSColor.secondaryLabelColor
-            ]
-        )
-        authorItem.image = NSImage(systemSymbolName: "person.crop.circle", accessibilityDescription: nil)
-        authorItem.isEnabled = false
-        menu.addItem(authorItem)
-
-        menu.addItem(NSMenuItem.separator())
-
+        // 3. 系统设置
         let settingsItem = NSMenuItem(
             title: "设置...".appLocalized,
             action: #selector(openSettings),
@@ -145,7 +98,7 @@ final class MenuBarManager: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Quit
+        // 4. 退出程序
         let quitItem = NSMenuItem(
             title: "退出".appLocalized,
             action: #selector(confirmQuit),
@@ -160,29 +113,30 @@ final class MenuBarManager: NSObject {
 
     @objc private func openMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
+        
+        // 过滤获得主界面窗口（排除设置窗口和气泡窗口）
+        let mainWindows = NSApp.windows.filter { window in
+            return window.canBecomeMain && !window.title.contains("设置") && !window.title.contains("Settings")
+        }
+        
+        if let window = mainWindows.first {
             window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
+        } else {
+            // 如果窗口由于被用户关闭而彻底不存在，则向 AppDelegate 发送 reopen 消息，让 SwiftUI WindowGroup 自动拉起新窗口
+            if let delegate = NSApp.delegate as? AppDelegate {
+                _ = delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
+            }
         }
     }
 
     @objc private func openSettings() {
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-    }
-
-    @objc private func syncAll() {
-        Task { @MainActor in
-            let context = PersistenceController.shared.makeBackgroundContext()
-            let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
-
-            if let unsyncedEvents = try? context.fetch(descriptor) {
-                for event in unsyncedEvents {
-                    event.isSynced = true
-                }
-                try? context.save()
-                updateBadge(count: 0)
-                setupMenu()
-            }
+        // 兼容现代 macOS Sonoma (showSettingsWindow:) 和早期 macOS (showPreferencesWindow:)
+        if #available(macOS 13.0, *) {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        } else {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
         }
     }
 
@@ -199,56 +153,9 @@ final class MenuBarManager: NSObject {
         }
     }
 
-    @objc private func markMenuEventSynced(_ sender: NSMenuItem) {
-        guard let idString = sender.representedObject as? String,
-              let id = UUID(uuidString: idString) else { return }
-
-        Task { @MainActor in
-            let context = PersistenceController.shared.makeBackgroundContext()
-            let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.id == id })
-            if let event = try? context.fetch(descriptor).first {
-                event.isSynced = true
-                try? context.save()
-            }
-            let count = getUnsyncedCount()
-            updateBadge(count: count)
-            setupMenu()
-        }
-    }
-
     private func getUnsyncedCount() -> Int {
         let context = PersistenceController.shared.makeBackgroundContext()
         let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
         return (try? context.fetchCount(descriptor)) ?? 0
-    }
-
-    private func getRecentUnsyncedEvents() -> [FileEvent] {
-        let context = PersistenceController.shared.makeBackgroundContext()
-        var descriptor = FetchDescriptor<FileEvent>(
-            predicate: #Predicate<FileEvent> { $0.isSynced == false },
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
-        )
-        descriptor.fetchLimit = 5
-        return (try? context.fetch(descriptor)) ?? []
-    }
-
-    private func eventTypeLabel(_ type: String) -> String {
-        switch type {
-        case "created": return "新增".appLocalized
-        case "modified": return "修改".appLocalized
-        case "deleted": return "删除".appLocalized
-        case "renamed": return "重命名".appLocalized
-        default: return "变动".appLocalized
-        }
-    }
-
-    private func eventTypeSymbol(_ type: String) -> String {
-        switch type {
-        case "created": return "plus.circle"
-        case "modified": return "pencil.circle"
-        case "deleted": return "trash.circle"
-        case "renamed": return "arrow.left.arrow.right.circle"
-        default: return "doc"
-        }
     }
 }

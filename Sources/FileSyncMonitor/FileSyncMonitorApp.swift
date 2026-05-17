@@ -9,6 +9,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         MenuBarManager.shared.setupMenuBar()
         _ = FileMonitorService.shared // Trigger initialization and monitoring
     }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            let mainWindows = NSApp.windows.filter { window in
+                return window.canBecomeMain && !window.title.contains("设置") && !window.title.contains("Settings")
+            }
+            if let window = mainWindows.first {
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+            }
+        }
+        return true
+    }
 }
 
 @main
