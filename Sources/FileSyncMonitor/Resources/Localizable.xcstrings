@@ -1,6 +1,54 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "云端同步配置未完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud Sync Incomplete"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雲端同步配置未完成"
+          }
+        }
+      }
+    },
+    "请在设置中配置 Tencent IMA 的 Client ID、API Key 和 知识库 ID，以开启全自动云端同步备份。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please configure Tencent IMA Client ID, API Key, and Knowledge Base ID in Settings to enable fully automatic cloud sync backup."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請在設置中配置 Tencent IMA 的 Client ID、API Key 和 知識庫 ID，以開啟全自動雲端同步備份。"
+          }
+        }
+      }
+    },
+    "去配置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configure"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去配置"
+          }
+        }
+      }
+    },
     "首页": {
       "localizations": {
         "en": {
