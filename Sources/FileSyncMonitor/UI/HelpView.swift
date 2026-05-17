@@ -866,7 +866,7 @@ private struct FAQCard: View {
         FAQItem(
             question: "打开时提示“Apple无法验证是否包含恶意软件”如何解决？",
             answer: "这是 macOS 针对非 App Store 或未签名开发者程序的 Gatekeeper 安全防护机制。请使用以下任一方式解锁：\n\n1. 【右键打开 - 最常用】：在「应用程序」文件夹中找到 FileSyncMonitor，按住 Control 键点按（或右键点按）应用图标，选择「打开」，在弹出的对话框中点击「仍要打开」。此操作只需进行一次，以后双击便可秒开。\n2. 【系统设置放行】：前往「系统设置 -> 隐私与安全 -> 安全性」，点击底部的「仍要打开」并输入系统开机密码放行。\n3. 【终端指令秒解】：打开「终端」执行 `xattr -cr /Applications/FileSyncMonitor.app` 即可彻底抹除系统内置的隔离标志，双击无感秒开。",
-            symbol: "shield.dashed",
+            symbol: "exclamationmark.shield",
             color: .appRose
         ),
         FAQItem(
