@@ -1,37 +1,117 @@
 import SwiftUI
 
+enum HelpTab: String, CaseIterable, Identifiable {
+    case faq, syncLogic, features, about
+    var id: String { rawValue }
+    
+    var titleKey: String {
+        switch self {
+        case .faq: return "常见问题"
+        case .syncLogic: return "同步逻辑"
+        case .features: return "功能指南"
+        case .about: return "关于与支持"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .faq: return "questionmark.circle"
+        case .syncLogic: return "arrow.triangle.2.circlepath"
+        case .features: return "doc.text"
+        case .about: return "heart"
+        }
+    }
+}
+
 struct HelpView: View {
     private let categories = HelpContent.categories
+    @State private var selectedTab: HelpTab = .faq
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 38) {
+            VStack(alignment: .leading, spacing: 28) {
                 HelpHero()
 
-                VStack(alignment: .leading, spacing: 34) {
-                    ForEach(categories) { category in
-                        HelpCategorySection(category: category)
+                HelpTabBar(selection: $selectedTab)
+                    .padding(.top, 4)
+
+                Group {
+                    switch selectedTab {
+                    case .faq:
+                        FAQCard()
+                    case .syncLogic:
+                        SyncLogicCard()
+                    case .features:
+                        VStack(alignment: .leading, spacing: 34) {
+                            ForEach(categories) { category in
+                                HelpCategorySection(category: category)
+                            }
+                        }
+                    case .about:
+                        VStack(alignment: .leading, spacing: 28) {
+                            DonationCard()
+                            AboutCard()
+                        }
                     }
                 }
-
-                SyncLogicCard()
-                    .padding(.top, 4)
-
-                FAQCard()
-                    .padding(.top, 4)
-
-                DonationCard()
-                    .padding(.top, 4)
-
-                AboutCard()
-                    .padding(.top, 4)
-                    .padding(.bottom, 84)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .trailing)),
+                    removal: .opacity
+                ))
+                .id(selectedTab) // 触发精美切换转场动画
+                .padding(.bottom, 84)
             }
             .frame(maxWidth: 1040, alignment: .leading)
             .padding(.horizontal, 44)
             .frame(maxWidth: .infinity)
         }
         .background(IMAClientSurfaceBackground())
+    }
+}
+
+private struct HelpTabBar: View {
+    @Binding var selection: HelpTab
+    @Namespace private var animation
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(HelpTab.allCases) { tab in
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+                        selection = tab
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 13, weight: .semibold))
+                        LocalizedText(tab.titleKey)
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        ZStack {
+                            if selection == tab {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.appInk)
+                                    .matchedGeometryEffect(id: "activeTab", in: animation)
+                            }
+                        }
+                    )
+                    .foregroundStyle(selection == tab ? .white : Color.appMuted)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.appSurface.opacity(0.8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .stroke(Color.appLine.opacity(0.72), lineWidth: 1)
+                )
+        )
     }
 }
 
