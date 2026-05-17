@@ -216,6 +216,7 @@ struct MainView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(IMAWindowBackground())
+            .background(MainWindowDelegateConfigurator())
             .tint(.appMint)
             .overlayPreferenceValue(OnboardingTargetPreferenceKey.self) { anchors in
                 GeometryReader { proxy in
@@ -2343,5 +2344,27 @@ struct TreeFileEventRow: View {
         .onHover { isHovered = $0 }
         .animation(.snappy(duration: 0.15), value: isHovered)
         .animation(.snappy(duration: 0.15), value: isSelected)
+    }
+}
+
+struct MainWindowDelegateConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window {
+                window.delegate = MainWindowDelegate.shared
+            }
+        }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+final class MainWindowDelegate: NSObject, NSWindowDelegate {
+    static let shared = MainWindowDelegate()
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        sender.orderOut(nil) // 隐藏窗口而非销毁
+        return false // 阻止默认的销毁行为
     }
 }
