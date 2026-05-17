@@ -24,7 +24,10 @@ final class NotificationManager {
     func sendFileEventNotification(event: FileEvent) {
         guard Bundle.main.bundleIdentifier != nil else { return }
         
-        // 如果用户关闭了通知，则不发送
+        // 检查用户是否在设置中开启了通知（默认为 true）
+        let notifyOnChanges = UserDefaults.standard.object(forKey: "notifyOnChanges") as? Bool ?? true
+        guard notifyOnChanges else { return }
+        
         let content = UNMutableNotificationContent()
         content.title = "检测到文件改动".appLocalized
         
