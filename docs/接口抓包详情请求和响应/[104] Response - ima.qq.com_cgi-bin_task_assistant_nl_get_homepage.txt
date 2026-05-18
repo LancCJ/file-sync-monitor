@@ -1,0 +1,51 @@
+HTTP/1.1 200 OK
+Date: Mon, 18 May 2026 08:22:42 GMT
+Content-Type: application/json
+Content-Length: 643
+Connection: keep-alive
+Server: tRPC-Gateway
+X-Content-Type-Options: nosniff
+X-Upstream-Latency: 1
+X-Proxy-Latency: 1
+Access-Control-Allow-Origin: chrome://home
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "apply_jump_url": "",
+  "code": 0,
+  "daily_left_count": 0,
+  "default_tips": "请输入你的任务描述",
+  "is_beat": false,
+  "msg": "ok",
+  "recommend_task_category": [],
+  "recommend_task_examples": [],
+  "recommend_task_examples_end": false,
+  "recommend_task_examples_next_cursor": "",
+  "tips": "",
+  "tool_bar_items": [
+    {
+      "default_tips": "请输入报告主题描述",
+      "icon": "",
+      "task_scene_type": 1000,
+      "title": "生成报告",
+      "ui_type": 2
+    },
+    {
+      "default_tips": "请输入PPT主题描述",
+      "icon": "",
+      "task_scene_type": 1005,
+      "title": "生成PPT",
+      "ui_type": 5
+    },
+    {
+      "default_tips": "请输入播客主题描述",
+      "icon": "",
+      "task_scene_type": 1004,
+      "title": "生成播客",
+      "ui_type": 4
+    }
+  ],
+  "trial_status": 0
+}

@@ -1,0 +1,28 @@
+POST /cgi-bin/knowledge_member/get_apply_list HTTP/1.1
+Host: ima.qq.com
+Connection: keep-alive
+Content-Length: 61
+sec-ch-ua-platform: "macOS"
+from_browser_ima: 1
+sec-ch-ua: "Chromium";v="143", "Not A(Brand";v="24"
+x-ima-bkn: 672056233
+sec-ch-ua-mobile: ?0
+traceparent: 00-f0b279fdd5a29696f63c2df6aa1d7b65-ac59d3e4f7adc373-01
+x-ima-cookie: PLATFORM=H5; CLIENT-TYPE=256020; WEB-VERSION=4.25.3; IMA-GUID=7460830660542107; IMA-Q36=e749267b48b3622b592f9d2d200018c19311; IMA-IUA=PR=IMA&PP=com.tencent.imamac&PPVN=2.5.1&PL=MAC&COVC=143.0.7499.4456&RL=3024*1964&MO=Mac OS X&OS=15.7.7&SYSARCH=Arm&DN=&BC=release&BN=4262&BT=1778318655445&CH=9caac41887&DC=10000074&EV=; IMA-UID=001a636055004551; IMA-TOKEN=98jd6Zk3TpMoENGKwFeIW5LXyUlFi64pZ+F3yzhpQvbDzEhiKeOUV9j7aD2eyAcIN9Qgwhb8KNzB3E8xbLZ2SwdX4C3EeRZKtZwRiiP262IwMpcGS3qXv0Hcjh3Q/8QiE/zqm63imt4IbLrUWZJ551k0C4DhImJPAMDm0RhGPTf6DrIpc82+T2GZ5jmOGzzEirA87bCY; IMA-REFRESH-TOKEN=k3q2jKzYsZhZAY90T4lu1FyGe6E3HvJMs9Q0ZcgyDdQXuzDB5U8IBRsuFwJQVhmIXquPAWP//6ri+zMmLHxUtrsx9YBhY3As1q9NT8+vxI9qsaDg2GUH2v/2SgFKpndmriYFyW7Ac6heCyr18SmtiKg8w3xg7orq9olG9z/Sj/AyQYGt+TW17XUcjWGyP1z8vTcuNDTB; UID-TYPE=2; TOKEN-TYPE=14
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 IMA/143.0.7499.4456
+accept: application/json
+extension_version: 4.25.3
+content-type: application/json
+Origin: chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Sec-Fetch-Storage-Access: active
+Accept-Encoding: gzip, deflate, br, zstd
+Accept-Language: zh-CN,zh;q=0.9
+
+{
+  "knowledge_base_id": "7461896470929763",
+  "start": 0,
+  "limit": 20
+}

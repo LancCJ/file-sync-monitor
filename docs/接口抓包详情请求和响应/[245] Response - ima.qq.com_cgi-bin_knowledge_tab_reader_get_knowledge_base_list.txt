@@ -1,0 +1,617 @@
+HTTP/1.1 200 OK
+Date: Mon, 18 May 2026 08:23:07 GMT
+Content-Type: application/json
+Content-Length: 16506
+Connection: keep-alive
+Server: tRPC-Gateway
+X-Content-Type-Options: nosniff
+X-Upstream-Latency: 59
+X-Proxy-Latency: 1
+Access-Control-Allow-Origin: chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "code": 0,
+  "msg": "ok",
+  "results": [
+    {
+      "is_end": true,
+      "knowledge_base_list": [
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_work_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=7f2636f9476de7fe93a055367c15669c29a98f85&q-url-param-list=",
+            "create_timestamp_sec": "1778801529427",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_work_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1778836995238",
+            "knowledge_total_size": "4",
+            "name": "账密资料",
+            "recommended_questions": [],
+            "session_by_keyword": "7460834368311977",
+            "size": "5946",
+            "update_timestamp_sec": "1778836995251"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7460834368311977",
+          "is_top": false,
+          "knowledge_base_status_toast": "",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1001,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 2,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 1,
+            "requires_approval_for_join": false,
+            "visible_export_status": 3
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        }
+      ],
+      "knowledge_base_list_name": "个人知识库",
+      "next_cursor": "",
+      "type": 1001
+    },
+    {
+      "is_end": true,
+      "knowledge_base_list": [
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+            "create_timestamp_sec": "1778801585365",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1779090643434",
+            "knowledge_total_size": "7",
+            "name": "解决方案",
+            "recommended_questions": [],
+            "session_by_keyword": "7460834603186474",
+            "size": "172109662",
+            "update_timestamp_sec": "1779090656557"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7460834603186474",
+          "is_top": false,
+          "knowledge_base_status_toast": "最近更新 15:50",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1002,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 2,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 2,
+            "requires_approval_for_join": true,
+            "visible_export_status": 2
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        },
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+            "create_timestamp_sec": "1779067930159",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1779067935635",
+            "knowledge_total_size": "1",
+            "name": "工作记录",
+            "recommended_questions": [],
+            "session_by_keyword": "7461951730878011",
+            "size": "585",
+            "update_timestamp_sec": "1779067935650"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7461951730878011",
+          "is_top": false,
+          "knowledge_base_status_toast": "最近更新 09:32",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1002,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 1,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 2,
+            "requires_approval_for_join": true,
+            "visible_export_status": 3
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        },
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+            "create_timestamp_sec": "1779054754599",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1779054850215",
+            "knowledge_total_size": "0",
+            "name": "新创建知识库",
+            "recommended_questions": [],
+            "session_by_keyword": "7461896470929763",
+            "size": "0",
+            "update_timestamp_sec": "1779054856513"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7461896470929763",
+          "is_top": false,
+          "knowledge_base_status_toast": "最近更新 05:54",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1002,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 1,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 2,
+            "requires_approval_for_join": true,
+            "visible_export_status": 3
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        },
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+            "create_timestamp_sec": "1778843278607",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1778849134375",
+            "knowledge_total_size": "2",
+            "name": "技术分享",
+            "recommended_questions": [],
+            "session_by_keyword": "7461009476310536",
+            "size": "722",
+            "update_timestamp_sec": "1778849134390"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7461009476310536",
+          "is_top": false,
+          "knowledge_base_status_toast": "最近更新 5/15",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1002,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 1,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 2,
+            "requires_approval_for_join": true,
+            "visible_export_status": 3
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        },
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+            "create_timestamp_sec": "1778835702468",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1778835713991",
+            "knowledge_total_size": "1",
+            "name": "制度规范",
+            "recommended_questions": [],
+            "session_by_keyword": "7460977700263594",
+            "size": "558795",
+            "update_timestamp_sec": "1778835781096"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7460977700263594",
+          "is_top": false,
+          "knowledge_base_status_toast": "最近更新 5/15",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1002,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 2,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 2,
+            "requires_approval_for_join": true,
+            "visible_export_status": 3
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        },
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+            "create_timestamp_sec": "1778823645055",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1778826643624",
+            "knowledge_total_size": "8",
+            "name": "报价资料",
+            "recommended_questions": [],
+            "session_by_keyword": "7460927125348029",
+            "size": "180648527",
+            "update_timestamp_sec": "1778835793427"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7460927125348029",
+          "is_top": false,
+          "knowledge_base_status_toast": "最近更新 5/15",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1002,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 2,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 2,
+            "requires_approval_for_join": true,
+            "visible_export_status": 3
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        },
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+            "create_timestamp_sec": "1778803667212",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1778804306708",
+            "knowledge_total_size": "3",
+            "name": "问题集锦",
+            "recommended_questions": [],
+            "session_by_keyword": "7460843331534653",
+            "size": "2711",
+            "update_timestamp_sec": "1778836104732"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7460843331534653",
+          "is_top": false,
+          "knowledge_base_status_toast": "最近更新 5/15",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1002,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 2,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 2,
+            "requires_approval_for_join": true,
+            "visible_export_status": 3
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        },
+        {
+          "basic_info": {
+            "ai_key_points_available": false,
+            "cover_audit_status": 2,
+            "cover_background_color": 4,
+            "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+            "create_timestamp_sec": "1778803494326",
+            "creator": {
+              "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/adc53a6bf07a4ec9b7430b94d34ea1db",
+              "certification_info": {
+                "certification_jump_url": "",
+                "company_certification_info": null,
+                "icon": "",
+                "personal_certification_info": null,
+                "title": "",
+                "type": 0,
+                "type_desc": ""
+              },
+              "icons": [],
+              "knowledge_matrix_id": "",
+              "nickname": "LancCJ"
+            },
+            "description": "",
+            "forbidden_info": null,
+            "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+            "has_deleted": false,
+            "join_timestamp": "1778803494419",
+            "knowledge_total_size": "0",
+            "name": "商机",
+            "recommended_questions": [],
+            "session_by_keyword": "7460842610120488",
+            "size": "0",
+            "update_timestamp_sec": "1778835798873"
+          },
+          "comment_info": null,
+          "has_intro_page": false,
+          "id": "7460842610120488",
+          "is_top": false,
+          "knowledge_base_status_toast": "创建时间 5/15",
+          "like_info": null,
+          "member_info": {
+            "apply_count": 0,
+            "member_count": 1
+          },
+          "new_is_top": false,
+          "new_type": 1002,
+          "payment_info": null,
+          "permission_info": {
+            "access_status": 2,
+            "ai_key_points_visibility": 0,
+            "comment_visibility": 1,
+            "forbid_member_access_content": false,
+            "join_type": 2,
+            "requires_approval_for_join": true,
+            "visible_export_status": 3
+          },
+          "statistics": null,
+          "type": 0,
+          "user_permission_info": {
+            "is_in_apply_list": false,
+            "role_type": 10000
+          }
+        }
+      ],
+      "knowledge_base_list_name": "共享知识库",
+      "next_cursor": "",
+      "type": 1002
+    },
+    {
+      "is_end": true,
+      "knowledge_base_list": [],
+      "knowledge_base_list_name": "我发布的",
+      "next_cursor": "",
+      "type": 1004
+    },
+    {
+      "is_end": true,
+      "knowledge_base_list": [],
+      "knowledge_base_list_name": "我加入的",
+      "next_cursor": "",
+      "type": 1005
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+HTTP/1.1 200 OK
+Date: Mon, 18 May 2026 08:23:07 GMT
+Content-Type: application/json
+Content-Length: 171
+Connection: keep-alive
+Server: tRPC-Gateway
+X-Content-Type-Options: nosniff
+X-Upstream-Latency: 28
+X-Proxy-Latency: 0
+Access-Control-Allow-Origin: chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "code": 0,
+  "knowledge_user_space": null,
+  "msg": "ok",
+  "note_user_space": null,
+  "share_user_space": null,
+  "total_user_space": {
+    "total_space": "107374182400",
+    "used_space": "353391736"
+  }
+}

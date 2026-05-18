@@ -1,0 +1,23 @@
+POST /cgi-bin/notebook/logic/get_doc_version HTTP/1.1
+Host: ima.qq.com
+Connection: keep-alive
+Content-Length: 28
+from_browser_ima: 1
+x-ima-bkn: 672056233
+traceparent: 00-ac6bb2ce2def00c02a93c9fd71d67693-9f87d10b03c5c40f-01
+x-ima-cookie: IMA-UID=001a636055004551; IMA-TOKEN=98jd6Zk3TpMoENGKwFeIW5LXyUlFi64pZ+F3yzhpQvbDzEhiKeOUV9j7aD2eyAcIN9Qgwhb8KNzB3E8xbLZ2SwdX4C3EeRZKtZwRiiP262IwMpcGS3qXv0Hcjh3Q/8QiE/zqm63imt4IbLrUWZJ551k0C4DhImJPAMDm0RhGPTf6DrIpc82+T2GZ5jmOGzzEirA87bCY; IMA-REFRESH-TOKEN=k3q2jKzYsZhZAY90T4lu1FyGe6E3HvJMs9Q0ZcgyDdQXuzDB5U8IBRsuFwJQVhmIXquPAWP//6ri+zMmLHxUtrsx9YBhY3As1q9NT8+vxI9qsaDg2GUH2v/2SgFKpndmriYFyW7Ac6heCyr18SmtiKg8w3xg7orq9olG9z/Sj/AyQYGt+TW17XUcjWGyP1z8vTcuNDTB; UID-TYPE=2; IMA-GUID=7460830660542107; IMA-Q36=e749267b48b3622b592f9d2d200018c19311; IMA-IUA=PR=IMA&PP=com.tencent.imamac&PPVN=2.5.1&PL=MAC&COVC=143.0.7499.4456&RL=3024*1964&MO=Mac OS X&OS=15.7.7&SYSARCH=Arm&DN=&BC=release&BN=4262&BT=1778318655445&CH=9caac41887&DC=10000074&EV=; TOKEN-TYPE=14; PLATFORM=H5; CLIENT-TYPE=256020; WEB-VERSION=4.38.7
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 IMA/143.0.7499.4456
+accept: application/json
+extension_version: 4.38.7
+content-type: application/json
+Origin: chrome-extension://cninonkgpcmdognjppglnkelbkhlhhee
+Sec-Fetch-Site: none
+Sec-Fetch-Mode: cors
+Sec-Fetch-Dest: empty
+Sec-Fetch-Storage-Access: active
+Accept-Encoding: gzip, deflate, br, zstd
+Accept-Language: zh-CN,zh;q=0.9
+
+{
+  "docid": "7461951756045751"
+}

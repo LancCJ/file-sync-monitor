@@ -1,7 +1,7 @@
 import Foundation
 import CommonCrypto
 
-/// 负责对接 IMA OpenAPI 的服务
+/// 负责对接 Tencent IMA H5 Web 私有接口的同步服务
 final class IMASyncService {
     static let shared = IMASyncService()
 
@@ -21,51 +21,96 @@ final class IMASyncService {
         if let kbId = knowledgeBaseId, !kbId.isEmpty && kbId != "default" {
             // 如果指定了具体知识库 ID，走 Wiki 上传流
             let folderId = try await resolveFolderIdIfNeeded(knowledgeBaseId: kbId, relativeFolderPath: relativeFolderPath)
-            return try await uploadToWiki(
+            let mediaId = try await uploadToWiki(
                 fileURL: fileURL,
                 knowledgeBaseId: kbId,
                 folderId: folderId,
                 existingRemoteId: existingRemoteId,
                 duplicateStrategy: duplicateStrategy
             )
+            
+            // 异步启动流式 SSE 解析进度监听，非阻塞
+            Task {
+                try? await trackParseProgress(mediaId: mediaId)
+            }
+            
+            return mediaId
         } else {
-            // 默认走笔记导入流
-            return try await importDoc(fileURL: fileURL, knowledgeBaseId: "default")
+            throw IMASyncError.apiError("同步目标错误：新版 IMA 不再支持直接导入个人笔记，请选择具体的知识库作为同步目标。")
         }
     }
 
-    /// 获取知识库列表
+    /// 获取知识库列表 (私有 H5 接口)
     func getKnowledgeBases() async throws -> [KnowledgeBase] {
-        let credentials = try normalizedCredentials()
-
-        var request = URLRequest(url: baseURL.appendingPathComponent("openapi/wiki/v1/search_knowledge_base"))
-        request.httpMethod = "POST"
-        applyCredentials(credentials, to: &request)
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "params": [
+                ["type": 1001, "cursor": "", "limit": 20],
+                ["type": 1002, "cursor": "", "limit": 20],
+                ["type": 1004, "cursor": "", "limit": 20],
+                ["type": 1005, "cursor": "", "limit": 50]
+            ]
+        ]
         
-        // 根据文档，query 为空字符串时返回所有知识库
-        let body: [String: Any] = ["query": "", "cursor": "", "limit": 20]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        let response: IMAResponse<KnowledgeBaseListPayload> = try await send(request)
+        let response: IMAResponse<H5KnowledgeBaseListResponse> = try await postJson(
+            path: "cgi-bin/knowledge_tab_reader/get_knowledge_base_list",
+            body: body
+        )
         try validate(response)
 
-        return response.data?.items ?? []
+        return response.data?.results.flatMap { $0.knowledgeBaseList } ?? []
     }
 
-    /// 获取知识库内容列表
+    /// 获取绑定设备列表 (私有 H5 接口)
+    func getTabDevices() async throws -> [H5Device] {
+        let response: IMAResponse<H5DeviceListResponse> = try await postJson(
+            path: "cgi-bin/user_info/get_device_list",
+            body: [:]
+        )
+        try validate(response)
+        return response.data?.devices ?? []
+    }
+
+    /// 获取用户微信昵称与头像个人信息 (私有 H5 接口)
+    func getUserProfile() async throws -> (avatarUrl: String, nickname: String) {
+        let response: IMAResponse<H5UserInfoDetail> = try await postJson(
+            path: "cgi-bin/user_info/get_user_info",
+            body: [:]
+        )
+        try validate(response)
+        
+        guard let openInfo = response.data?.openInfo else {
+            throw IMASyncError.apiError("未获取到有效的微信用户信息")
+        }
+        
+        return (openInfo.avatarUrl, openInfo.nickname)
+    }
+
+    /// 获取空间配额信息 (私有 H5 接口)
+    func getSpaceQuota() async throws -> H5SpaceQuota {
+        let response: IMAResponse<H5SpaceQuota> = try await postJson(
+            path: "cgi-bin/notebook/tab/get_tab_space_quota",
+            body: [:]
+        )
+        try validate(response)
+        return response.data ?? H5SpaceQuota(totalQuota: 0, usedQuota: 0)
+    }
+
+    /// 获取知识库内容列表 (私有 H5 接口)
     func getKnowledgeList(knowledgeBaseId: String, folderId: String? = nil, cursor: String = "") async throws -> (items: [KnowledgeInfo], isEnd: Bool, nextCursor: String) {
         var body: [String: Any] = [
+            "sort_type": 9,
+            "need_default_cover": true,
             "knowledge_base_id": knowledgeBaseId,
             "cursor": cursor,
-            "limit": 50
+            "limit": 50,
+            "ext_info": [:]
         ]
         if let folderId, !folderId.isEmpty {
             body["folder_id"] = folderId
         }
         
         let response: IMAResponse<KnowledgeListPayload> = try await postJson(
-            path: "openapi/wiki/v1/get_knowledge_list",
+            path: "cgi-bin/knowledge_tab_reader/get_knowledge_list",
             body: body
         )
         try validate(response)
@@ -77,31 +122,32 @@ final class IMASyncService {
         )
     }
 
-    /// 获取媒体信息（包含下载地址）
-    func getMediaInfo(mediaId: String) async throws -> MediaInfoPayload {
-        let response: IMAResponse<MediaInfoPayload> = try await postJson(
-            path: "openapi/wiki/v1/get_media_info",
-            body: ["media_id": mediaId]
+    /// 获取媒体信息与下载链接 (私有 H5 /get_knowledge 接口适配)
+    func getMediaInfo(mediaId: String, knowledgeBaseId: String) async throws -> MediaInfoPayload {
+        let response: IMAResponse<H5GetKnowledgeResponse> = try await postJson(
+            path: "cgi-bin/knowledge_tab_reader/get_knowledge",
+            body: [
+                "media_id": mediaId,
+                "knowledge_base_id": knowledgeBaseId,
+                "need_default_cover": true
+            ]
         )
         try validate(response)
         guard let data = response.data else { throw IMASyncError.apiError("未获取到媒体详情") }
-        return data
+        
+        let urlInfo = URLInfo(url: data.knowledge.jumpUrl, headers: nil)
+        return MediaInfoPayload(mediaType: data.knowledge.mediaType, urlInfo: urlInfo)
     }
 
     /// 从云端下载文件
-    func downloadFile(mediaId: String, to destinationURL: URL) async throws {
-        let info = try await getMediaInfo(mediaId: mediaId)
+    func downloadFile(mediaId: String, knowledgeBaseId: String, to destinationURL: URL) async throws {
+        let info = try await getMediaInfo(mediaId: mediaId, knowledgeBaseId: knowledgeBaseId)
         guard let urlInfo = info.urlInfo, let downloadURL = URL(string: urlInfo.url) else {
             throw IMASyncError.apiError("该媒体类型暂不支持导出或无法获取下载链接")
         }
         
         var request = URLRequest(url: downloadURL)
         request.httpMethod = "GET"
-        if let headers = urlInfo.headers {
-            for (key, value) in headers {
-                request.addValue(value, forHTTPHeaderField: key)
-            }
-        }
         
         let logId = IMALogService.shared.logRequest(method: "DOWNLOAD", url: downloadURL.absoluteString, headers: request.allHTTPHeaderFields, body: "Downloading file...")
         let (tempURL, response) = try await URLSession.shared.download(for: request)
@@ -120,7 +166,7 @@ final class IMASyncService {
         try FileManager.default.moveItem(at: tempURL, to: destinationURL)
     }
 
-    /// 知识库模块：上传文件 (Wiki Flow)
+    /// 知识库模块：上传文件 (私有 H5 接口上传链路)
     @discardableResult
     func uploadToWiki(
         fileURL: URL,
@@ -131,6 +177,14 @@ final class IMASyncService {
     ) async throws -> String {
         let originalFileName = fileURL.lastPathComponent
         let fileSize = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        
+        if fileSize == 0 {
+            let errorMsg = "检测到文件大小为 0（可能尚未写入完成或沙盒受限），已拦截本次无效同步，防止触发腾讯云端 code 51 参数错误。"
+            let logId = IMALogService.shared.logRequest(method: "PREFLIGHT", url: "wiki/v1/upload", headers: nil, body: "File: \(originalFileName)")
+            IMALogService.shared.logError(id: logId, code: nil, error: errorMsg, requestId: nil)
+            throw IMASyncError.apiError(errorMsg)
+        }
+        
         let fileExt = fileURL.pathExtension.lowercased()
         
         // 1. Preflight Check (获取 media_type 和 content_type)
@@ -150,17 +204,17 @@ final class IMASyncService {
             duplicateStrategy: duplicateStrategy
         )
         
-        // 2. Create Media (获取 COS 凭据)
+        // 2. Create Media (私有 H5 /create_media 接口获取 COS 凭据)
+        // 严格契合抓包规范，不能携带未定义参数如 "file_ext"，否则服务器会报 code 51 / 参数错误
         let step1LogId = IMALogService.shared.logRequest(method: "STEP 1", url: "create_media", headers: nil, body: "开始请求 COS 凭据...")
         let createResp: IMAResponse<CreateMediaPayload> = try await postJson(
-            path: "openapi/wiki/v1/create_media",
+            path: "cgi-bin/file_manager/create_media",
             body: [
                 "file_name": uploadFileName,
                 "file_size": fileSize,
                 "content_type": contentType,
                 "media_type": mediaType,
-                "knowledge_base_id": knowledgeBaseId,
-                "file_ext": fileExt
+                "knowledge_base_id": knowledgeBaseId
             ]
         )
         try validate(createResp)
@@ -172,17 +226,20 @@ final class IMASyncService {
         try await uploadToCOS(fileURL: fileURL, payload: payload, contentType: contentType, fileSize: fileSize)
         IMALogService.shared.logResponse(id: step2LogId, code: 200, body: "文件流上传完成", requestId: nil)
         
-        // 4. Add Knowledge (正式关联)
-        let step3LogId = IMALogService.shared.logRequest(method: "STEP 3", url: "add_knowledge", headers: nil, body: "开始将媒体关联到知识库...")
+        // 4. Add Knowledge (私有 H5 /add_knowledge 接口关联知识库)
+        // file_info 必须携带 "content_type": "" (空字符串) 以完全符合 H5 私有 API 校验
+        let step3LogId = IMALogService.shared.logRequest(method: "STEP 3", url: "add_knowledge", headers: nil, body: "开始将媒体关联 to 知识库...")
         var addKnowledgeBody: [String: Any] = [
             "media_type": mediaType,
             "media_id": payload.mediaId,
             "title": uploadFileName,
             "knowledge_base_id": knowledgeBaseId,
+            "need_parse": true,
             "file_info": [
                 "cos_key": payload.cosCredential.cosKey,
                 "file_size": fileSize,
-                "file_name": uploadFileName
+                "file_name": uploadFileName,
+                "content_type": ""
             ]
         ]
         if let folderId, !folderId.isEmpty {
@@ -190,13 +247,46 @@ final class IMASyncService {
         }
 
         let addResp: IMAResponse<EmptyPayload> = try await postJson(
-            path: "openapi/wiki/v1/add_knowledge",
+            path: "cgi-bin/knowledge_tab_writer/add_knowledge",
             body: addKnowledgeBody
         )
         try validate(addResp)
         IMALogService.shared.logResponse(id: step3LogId, code: 200, body: "关联成功！同步完成。", requestId: addResp.requestId)
         
         return payload.mediaId
+    }
+
+    /// 监听流式 SSE 解析进度
+    private func trackParseProgress(mediaId: String) async throws {
+        var request = URLRequest(url: baseURL.appendingPathComponent("cgi-bin/media_center/get_parse_progress"))
+        request.httpMethod = "POST"
+        try applyPrivateWebHeaders(to: &request)
+        request.setValue("text/event-stream", forHTTPHeaderField: "accept")
+        request.setValue("text/plain;charset=UTF-8", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: Any] = ["media_ids": [mediaId]]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        let logId = IMALogService.shared.logRequest(
+            method: "SSE (Progress)",
+            url: "cgi-bin/media_center/get_parse_progress",
+            headers: nil,
+            body: "开始监听解析进度..."
+        )
+        
+        do {
+            let (bytes, _) = try await URLSession.shared.bytes(for: request)
+            for try await line in bytes.lines {
+                if line.hasPrefix("data:") {
+                    let dataContent = line.dropFirst(5).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !dataContent.isEmpty {
+                        IMALogService.shared.logResponse(id: logId, code: 200, body: dataContent, requestId: nil)
+                    }
+                }
+            }
+        } catch {
+            IMALogService.shared.logError(id: logId, code: nil, error: "SSE 进度监听异常中断: \(error.localizedDescription)", requestId: nil)
+        }
     }
 
     private func resolvedUploadFileName(
@@ -223,7 +313,7 @@ final class IMASyncService {
         }
 
         let response: IMAResponse<CheckRepeatedNamesPayload> = try await postJson(
-            path: "openapi/wiki/v1/check_repeated_names",
+            path: "cgi-bin/knowledge_tab_reader/check_repeated_names",
             body: body
         )
         try validate(response)
@@ -272,24 +362,12 @@ final class IMASyncService {
     }
 
     private func deleteKnowledgeByWebAPI(mediaIds: [String], knowledgeBaseId: String) async throws {
-        let webCookie = UserDefaults.standard.string(forKey: "imaWebCookie")?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let bkn = UserDefaults.standard.string(forKey: "imaBkn")?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        guard !webCookie.isEmpty, !bkn.isEmpty else {
-            throw IMASyncError.apiError("实验性覆盖上传需要先在设置中填写 IMA Web Cookie 和 x-ima-bkn。")
-        }
-
         var request = URLRequest(url: baseURL.appendingPathComponent("cgi-bin/knowledge_tab_writer/del_knowledge"))
         request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("application/json", forHTTPHeaderField: "Accept")
-        request.addValue("1", forHTTPHeaderField: "from_browser_ima")
-        request.addValue("4.25.3", forHTTPHeaderField: "extension_version")
-        request.addValue(bkn, forHTTPHeaderField: "x-ima-bkn")
-        request.addValue(webCookie, forHTTPHeaderField: "x-ima-cookie")
-        request.addValue("FileSyncMonitor/1.0", forHTTPHeaderField: "User-Agent")
+        try applyPrivateWebHeaders(to: &request)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "knowledge_base_id": knowledgeBaseId,
             "media_ids": mediaIds
@@ -450,51 +528,34 @@ final class IMASyncService {
     }
 
     private func postJson<T: Decodable>(path: String, body: [String: Any]) async throws -> IMAResponse<T> {
-        let credentials = try normalizedCredentials()
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
-        applyCredentials(credentials, to: &request)
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        try applyPrivateWebHeaders(to: &request)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         return try await send(request)
     }
 
-    /// 导入文档到 IMA (笔记流)
-    func importDoc(fileURL: URL, knowledgeBaseId: String) async throws -> String {
-        let credentials = try normalizedCredentials()
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: baseURL.appendingPathComponent("openapi/note/v1/import_doc"))
-        request.httpMethod = "POST"
-        applyCredentials(credentials, to: &request)
-        request.addValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        let tempFileURL = try createMultipartFile(fileURL: fileURL, knowledgeBaseId: knowledgeBaseId, boundary: boundary)
-        defer { try? FileManager.default.removeItem(at: tempFileURL) }
-
-        let response: IMAResponse<ImportResult> = try await upload(request, fromFile: tempFileURL)
-        try validate(response)
-        return response.data?.docId ?? ""
-    }
-
-    private func normalizedCredentials() throws -> (clientId: String, apiKey: String) {
-        let clientId = UserDefaults.standard.string(forKey: "imaClientId")?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let apiKey = UserDefaults.standard.string(forKey: "imaApiKey")?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        guard !clientId.isEmpty, !apiKey.isEmpty else {
+    private func applyPrivateWebHeaders(to request: inout URLRequest) throws {
+        let creds = IMACredentialsManager.shared
+        guard creds.isLoggedIn else {
             throw IMASyncError.missingCredentials
         }
-
-        return (clientId, apiKey)
-    }
-
-    private func applyCredentials(_ credentials: (clientId: String, apiKey: String), to request: inout URLRequest) {
-        request.addValue(credentials.clientId, forHTTPHeaderField: "ima-openapi-clientid")
-        request.addValue(credentials.apiKey, forHTTPHeaderField: "ima-openapi-apikey")
-        request.addValue("skill_version=1.1.7", forHTTPHeaderField: "ima-openapi-ctx")
-        request.addValue("FileSyncMonitor/1.0", forHTTPHeaderField: "User-Agent")
+        
+        request.setValue("ima.qq.com", forHTTPHeaderField: "Host")
+        request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+        request.setValue("macOS", forHTTPHeaderField: "sec-ch-ua-platform")
+        request.setValue("1", forHTTPHeaderField: "from_browser_ima")
+        request.setValue("\"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"", forHTTPHeaderField: "sec-ch-ua")
+        request.setValue(String(creds.bkn), forHTTPHeaderField: "x-ima-bkn")
+        request.setValue("?0", forHTTPHeaderField: "sec-ch-ua-mobile")
+        request.setValue(creds.getCookieString(), forHTTPHeaderField: "x-ima-cookie")
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 IMA/143.0.7499.4456", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.setValue("4.25.3", forHTTPHeaderField: "extension_version")
+        request.setValue("chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi", forHTTPHeaderField: "Origin")
+        request.setValue("zh-CN,zh;q=0.9", forHTTPHeaderField: "Accept-Language")
     }
 
     private func send<T: Decodable>(_ request: URLRequest) async throws -> IMAResponse<T> {
@@ -503,20 +564,6 @@ final class IMASyncService {
         
         do {
             let (data, urlResponse) = try await URLSession.shared.data(for: request)
-            let decoded: IMAResponse<T> = try decodeIMAResponse(data: data, urlResponse: urlResponse)
-            IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: String(data: data, encoding: .utf8), requestId: decoded.requestId)
-            return decoded
-        } catch {
-            IMALogService.shared.logError(id: logId, code: nil, error: error.localizedDescription, requestId: nil)
-            throw error
-        }
-    }
-
-    private func upload<T: Decodable>(_ request: URLRequest, fromFile fileURL: URL) async throws -> IMAResponse<T> {
-        let logId = IMALogService.shared.logRequest(method: "UPLOAD", url: request.url?.absoluteString ?? "", headers: request.allHTTPHeaderFields, body: "[Multipart Data: \(fileURL.lastPathComponent)]")
-        
-        do {
-            let (data, urlResponse) = try await URLSession.shared.upload(for: request, fromFile: fileURL)
             let decoded: IMAResponse<T> = try decodeIMAResponse(data: data, urlResponse: urlResponse)
             IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: String(data: data, encoding: .utf8), requestId: decoded.requestId)
             return decoded
@@ -553,44 +600,92 @@ final class IMASyncService {
             throw IMASyncError.apiError(response.displayMessage())
         }
     }
+}
 
-    private func createMultipartFile(fileURL: URL, knowledgeBaseId: String, boundary: String) throws -> URL {
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        FileManager.default.createFile(atPath: tempURL.path, contents: nil)
-        
-        let handle = try FileHandle(forWritingTo: tempURL)
-        defer { try? handle.close() }
+// MARK: - H5 Web Models & Adaptations
 
-        // 知识库 ID
-        handle.write("--\(boundary)\r\n".data(using: .utf8)!)
-        handle.write("Content-Disposition: form-data; name=\"kbId\"\r\n\r\n".data(using: .utf8)!)
-        handle.write("\(knowledgeBaseId)\r\n".data(using: .utf8)!)
-
-        // 文件名
-        let filename = fileURL.lastPathComponent
-        handle.write("--\(boundary)\r\n".data(using: .utf8)!)
-        handle.write("Content-Disposition: form-data; name=\"fileName\"\r\n\r\n".data(using: .utf8)!)
-        handle.write("\(filename)\r\n".data(using: .utf8)!)
-        handle.write("--\(boundary)\r\n".data(using: .utf8)!)
-        handle.write("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
-        handle.write("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+struct H5KnowledgeBaseListResponse: Decodable {
+    let results: [H5KnowledgeBaseResult]
+    
+    struct H5KnowledgeBaseResult: Decodable {
+        let knowledgeBaseList: [KnowledgeBase]
         
-        // 分块读取原文件并写入临时文件，避免一次性读入大文件内存
-        let sourceHandle = try FileHandle(forReadingFrom: fileURL)
-        defer { try? sourceHandle.close() }
-        
-        while let chunk = try sourceHandle.read(upToCount: 1024 * 1024), !chunk.isEmpty {
-            handle.write(chunk)
+        enum CodingKeys: String, CodingKey {
+            case knowledgeBaseList = "knowledge_base_list"
         }
-        
-        handle.write("\r\n".data(using: .utf8)!)
-        handle.write("--\(boundary)--\r\n".data(using: .utf8)!)
-        
-        return tempURL
     }
 }
 
-// MARK: - Models & Errors
+struct H5GetKnowledgeResponse: Decodable {
+    let knowledge: H5KnowledgeDetail
+    
+    struct H5KnowledgeDetail: Decodable {
+        let jumpUrl: String
+        let mediaType: Int
+        
+        enum CodingKeys: String, CodingKey {
+            case jumpUrl = "jump_url"
+            case mediaType = "media_type"
+        }
+    }
+}
+
+struct H5DeviceListResponse: Decodable {
+    let devices: [H5Device]
+    
+    enum CodingKeys: String, CodingKey {
+        case devices = "device_list"
+    }
+}
+
+struct H5Device: Decodable, Identifiable {
+    var id: String { deviceName + "_" + deviceType }
+    let deviceName: String
+    let deviceType: String
+    
+    var isCurrent: Bool {
+        deviceType.lowercased().contains("mac")
+    }
+    
+    var osName: String {
+        deviceType
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case deviceName = "device_name"
+        case deviceType = "device_type"
+    }
+}
+
+struct H5SpaceQuota: Decodable {
+    let totalQuota: Int64
+    let usedQuota: Int64
+    
+    enum CodingKeys: String, CodingKey {
+        case totalQuota = "total_quota"
+        case usedQuota = "used_quota"
+    }
+}
+
+struct H5UserInfoDetail: Decodable {
+    let openInfo: H5UserOpenInfo
+    
+    enum CodingKeys: String, CodingKey {
+        case openInfo = "open_info"
+    }
+}
+
+struct H5UserOpenInfo: Decodable {
+    let avatarUrl: String
+    let nickname: String
+    
+    enum CodingKeys: String, CodingKey {
+        case avatarUrl = "avatar_url"
+        case nickname = "nickname"
+    }
+}
+
+// MARK: - Standard Models & Errors
 
 struct IMAResponse<T: Decodable>: Decodable {
     let code: Int
@@ -604,6 +699,7 @@ struct IMAResponse<T: Decodable>: Decodable {
         case msg
         case requestId = "request_id"
         case data
+        case info
     }
 
     init(from decoder: Decoder) throws {
@@ -613,7 +709,9 @@ struct IMAResponse<T: Decodable>: Decodable {
             ?? (try? container.decode(String.self, forKey: .msg))
             ?? "IMA 接口未返回错误说明"
         requestId = try? container.decode(String.self, forKey: .requestId)
-        data = try? container.decodeIfPresent(T.self, forKey: .data)
+        data = (try? container.decodeIfPresent(T.self, forKey: .data))
+            ?? (try? container.decodeIfPresent(T.self, forKey: .info))
+            ?? (try? T(from: decoder))
     }
 
     func displayMessage(httpStatus: Int? = nil) -> String {
@@ -627,58 +725,6 @@ struct IMAResponse<T: Decodable>: Decodable {
             parts.append("request_id \(requestId)")
         }
         return parts.joined(separator: " / ")
-    }
-}
-
-struct KnowledgeBaseListPayload: Decodable {
-    let items: [KnowledgeBase]
-
-    init(from decoder: Decoder) throws {
-        if let directItems = try? [KnowledgeBase](from: decoder) {
-            items = directItems
-            return
-        }
-
-        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
-        for key in ["list", "items", "knowledge_bases", "knowledgeBases", "kb_list", "info_list"] {
-            if let codingKey = DynamicCodingKey(stringValue: key),
-               let nestedItems = try? container.decode([KnowledgeBase].self, forKey: codingKey) {
-                items = nestedItems
-                return
-            }
-        }
-
-        items = []
-    }
-}
-
-struct CheckRepeatedNamesPayload: Decodable {
-    let results: [CheckRepeatedNamesResult]
-}
-
-struct CheckRepeatedNamesResult: Decodable {
-    let name: String
-    let isRepeated: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case isRepeated = "is_repeated"
-    }
-}
-
-struct DeleteKnowledgeWebResponse: Decodable {
-    let code: Int
-    let msg: String
-    let results: [String: DeleteKnowledgeResult]
-}
-
-struct DeleteKnowledgeResult: Decodable {
-    let mediaId: String
-    let retCode: Int
-
-    enum CodingKeys: String, CodingKey {
-        case mediaId = "media_id"
-        case retCode = "ret_code"
     }
 }
 
@@ -699,22 +745,31 @@ struct KnowledgeBase: Codable, Identifiable, Hashable {
         case title
         case knowledgeBaseName = "knowledge_base_name"
         case kbName = "kb_name"
+        case basicInfo = "basic_info"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        // 优先尝试官方最新字段
         let rawId = (try? container.decode(String.self, forKey: .kbId))
             ?? (try? container.decode(String.self, forKey: .id))
             ?? (try? container.decode(String.self, forKey: .knowledgeBaseId))
         self.id = rawId ?? ""
         
-        // 优先尝试官方名称字段
-        let rawName = (try? container.decode(String.self, forKey: .kbName))
-            ?? (try? container.decode(String.self, forKey: .name))
-            ?? (try? container.decode(String.self, forKey: .title))
-            ?? (try? container.decode(String.self, forKey: .knowledgeBaseName))
+        var rawName: String? = nil
+        if let basicInfoContainer = try? container.nestedContainer(keyedBy: DynamicCodingKey.self, forKey: .basicInfo) {
+            if let kbNameKey = DynamicCodingKey(stringValue: "name") {
+                rawName = try? basicInfoContainer.decode(String.self, forKey: kbNameKey)
+            }
+        }
+        
+        if rawName == nil {
+            rawName = (try? container.decode(String.self, forKey: .kbName))
+                ?? (try? container.decode(String.self, forKey: .name))
+                ?? (try? container.decode(String.self, forKey: .title))
+                ?? (try? container.decode(String.self, forKey: .knowledgeBaseName))
+        }
+        
         self.name = rawName ?? "未命名知识库"
     }
     
@@ -722,22 +777,6 @@ struct KnowledgeBase: Codable, Identifiable, Hashable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
-    }
-}
-
-struct ImportResult: Decodable {
-    let docId: String
-
-    enum CodingKeys: String, CodingKey {
-        case docId
-        case docID = "doc_id"
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        docId = (try? container.decode(String.self, forKey: .docId))
-            ?? (try? container.decode(String.self, forKey: .docID))
-            ?? ""
     }
 }
 
@@ -885,11 +924,11 @@ struct IMAMediaType {
         let map: [String: (Int, String)] = [
             "pdf": (1, "application/pdf"),
             "doc": (3, "application/msword"),
-            "docx": (3, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            "docx": (3, "application/msword"), // 统一使用短 MIME 类型突破接口 50 字符限制防 code 51
             "ppt": (4, "application/vnd.ms-powerpoint"),
-            "pptx": (4, "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+            "pptx": (4, "application/vnd.ms-powerpoint"), // 统一使用短 MIME 类型突破限制
             "xls": (5, "application/vnd.ms-excel"),
-            "xlsx": (5, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            "xlsx": (5, "application/vnd.ms-excel"), // 统一使用短 MIME 类型突破限制
             "csv": (5, "text/csv"),
             "md": (7, "text/markdown"),
             "markdown": (7, "text/markdown"),
@@ -931,12 +970,42 @@ enum IMASyncError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingCredentials:
-            return "请先填写 IMA Client ID 和 API Key"
+            return "请先使用微信扫码登录 IMA 账号"
         case .apiError(let message):
             return message
         case .invalidResponse(let message):
             return "IMA 响应无法解析：\(message)"
         }
+    }
+}
+
+struct CheckRepeatedNamesPayload: Decodable {
+    let results: [CheckRepeatedNameResult]
+}
+
+struct CheckRepeatedNameResult: Decodable {
+    let name: String
+    let isRepeated: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case name
+        case isRepeated = "is_repeated"
+    }
+}
+
+struct DeleteKnowledgeWebResponse: Decodable {
+    let code: Int
+    let msg: String
+    let results: [String: DeleteKnowledgeResult]
+}
+
+struct DeleteKnowledgeResult: Decodable {
+    let mediaId: String
+    let retCode: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case mediaId = "media_id"
+        case retCode = "ret_code"
     }
 }
 

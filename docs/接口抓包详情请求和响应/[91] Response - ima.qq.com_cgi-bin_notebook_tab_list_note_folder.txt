@@ -1,0 +1,18 @@
+HTTP/1.1 200 OK
+Date: Mon, 18 May 2026 08:22:42 GMT
+Content-Type: application/json
+Content-Length: 51
+Connection: keep-alive
+Server: tRPC-Gateway
+X-Content-Type-Options: nosniff
+X-Upstream-Latency: 4
+X-Proxy-Latency: 0
+Access-Control-Allow-Origin: chrome-extension://cninonkgpcmdognjppglnkelbkhlhhee
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "code": 41,
+  "msg": "登录失败，请重新登录"
+}
