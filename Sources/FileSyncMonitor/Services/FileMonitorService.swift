@@ -255,14 +255,13 @@ final class FileMonitorService {
         }
     }
     
-    var availableKnowledgeBases: [KnowledgeBase] {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: availableKBsKey) else { return [] }
-            return (try? JSONDecoder().decode([KnowledgeBase].self, from: data)) ?? []
-        }
-        set {
-            if let data = try? JSONEncoder().encode(newValue) {
-                UserDefaults.standard.set(data, forKey: availableKBsKey)
+    var availableKnowledgeBases: [KnowledgeBase] = {
+        guard let data = UserDefaults.standard.data(forKey: "availableKnowledgeBases") else { return [] }
+        return (try? JSONDecoder().decode([KnowledgeBase].self, from: data)) ?? []
+    }() {
+        didSet {
+            if let data = try? JSONEncoder().encode(availableKnowledgeBases) {
+                UserDefaults.standard.set(data, forKey: "availableKnowledgeBases")
             }
         }
     }
@@ -358,7 +357,7 @@ final class FileMonitorService {
             return count > 0
         }
         
-        var deletedFilesToPull: [(url: URL, mediaId: String)] = []
+        var deletedFilesToPull: [(url: URL, mediaId: String, kbId: String)] = []
         let mapping = pathKnowledgeBaseMapping
         
         for (localPath, kbId) in mapping {
@@ -378,12 +377,12 @@ final class FileMonitorService {
                         // 3. 检查是否有本地删除记录
                         if hasLocalDeletionRecord(for: filePath) {
                             // 暂存，稍后统一确认
-                            deletedFilesToPull.append((fileURL, item.mediaId))
+                            deletedFilesToPull.append((fileURL, item.mediaId, kbId))
                             print("Sync: Found locally deleted file still on cloud (pending choice): \(item.title)")
                         } else {
                             // 无删除记录，安全直接下载
                             print("Sync: Downloading new file from cloud: \(item.title)")
-                            try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                            try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
                             
                             let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
                             event.isSynced = true
@@ -414,7 +413,7 @@ final class FileMonitorService {
                                     backupEvent.isSynced = true
                                     context.insert(backupEvent)
                                     
-                                    try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                                    try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
                                     
                                     let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
                                     event.isSynced = true
@@ -422,7 +421,7 @@ final class FileMonitorService {
                                     try? context.save()
                                 } else {
                                     print("Sync: Safe pull (cloud updated, local untouched) for \(item.title)")
-                                    try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                                    try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
                                     
                                     let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
                                     event.isSynced = true
@@ -444,7 +443,7 @@ final class FileMonitorService {
                             backupEvent.isSynced = true
                             context.insert(backupEvent)
                             
-                            try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: fileURL)
+                            try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
                             
                             let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
                             event.isSynced = true
@@ -472,7 +471,7 @@ final class FileMonitorService {
                 for item in deletedFilesToPull {
                     do {
                         print("Sync: Re-downloading locally deleted file: \(item.url.lastPathComponent)")
-                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, to: item.url)
+                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: item.kbId, to: item.url)
                         
                         let event = FileEvent(path: item.url.path, type: "created", isDirectory: false, remoteId: item.mediaId)
                         event.isSynced = true
@@ -527,6 +526,14 @@ final class FileMonitorService {
 
     @MainActor
     func syncEventToIMA(_ event: FileEvent, in context: ModelContext) async throws {
+        // 目录本身不需要进行文件级别的关联上传，直接标记为已同步即可
+        if event.isDirectory {
+            event.isSynced = true
+            try? context.save()
+            MenuBarManager.shared.updateBadge(count: unsyncedCount(in: context))
+            return
+        }
+
         if event.type == "deleted" {
             event.isSynced = true
             try? context.save()
@@ -535,6 +542,25 @@ final class FileMonitorService {
         }
 
         let target = getKnowledgeBaseTarget(for: event.path)
+        
+        // 寻找包含此文件路径的已授权根目录安全 scoped URL
+        let sortedPaths = monitoredPaths.sorted { $0.count > $1.count }
+        var rootUrl: URL? = nil
+        for rootPath in sortedPaths {
+            if event.path.hasPrefix(rootPath) {
+                rootUrl = securityScopedURLs[rootPath]
+                break
+            }
+        }
+        
+        // 显式开启沙盒内该父目录的读取权限（防 fileSize 因沙盒限制返回 0 / code 51）
+        let didAccess = rootUrl?.startAccessingSecurityScopedResource() ?? false
+        defer {
+            if didAccess {
+                rootUrl?.stopAccessingSecurityScopedResource()
+            }
+        }
+
         let remoteId = try await IMASyncService.shared.syncFile(
             fileURL: URL(fileURLWithPath: event.path),
             knowledgeBaseId: target.knowledgeBaseId,
@@ -719,6 +745,35 @@ struct IgnoreRules {
     let customExtensions: [String]
     let customDirectoryNames: [String]
 
+    let normalizedFileNames: Set<String>
+    let normalizedExtensions: Set<String>
+    let normalizedDirectoryNames: Set<String>
+
+    init(enableDefaultRules: Bool, customFileNames: [String], customExtensions: [String], customDirectoryNames: [String]) {
+        self.enableDefaultRules = enableDefaultRules
+        self.customFileNames = customFileNames
+        self.customExtensions = customExtensions
+        self.customDirectoryNames = customDirectoryNames
+        
+        var fileNamesSet = Set(customFileNames.map { $0.lowercased() })
+        if enableDefaultRules {
+            fileNamesSet.formUnion(Self.defaultFileNames.map { $0.lowercased() })
+        }
+        self.normalizedFileNames = fileNamesSet
+        
+        var extensionsSet = Set(customExtensions.map(Self.normalizeExtension))
+        if enableDefaultRules {
+            extensionsSet.formUnion(Self.defaultExtensions.map(Self.normalizeExtension))
+        }
+        self.normalizedExtensions = extensionsSet
+        
+        var dirNamesSet = Set(customDirectoryNames.map { $0.lowercased() })
+        if enableDefaultRules {
+            dirNamesSet.formUnion(Self.defaultDirectoryNames.map { $0.lowercased() })
+        }
+        self.normalizedDirectoryNames = dirNamesSet
+    }
+
     static func load(
         userDefaults: UserDefaults,
         enableDefaultKey: String,
@@ -736,8 +791,8 @@ struct IgnoreRules {
     }
 
     func matches(path: String, isDirectory: Bool) -> Bool {
-        let url = URL(fileURLWithPath: path)
-        let fileName = url.lastPathComponent
+        let nsPath = path as NSString
+        let fileName = nsPath.lastPathComponent
         let loweredFileName = fileName.lowercased()
         let loweredComponents = pathComponents(path).map { $0.lowercased() }
 
@@ -745,8 +800,7 @@ struct IgnoreRules {
             return true
         }
 
-        let fileNames = normalizedFileNames
-        if fileNames.contains(loweredFileName) {
+        if normalizedFileNames.contains(loweredFileName) {
             return true
         }
 
@@ -774,37 +828,12 @@ struct IgnoreRules {
         return false
     }
 
-    private var normalizedFileNames: Set<String> {
-        var names = Set(customFileNames.map { $0.lowercased() })
-        if enableDefaultRules {
-            names.formUnion(Self.defaultFileNames.map { $0.lowercased() })
-        }
-        return names
-    }
-
-    private var normalizedExtensions: Set<String> {
-        var extensions = Set(customExtensions.map(Self.normalizeExtension))
-        if enableDefaultRules {
-            extensions.formUnion(Self.defaultExtensions.map(Self.normalizeExtension))
-        }
-        return extensions
-    }
-
-    private var normalizedDirectoryNames: Set<String> {
-        var names = Set(customDirectoryNames.map { $0.lowercased() })
-        if enableDefaultRules {
-            names.formUnion(Self.defaultDirectoryNames.map { $0.lowercased() })
-        }
-        return names
-    }
-
     private func containsAnyDirectoryName(in pathComponents: [String]) -> Bool {
-        let directoryNames = normalizedDirectoryNames
-        return pathComponents.contains { directoryNames.contains($0) }
+        return pathComponents.contains { normalizedDirectoryNames.contains($0) }
     }
 
     private func pathComponents(_ path: String) -> [String] {
-        URL(fileURLWithPath: path).pathComponents.filter { $0 != "/" }
+        path.split(separator: "/").map { String($0) }
     }
 
     private static func parseList(_ value: String) -> [String] {

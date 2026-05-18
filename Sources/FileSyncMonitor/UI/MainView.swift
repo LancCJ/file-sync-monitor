@@ -6,6 +6,8 @@ import AppKit
 struct MainView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FileEvent.timestamp, order: .reverse) private var events: [FileEvent]
+    
+    @State private var credsManager = IMACredentialsManager.shared
 
     // 观测语言变化，确保切换语言时 body 重新执行，所有 LocalizedText / .appLocalized 使用新语言
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
@@ -220,6 +222,34 @@ struct MainView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
 
+                if !credsManager.isLoggedIn {
+                    ZStack {
+                        Color.black.opacity(0.12)
+                        
+                        Circle()
+                            .fill(Color.appMint.opacity(0.15))
+                            .frame(width: 400, height: 400)
+                            .blur(radius: 80)
+                            .offset(x: -120, y: -80)
+                        
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.15))
+                            .frame(width: 450, height: 450)
+                            .blur(radius: 90)
+                            .offset(x: 150, y: 100)
+                        
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .opacity(0.55)
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    
+                    IMALoginView(onLoginSuccess: {
+                        print("[MainView] WeChat login success, unlocking interface.")
+                    })
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(IMAWindowBackground())
@@ -248,6 +278,16 @@ struct MainView: View {
                 typeFilter = .all
             }
             .onAppear {
+                if credsManager.isLoggedIn && credsManager.avatarUrl.isEmpty {
+                    Task {
+                        if let profile = try? await IMASyncService.shared.getUserProfile() {
+                            await MainActor.run {
+                                credsManager.avatarUrl = profile.avatarUrl
+                                credsManager.nickname = profile.nickname
+                            }
+                        }
+                    }
+                }
                 if !hasCompletedOnboarding {
                     selectedSidebarItem = .home
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
@@ -366,6 +406,7 @@ struct IMARailView: View {
     let layout: MainLayoutMetrics
     let requestQuit: () -> Void
     @Environment(\.colorScheme) var scheme
+    @State private var credsManager = IMACredentialsManager.shared
 
     var body: some View {
         VStack(spacing: 18) {
@@ -402,6 +443,15 @@ struct IMARailView: View {
 
                 VStack(spacing: 18) {
                     IMARailLanguageButton()
+                    
+                    if credsManager.isLoggedIn {
+                        IMARailAvatarButton {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                credsManager.clear()
+                            }
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    }
 
                     Button(action: requestQuit) {
                         IMARailExitButton()
@@ -454,6 +504,67 @@ struct IMARailExitButton: View {
             )
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
+    }
+}
+
+struct IMARailAvatarButton: View {
+    @State private var isHovered = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomTrailing) {
+                let avatarUrl = IMACredentialsManager.shared.avatarUrl
+                
+                Group {
+                    if !avatarUrl.isEmpty, let url = URL(string: avatarUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .clipShape(Circle())
+                        } placeholder: {
+                            Circle()
+                                .fill(Color.appMint.opacity(0.2))
+                                .overlay(
+                                    ProgressView()
+                                        .scaleEffect(0.5)
+                                )
+                        }
+                    } else {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.appMint, Color.appMint.opacity(0.85)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.white)
+                            )
+                    }
+                }
+                .frame(width: 28, height: 28)
+                .shadow(color: Color.appMint.opacity(isHovered ? 0.35 : 0.15), radius: isHovered ? 5 : 2.5, y: 1)
+                
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white, lineWidth: 1.5)
+                    )
+                    .offset(x: 1, y: 1)
+            }
+            .scaleEffect(isHovered ? 1.06 : 1.0)
+            .animation(.snappy(duration: 0.15), value: isHovered)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(IMACredentialsManager.shared.nickname.isEmpty ? "微信已登录 - 点击注销".appLocalized : "\(IMACredentialsManager.shared.nickname) - 点击注销".appLocalized)
     }
 }
 

@@ -15,11 +15,10 @@ struct SettingsView: View {
     @AppStorage("autoSync") private var autoSync = false
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
 
-    @AppStorage("imaClientId") private var clientId = ""
-    @AppStorage("imaApiKey") private var apiKey = ""
     @AppStorage("imaDuplicateFileStrategy") private var duplicateFileStrategy = IMADuplicateFileStrategy.renameWithTimestamp.rawValue
-    @AppStorage("imaWebCookie") private var imaWebCookie = ""
-    @AppStorage("imaBkn") private var imaBkn = ""
+
+    @State private var devices: [H5Device] = []
+    @State private var quota: H5SpaceQuota? = nil
 
     @State private var isTestingIMA = false
     @State private var imaStatus: IMAStatus = .idle
@@ -149,39 +148,96 @@ struct SettingsView: View {
                         .frame(width: 154)
                     }
 
-                    IMASettingsTextRow(title: "Client ID", subtitle: "IMA OpenAPI Client ID", text: $clientId)
-                    IMASettingsTextRow(title: "API Key", subtitle: "IMA OpenAPI API Key", text: $apiKey, isSecure: true)
-
-                    if duplicateFileStrategy == IMADuplicateFileStrategy.experimentalOverwrite.rawValue {
-                        IMASettingsTextRow(
-                            title: "IMA Web Cookie",
-                            subtitle: "实验性覆盖使用，仅保存在本机，请粘贴 x-ima-cookie 请求头内容",
-                            text: $imaWebCookie,
-                            placeholder: "PLATFORM=H5; ...",
-                            isSecure: true
-                        )
-
-                        IMASettingsTextRow(
-                            title: "x-ima-bkn",
-                            subtitle: "实验性覆盖使用，请粘贴删除接口请求头里的 x-ima-bkn",
-                            text: $imaBkn,
-                            placeholder: "1392607292"
-                        )
-                    }
-                    
-                    IMASettingsRow(title: "获取凭证帮助", subtitle: "了解如何注册并获取 Tencent IMA 凭证") {
-                        Button(action: { isShowingIMAHelp = true }) {
-                            HStack(spacing: 4) {
-                                LocalizedText("查看帮助")
-                                Image(systemName: "questionmark.circle")
+                    // 微信登录状态与个人看板
+                    if IMACredentialsManager.shared.isLoggedIn {
+                        // 微信账户行
+                        IMASettingsRow(title: "腾讯 IMA 账户", subtitle: "已通过微信扫码安全授权") {
+                            HStack(spacing: 12) {
+                                Image(systemName: "person.crop.circle.badge.checkmark")
+                                    .font(.title2)
+                                    .foregroundColor(.green)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("微信用户 (ID: \(IMACredentialsManager.shared.imaUid.prefix(8))...)")
+                                        .font(.system(size: 13, weight: .semibold))
+                                    Text("设备指纹 bkn: \(IMACredentialsManager.shared.bkn)")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    IMACredentialsManager.shared.clear()
+                                    devices = []
+                                    quota = nil
+                                }) {
+                                    Text("退出登录")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(QuietButtonStyle())
                             }
                         }
-                        .buttonStyle(QuietButtonStyle())
+                        
+                        // 空间使用看板
+                        if let quota {
+                            IMASettingsRow(title: "云端存储空间", subtitle: "使用情况实时同步") {
+                                VStack(alignment: .trailing, spacing: 6) {
+                                    // 进度条
+                                    ProgressView(value: Double(quota.usedQuota), total: Double(quota.totalQuota))
+                                        .progressViewStyle(.linear)
+                                        .frame(width: 160)
+                                    
+                                    HStack(spacing: 4) {
+                                        Text(ByteCountFormatter.string(fromByteCount: quota.usedQuota, countStyle: .file))
+                                        Text("/")
+                                        Text(ByteCountFormatter.string(fromByteCount: quota.totalQuota, countStyle: .file))
+                                    }
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        
+                        // 多端关联设备列表
+                        if !devices.isEmpty {
+                            IMASettingsRow(title: "关联多端设备", subtitle: "当前账号下已登录的其他 IMA 客户端") {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ForEach(devices) { dev in
+                                        HStack(spacing: 6) {
+                                            Image(systemName: dev.osName.lowercased().contains("mac") ? "laptopcomputer" : "iphone")
+                                                .foregroundColor(.secondary)
+                                            Text(dev.deviceName)
+                                                .font(.system(size: 12))
+                                            if dev.isCurrent {
+                                                Text("(当前)")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(.accentColor)
+                                                    .padding(.horizontal, 4)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.accentColor.opacity(0.1))
+                                                    .cornerRadius(4)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        IMASettingsRow(title: "腾讯 IMA 账户", subtitle: "未登录") {
+                            Text("未登录，请在主界面进行扫码登录")
+                                .font(.system(size: 12))
+                                .foregroundColor(.red)
+                        }
                     }
                     
-                    IMASettingsRow(title: "连接状态", subtitle: imaStatusDetail, isSelectable: true) {
+                    IMASettingsRow(title: "连接状态", subtitle: IMACredentialsManager.shared.isLoggedIn ? "Tencent IMA 正常连接中" : "未登录，请先在主页扫码", isSelectable: true) {
                         HStack(spacing: 12) {
-                            StatusPill(text: imaStatusTitle, symbol: imaStatusIcon, color: imaStatusColor)
+                            StatusPill(
+                                text: IMACredentialsManager.shared.isLoggedIn ? "已连接" : "未连接",
+                                symbol: IMACredentialsManager.shared.isLoggedIn ? "checkmark.circle.fill" : "exclamationmark.circle.fill",
+                                color: IMACredentialsManager.shared.isLoggedIn ? .green : .red
+                            )
                             
                             Button(action: { isShowingLogs = true }) {
                                 Image(systemName: "list.bullet.rectangle.portrait")
@@ -190,17 +246,13 @@ struct SettingsView: View {
                             .buttonStyle(QuietButtonStyle())
                             .help("查看请求日志".appLocalized)
                             
-                            Button(action: testIMAConnection) {
-                                if isTestingIMA {
-                                    ProgressView().controlSize(.small)
-                                        .transition(.scale.combined(with: .opacity))
-                                } else {
-                                    LocalizedText("测试连接")
-                                }
+                            Button(action: {
+                                fetchPrivateWebInfo()
+                            }) {
+                                Text("刷新状态")
                             }
                             .buttonStyle(QuietButtonStyle())
-                            .disabled(clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isTestingIMA)
-                            .animation(.snappy, value: isTestingIMA)
+                            .disabled(!IMACredentialsManager.shared.isLoggedIn)
                         }
                     }
                     .imaHover()
@@ -287,6 +339,7 @@ struct SettingsView: View {
             }
             .onAppear {
                 refreshLaunchAtLoginStatus()
+                fetchPrivateWebInfo()
                 if highlightIMAConfig {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
@@ -300,6 +353,14 @@ struct SettingsView: View {
                             highlightPulse = false
                         }
                     }
+                }
+            }
+            .onChange(of: IMACredentialsManager.shared.isLoggedIn) { _, isLoggedIn in
+                if isLoggedIn {
+                    fetchPrivateWebInfo()
+                } else {
+                    devices = []
+                    quota = nil
                 }
             }
             .onChange(of: enableDefaultIgnoreRules) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
@@ -328,41 +389,6 @@ struct SettingsView: View {
         return "同名时在文件名后追加年月日时分秒，避免覆盖旧文件"
     }
 
-    private var imaStatusTitle: String {
-        switch imaStatus {
-        case .idle: return "未测试"
-        case .connected: return "连接成功"
-        case .failed: return "连接失败"
-        }
-    }
-
-    private var imaStatusDetail: String {
-        switch imaStatus {
-        case .idle:
-            return "检查当前凭据是否可用"
-        case .connected:
-            return String(format: "IMA OpenAPI 连接成功，已获取知识库_format".appLocalized, FileMonitorService.shared.availableKnowledgeBases.count)
-        case .failed(let message):
-            return message
-        }
-    }
-
-    private var imaStatusIcon: String {
-        switch imaStatus {
-        case .idle: return "circle"
-        case .connected: return "checkmark"
-        case .failed: return "xmark"
-        }
-    }
-
-    private var imaStatusColor: Color {
-        switch imaStatus {
-        case .idle: return .secondary
-        case .connected: return .appMint
-        case .failed: return .appRose
-        }
-    }
-
     private func addDirectory() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -378,22 +404,21 @@ struct SettingsView: View {
         FileMonitorService.shared.removeDirectory(at: path)
     }
 
-    private func testIMAConnection() {
-        isTestingIMA = true
-        imaStatus = .idle
+    private func fetchPrivateWebInfo() {
+        guard IMACredentialsManager.shared.isLoggedIn else { return }
         Task {
             do {
-                let kbs = try await IMASyncService.shared.getKnowledgeBases()
+                let fetchedDevices = try await IMASyncService.shared.getTabDevices()
+                let fetchedQuota = try await IMASyncService.shared.getSpaceQuota()
+                let fetchedKBs = try await IMASyncService.shared.getKnowledgeBases()
+                
                 await MainActor.run {
-                    FileMonitorService.shared.availableKnowledgeBases = kbs
-                    imaStatus = .connected
-                    isTestingIMA = false
+                    self.devices = fetchedDevices
+                    self.quota = fetchedQuota
+                    FileMonitorService.shared.availableKnowledgeBases = fetchedKBs
                 }
             } catch {
-                await MainActor.run {
-                    imaStatus = .failed(error.localizedDescription)
-                    isTestingIMA = false
-                }
+                print("Failed to fetch private H5 setting info: \(error)")
             }
         }
     }
@@ -409,9 +434,6 @@ struct SettingsView: View {
         guard canRegisterLaunchAtLogin else {
             launchAtLoginEnabled = false
             launchAtLoginStatusMessage = "当前是 Xcode/命令行调试运行，不能注册开机自启；请使用 .app 应用包运行后再开启。"
-            if SMAppService.mainApp.status == .enabled {
-                try? SMAppService.mainApp.unregister()
-            }
             return
         }
 
@@ -423,9 +445,6 @@ struct SettingsView: View {
         guard canRegisterLaunchAtLogin else {
             launchAtLoginEnabled = false
             launchAtLoginStatusMessage = "当前运行的不是 .app 应用包，已阻止注册开机自启，避免重启后打开终端窗口。"
-            if SMAppService.mainApp.status == .enabled {
-                try? SMAppService.mainApp.unregister()
-            }
             return
         }
 
@@ -456,7 +475,6 @@ struct MonitoredPathRow: View {
     let path: String
     let onRemove: (String) -> Void
     @State private var selectedKnowledgeBaseId: String
-    @State private var knowledgeBases: [KnowledgeBase]
 
     init(path: String, onRemove: @escaping (String) -> Void) {
         self.path = path
@@ -464,11 +482,10 @@ struct MonitoredPathRow: View {
 
         let initialId = FileMonitorService.shared.getKnowledgeBaseId(for: path)
         self._selectedKnowledgeBaseId = State(initialValue: initialId == "default" ? "" : initialId)
-        self._knowledgeBases = State(initialValue: FileMonitorService.shared.availableKnowledgeBases)
     }
 
     private var knowledgeBaseOptions: [(String, String)] {
-        [("", "默认 (新建笔记)")] + knowledgeBases.map { ($0.id, $0.name) }
+        [("", "默认 (新建笔记)")] + FileMonitorService.shared.availableKnowledgeBases.map { ($0.id, $0.name) }
     }
 
     private var selectedKnowledgeBaseName: String {
@@ -476,7 +493,7 @@ struct MonitoredPathRow: View {
             return "默认 (新建笔记)"
         }
 
-        return knowledgeBases.first { $0.id == selectedKnowledgeBaseId }?.name ?? "已选择的知识库"
+        return FileMonitorService.shared.availableKnowledgeBases.first { $0.id == selectedKnowledgeBaseId }?.name ?? "已选择的知识库"
     }
     
     var body: some View {
@@ -516,7 +533,6 @@ struct MonitoredPathRow: View {
                         Task {
                             await FileMonitorService.shared.fetchKnowledgeBases()
                             await MainActor.run {
-                                knowledgeBases = FileMonitorService.shared.availableKnowledgeBases
                                 let savedId = FileMonitorService.shared.getKnowledgeBaseId(for: path)
                                 selectedKnowledgeBaseId = savedId == "default" ? "" : savedId
                             }
@@ -539,7 +555,6 @@ struct MonitoredPathRow: View {
         .padding(.bottom, 8)
         .imaHover()
         .onAppear {
-            knowledgeBases = FileMonitorService.shared.availableKnowledgeBases
             let savedId = FileMonitorService.shared.getKnowledgeBaseId(for: path)
             selectedKnowledgeBaseId = savedId == "default" ? "" : savedId
         }
