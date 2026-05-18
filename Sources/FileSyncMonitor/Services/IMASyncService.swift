@@ -11,11 +11,23 @@ final class IMASyncService {
 
     /// 同步文件到指定目标（知识库或笔记）
     @discardableResult
-    func syncFile(fileURL: URL, knowledgeBaseId: String?, relativeFolderPath: String? = nil) async throws -> String {
+    func syncFile(
+        fileURL: URL,
+        knowledgeBaseId: String?,
+        relativeFolderPath: String? = nil,
+        existingRemoteId: String? = nil,
+        duplicateStrategy: IMADuplicateFileStrategy = .renameWithTimestamp
+    ) async throws -> String {
         if let kbId = knowledgeBaseId, !kbId.isEmpty && kbId != "default" {
             // 如果指定了具体知识库 ID，走 Wiki 上传流
             let folderId = try await resolveFolderIdIfNeeded(knowledgeBaseId: kbId, relativeFolderPath: relativeFolderPath)
-            return try await uploadToWiki(fileURL: fileURL, knowledgeBaseId: kbId, folderId: folderId)
+            return try await uploadToWiki(
+                fileURL: fileURL,
+                knowledgeBaseId: kbId,
+                folderId: folderId,
+                existingRemoteId: existingRemoteId,
+                duplicateStrategy: duplicateStrategy
+            )
         } else {
             // 默认走笔记导入流
             return try await importDoc(fileURL: fileURL, knowledgeBaseId: "default")
@@ -110,7 +122,13 @@ final class IMASyncService {
 
     /// 知识库模块：上传文件 (Wiki Flow)
     @discardableResult
-    func uploadToWiki(fileURL: URL, knowledgeBaseId: String, folderId: String? = nil) async throws -> String {
+    func uploadToWiki(
+        fileURL: URL,
+        knowledgeBaseId: String,
+        folderId: String? = nil,
+        existingRemoteId: String? = nil,
+        duplicateStrategy: IMADuplicateFileStrategy = .renameWithTimestamp
+    ) async throws -> String {
         let originalFileName = fileURL.lastPathComponent
         let fileSize = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
         let fileExt = fileURL.pathExtension.lowercased()
@@ -127,7 +145,9 @@ final class IMASyncService {
             originalFileName: originalFileName,
             mediaType: mediaType,
             knowledgeBaseId: knowledgeBaseId,
-            folderId: folderId
+            folderId: folderId,
+            existingRemoteId: existingRemoteId,
+            duplicateStrategy: duplicateStrategy
         )
         
         // 2. Create Media (获取 COS 凭据)
@@ -179,7 +199,14 @@ final class IMASyncService {
         return payload.mediaId
     }
 
-    private func resolvedUploadFileName(originalFileName: String, mediaType: Int, knowledgeBaseId: String, folderId: String?) async throws -> String {
+    private func resolvedUploadFileName(
+        originalFileName: String,
+        mediaType: Int,
+        knowledgeBaseId: String,
+        folderId: String?,
+        existingRemoteId: String?,
+        duplicateStrategy: IMADuplicateFileStrategy
+    ) async throws -> String {
         let logId = IMALogService.shared.logRequest(method: "PRECHECK", url: "check_repeated_names", headers: nil, body: "检查同目录同名文件：\(originalFileName)")
         var body: [String: Any] = [
             "params": [
@@ -206,6 +233,25 @@ final class IMASyncService {
         } ?? false
 
         if isRepeated {
+            if duplicateStrategy == .experimentalOverwrite {
+                let mediaId = existingRemoteId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                    ? existingRemoteId
+                    : try await findExistingKnowledgeMediaId(fileName: originalFileName, knowledgeBaseId: knowledgeBaseId, folderId: folderId)
+
+                guard let mediaId, !mediaId.isEmpty else {
+                    throw IMASyncError.apiError("IMA 目标目录中已存在同名文件：\(originalFileName)，但未能定位旧文件 media_id，无法执行覆盖上传。")
+                }
+
+                try await deleteKnowledgeByWebAPI(mediaIds: [mediaId], knowledgeBaseId: knowledgeBaseId)
+                IMALogService.shared.logResponse(
+                    id: logId,
+                    code: 200,
+                    body: "发现同名文件并已删除旧文件，继续使用原文件名上传：\(originalFileName)",
+                    requestId: response.requestId
+                )
+                return originalFileName
+            }
+
             let timestampedName = timestampedFileName(originalFileName)
             IMALogService.shared.logResponse(
                 id: logId,
@@ -218,6 +264,81 @@ final class IMASyncService {
 
         IMALogService.shared.logResponse(id: logId, code: 200, body: "未发现同名文件，可以继续上传。", requestId: response.requestId)
         return originalFileName
+    }
+
+    private func findExistingKnowledgeMediaId(fileName: String, knowledgeBaseId: String, folderId: String?) async throws -> String? {
+        let items = try await fetchAllKnowledgeItems(knowledgeBaseId: knowledgeBaseId, folderId: folderId)
+        return items.first { !$0.isFolder && $0.displayName == fileName }?.mediaId
+    }
+
+    private func deleteKnowledgeByWebAPI(mediaIds: [String], knowledgeBaseId: String) async throws {
+        let webCookie = UserDefaults.standard.string(forKey: "imaWebCookie")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let bkn = UserDefaults.standard.string(forKey: "imaBkn")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        guard !webCookie.isEmpty, !bkn.isEmpty else {
+            throw IMASyncError.apiError("实验性覆盖上传需要先在设置中填写 IMA Web Cookie 和 x-ima-bkn。")
+        }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("cgi-bin/knowledge_tab_writer/del_knowledge"))
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.addValue("1", forHTTPHeaderField: "from_browser_ima")
+        request.addValue("4.25.3", forHTTPHeaderField: "extension_version")
+        request.addValue(bkn, forHTTPHeaderField: "x-ima-bkn")
+        request.addValue(webCookie, forHTTPHeaderField: "x-ima-cookie")
+        request.addValue("FileSyncMonitor/1.0", forHTTPHeaderField: "User-Agent")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "knowledge_base_id": knowledgeBaseId,
+            "media_ids": mediaIds
+        ])
+
+        let mediaIdList = mediaIds.joined(separator: ", ")
+        let safeHeaders = request.allHTTPHeaderFields?.filter { header in
+            let key = header.key.lowercased()
+            return key != "x-ima-cookie" && key != "x-ima-bkn"
+        }
+
+        let logId = IMALogService.shared.logRequest(
+            method: "DELETE (WEB)",
+            url: request.url?.absoluteString ?? "",
+            headers: safeHeaders,
+            body: "删除旧知识条目：\(mediaIdList)"
+        )
+
+        do {
+            let (data, urlResponse) = try await URLSession.shared.data(for: request)
+            let statusCode = (urlResponse as? HTTPURLResponse)?.statusCode
+            if let statusCode, !(200..<300).contains(statusCode) {
+                let preview = String(data: data, encoding: .utf8)?.prefix(180) ?? ""
+                throw IMASyncError.apiError("IMA Web 删除接口 HTTP \(statusCode)：\(preview)")
+            }
+
+            let decoded = try JSONDecoder().decode(DeleteKnowledgeWebResponse.self, from: data)
+            if decoded.code != 0 {
+                throw IMASyncError.apiError("IMA Web 删除接口失败：code \(decoded.code) / \(decoded.msg)")
+            }
+
+            let failed = mediaIds.filter { mediaId in
+                decoded.results[mediaId]?.retCode != 0
+            }
+            if !failed.isEmpty {
+                let failedList = failed.joined(separator: ", ")
+                throw IMASyncError.apiError("IMA Web 删除接口未成功删除旧文件：\(failedList)")
+            }
+
+            IMALogService.shared.logResponse(
+                id: logId,
+                code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0,
+                body: String(data: data, encoding: .utf8),
+                requestId: nil
+            )
+        } catch {
+            IMALogService.shared.logError(id: logId, code: nil, error: error.localizedDescription, requestId: nil)
+            throw error
+        }
     }
 
     private func timestampedFileName(_ fileName: String) -> String {
@@ -543,6 +664,27 @@ struct CheckRepeatedNamesResult: Decodable {
         case name
         case isRepeated = "is_repeated"
     }
+}
+
+struct DeleteKnowledgeWebResponse: Decodable {
+    let code: Int
+    let msg: String
+    let results: [String: DeleteKnowledgeResult]
+}
+
+struct DeleteKnowledgeResult: Decodable {
+    let mediaId: String
+    let retCode: Int
+
+    enum CodingKeys: String, CodingKey {
+        case mediaId = "media_id"
+        case retCode = "ret_code"
+    }
+}
+
+enum IMADuplicateFileStrategy: String {
+    case renameWithTimestamp
+    case experimentalOverwrite
 }
 
 struct KnowledgeBase: Codable, Identifiable, Hashable {

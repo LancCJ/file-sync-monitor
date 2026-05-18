@@ -17,6 +17,9 @@ struct SettingsView: View {
 
     @AppStorage("imaClientId") private var clientId = ""
     @AppStorage("imaApiKey") private var apiKey = ""
+    @AppStorage("imaDuplicateFileStrategy") private var duplicateFileStrategy = IMADuplicateFileStrategy.renameWithTimestamp.rawValue
+    @AppStorage("imaWebCookie") private var imaWebCookie = ""
+    @AppStorage("imaBkn") private var imaBkn = ""
 
     @State private var isTestingIMA = false
     @State private var imaStatus: IMAStatus = .idle
@@ -134,8 +137,37 @@ struct SettingsView: View {
                         AppToggle(isOn: $autoSync)
                     }
 
+                    IMASettingsRow(title: "同名文件策略", subtitle: duplicateStrategyDescription) {
+                        AppDropdownMenu(
+                            selection: $duplicateFileStrategy,
+                            options: [
+                                (IMADuplicateFileStrategy.renameWithTimestamp.rawValue, "自动改名上传".appLocalized),
+                                (IMADuplicateFileStrategy.experimentalOverwrite.rawValue, "实验性覆盖上传".appLocalized)
+                            ],
+                            label: AppMenuValue(text: duplicateStrategyTitle)
+                        )
+                        .frame(width: 154)
+                    }
+
                     IMASettingsTextRow(title: "Client ID", subtitle: "IMA OpenAPI Client ID", text: $clientId)
                     IMASettingsTextRow(title: "API Key", subtitle: "IMA OpenAPI API Key", text: $apiKey, isSecure: true)
+
+                    if duplicateFileStrategy == IMADuplicateFileStrategy.experimentalOverwrite.rawValue {
+                        IMASettingsTextRow(
+                            title: "IMA Web Cookie",
+                            subtitle: "实验性覆盖使用，仅保存在本机，请粘贴 x-ima-cookie 请求头内容",
+                            text: $imaWebCookie,
+                            placeholder: "PLATFORM=H5; ...",
+                            isSecure: true
+                        )
+
+                        IMASettingsTextRow(
+                            title: "x-ima-bkn",
+                            subtitle: "实验性覆盖使用，请粘贴删除接口请求头里的 x-ima-bkn",
+                            text: $imaBkn,
+                            placeholder: "1392607292"
+                        )
+                    }
                     
                     IMASettingsRow(title: "获取凭证帮助", subtitle: "了解如何注册并获取 Tencent IMA 凭证") {
                         Button(action: { isShowingIMAHelp = true }) {
@@ -283,6 +315,17 @@ struct SettingsView: View {
 
     private var defaultIgnoreSummary: String {
         "过滤 .DS_Store、Office 临时文件、系统目录和常见构建缓存"
+    }
+
+    private var duplicateStrategyTitle: String {
+        duplicateFileStrategy == IMADuplicateFileStrategy.experimentalOverwrite.rawValue ? "实验性覆盖上传".appLocalized : "自动改名上传".appLocalized
+    }
+
+    private var duplicateStrategyDescription: String {
+        if duplicateFileStrategy == IMADuplicateFileStrategy.experimentalOverwrite.rawValue {
+            return "同名时先用 IMA Web 私有接口删除旧文件，再上传新文件；接口可能失效"
+        }
+        return "同名时在文件名后追加年月日时分秒，避免覆盖旧文件"
     }
 
     private var imaStatusTitle: String {

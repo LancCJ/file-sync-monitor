@@ -538,7 +538,9 @@ final class FileMonitorService {
         let remoteId = try await IMASyncService.shared.syncFile(
             fileURL: URL(fileURLWithPath: event.path),
             knowledgeBaseId: target.knowledgeBaseId,
-            relativeFolderPath: target.relativeFolderPath
+            relativeFolderPath: target.relativeFolderPath,
+            existingRemoteId: event.remoteId,
+            duplicateStrategy: duplicateFileStrategy
         )
         event.isSynced = true
         event.remoteId = remoteId
@@ -550,6 +552,11 @@ final class FileMonitorService {
     private func unsyncedCount(in context: ModelContext) -> Int {
         let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
         return (try? context.fetchCount(descriptor)) ?? 0
+    }
+
+    private var duplicateFileStrategy: IMADuplicateFileStrategy {
+        let rawValue = UserDefaults.standard.string(forKey: "imaDuplicateFileStrategy") ?? IMADuplicateFileStrategy.renameWithTimestamp.rawValue
+        return IMADuplicateFileStrategy(rawValue: rawValue) ?? .renameWithTimestamp
     }
 
     /// 开始监控指定目录
