@@ -568,15 +568,42 @@ final class IMASyncService {
         let bodyString = request.httpBody.flatMap { String(data: $0, encoding: .utf8) }
         let logId = IMALogService.shared.logRequest(method: request.httpMethod ?? "GET", url: request.url?.absoluteString ?? "", headers: request.allHTTPHeaderFields, body: bodyString)
         
-        do {
-            let (data, urlResponse) = try await self.session.data(for: request)
-            let decoded: IMAResponse<T> = try decodeIMAResponse(data: data, urlResponse: urlResponse)
-            IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: String(data: data, encoding: .utf8), requestId: decoded.requestId)
-            return decoded
-        } catch {
-            IMALogService.shared.logError(id: logId, code: nil, error: error.localizedDescription, requestId: nil)
-            throw error
+        var attempts = 0
+        let maxAttempts = 3
+        var lastError: Error? = nil
+        
+        while attempts < maxAttempts {
+            attempts += 1
+            do {
+                let (data, urlResponse) = try await self.session.data(for: request)
+                let decoded: IMAResponse<T> = try decodeIMAResponse(data: data, urlResponse: urlResponse)
+                
+                // If it is transient rate limit or service busy (600001), perform retry!
+                if decoded.code == 600001 {
+                    let delay = Double(attempts) * 1.5 // Exponential backoff: 1.5s, 3.0s
+                    IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: "Transient 600001 (service busy) detected. Retrying in \(delay)s (attempt \(attempts)/\(maxAttempts))...", requestId: decoded.requestId)
+                    
+                    if attempts < maxAttempts {
+                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        continue
+                    }
+                }
+                
+                IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: String(data: data, encoding: .utf8), requestId: decoded.requestId)
+                return decoded
+            } catch {
+                lastError = error
+                IMALogService.shared.logError(id: logId, code: nil, error: "Attempt \(attempts) failed: \(error.localizedDescription)", requestId: nil)
+                
+                if attempts < maxAttempts {
+                    let delay = Double(attempts) * 1.5
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    continue
+                }
+            }
         }
+        
+        throw lastError ?? IMASyncError.apiError("发送请求失败，已自动尝试 \(maxAttempts) 次")
     }
 
     private func decodeIMAResponse<T: Decodable>(data: Data, urlResponse: URLResponse) throws -> IMAResponse<T> {
