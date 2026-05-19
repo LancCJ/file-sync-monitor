@@ -381,6 +381,14 @@ final class FileMonitorService {
                 
                 let localURL = URL(fileURLWithPath: localPath)
                 for item in items {
+                    guard !item.isFolder else {
+                        // 对于文件夹，我们只需确保本地目录存在，然后跳过内容下载
+                        let folderURL = localURL.appendingPathComponent(item.title)
+                        try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                        print("Sync: Ensured local directory exists for folder: \(item.title)")
+                        continue
+                    }
+                    
                     let fileURL = localURL.appendingPathComponent(item.title)
                     let filePath = fileURL.path
                     
