@@ -21,7 +21,7 @@ final class FileMonitorService {
     private let customIgnoredDirectoryNamesKey = "customIgnoredDirectoryNames"
     
     /// 当前正在监控的目录路径
-    private(set) var monitoredPaths: [String] = []
+    var monitoredPaths: [String] = []
     
     /// 是否正在从云端同步
     var isPulling: Bool = false
@@ -290,13 +290,25 @@ final class FileMonitorService {
         getKnowledgeBaseTarget(for: filePath).knowledgeBaseId
     }
 
+    private func isSubpath(filePath: String, of rootPath: String) -> Bool {
+        let resolvedFile = URL(fileURLWithPath: filePath).resolvingSymlinksInPath().path
+        let resolvedRoot = URL(fileURLWithPath: rootPath).resolvingSymlinksInPath().path
+        
+        if resolvedFile == resolvedRoot {
+            return true
+        }
+        
+        let rootWithSlash = resolvedRoot.hasSuffix("/") ? resolvedRoot : resolvedRoot + "/"
+        return resolvedFile.hasPrefix(rootWithSlash)
+    }
+
     func getKnowledgeBaseTarget(for filePath: String) -> (knowledgeBaseId: String, relativeFolderPath: String?) {
         let mapping = pathKnowledgeBaseMapping
         
         // 寻找最长匹配的监控目录（即所属的最深层监控根目录）
         let sortedPaths = monitoredPaths.sorted { $0.count > $1.count }
         for rootPath in sortedPaths {
-            if filePath.hasPrefix(rootPath) {
+            if isSubpath(filePath: filePath, of: rootPath) {
                 return (mapping[rootPath] ?? "default", relativeFolderPath(filePath: filePath, rootPath: rootPath))
             }
         }
@@ -305,8 +317,8 @@ final class FileMonitorService {
     }
 
     private func relativeFolderPath(filePath: String, rootPath: String) -> String? {
-        let fileURL = URL(fileURLWithPath: filePath).standardizedFileURL
-        let rootURL = URL(fileURLWithPath: rootPath).standardizedFileURL
+        let fileURL = URL(fileURLWithPath: filePath).resolvingSymlinksInPath()
+        let rootURL = URL(fileURLWithPath: rootPath).resolvingSymlinksInPath()
         let parentURL = fileURL.deletingLastPathComponent()
 
         let rootComponents = rootURL.pathComponents
@@ -547,7 +559,7 @@ final class FileMonitorService {
         let sortedPaths = monitoredPaths.sorted { $0.count > $1.count }
         var rootUrl: URL? = nil
         for rootPath in sortedPaths {
-            if event.path.hasPrefix(rootPath) {
+            if isSubpath(filePath: event.path, of: rootPath) {
                 rootUrl = securityScopedURLs[rootPath]
                 break
             }

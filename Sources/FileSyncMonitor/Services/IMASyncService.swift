@@ -7,6 +7,12 @@ final class IMASyncService {
 
     private let baseURL = URL(string: "https://ima.qq.com")!
 
+    #if DEBUG
+    var session: URLSession = URLSession.shared
+    #else
+    private let session = URLSession.shared
+    #endif
+
     private init() {}
 
     /// 同步文件到指定目标（知识库或笔记）
@@ -150,7 +156,7 @@ final class IMASyncService {
         request.httpMethod = "GET"
         
         let logId = IMALogService.shared.logRequest(method: "DOWNLOAD", url: downloadURL.absoluteString, headers: request.allHTTPHeaderFields, body: "Downloading file...")
-        let (tempURL, response) = try await URLSession.shared.download(for: request)
+        let (tempURL, response) = try await self.session.download(for: request)
         
         if let httpResponse = response as? HTTPURLResponse {
             IMALogService.shared.logResponse(id: logId, code: httpResponse.statusCode, body: "Download Finished", requestId: nil)
@@ -275,7 +281,7 @@ final class IMASyncService {
         )
         
         do {
-            let (bytes, _) = try await URLSession.shared.bytes(for: request)
+            let (bytes, _) = try await self.session.bytes(for: request)
             for try await line in bytes.lines {
                 if line.hasPrefix("data:") {
                     let dataContent = line.dropFirst(5).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -387,7 +393,7 @@ final class IMASyncService {
         )
 
         do {
-            let (data, urlResponse) = try await URLSession.shared.data(for: request)
+            let (data, urlResponse) = try await self.session.data(for: request)
             let statusCode = (urlResponse as? HTTPURLResponse)?.statusCode
             if let statusCode, !(200..<300).contains(statusCode) {
                 let preview = String(data: data, encoding: .utf8)?.prefix(180) ?? ""
@@ -517,7 +523,7 @@ final class IMASyncService {
         request.setValue(signature, forHTTPHeaderField: "Authorization")
         
         let logId = IMALogService.shared.logRequest(method: "PUT (COS)", url: urlString, headers: request.allHTTPHeaderFields, body: "[Binary Data: \(fileURL.lastPathComponent)]")
-        let (_, response) = try await URLSession.shared.upload(for: request, fromFile: fileURL)
+        let (_, response) = try await self.session.upload(for: request, fromFile: fileURL)
         
         if let httpResponse = response as? HTTPURLResponse {
             IMALogService.shared.logResponse(id: logId, code: httpResponse.statusCode, body: "COS Upload Finished", requestId: nil)
@@ -563,7 +569,7 @@ final class IMASyncService {
         let logId = IMALogService.shared.logRequest(method: request.httpMethod ?? "GET", url: request.url?.absoluteString ?? "", headers: request.allHTTPHeaderFields, body: bodyString)
         
         do {
-            let (data, urlResponse) = try await URLSession.shared.data(for: request)
+            let (data, urlResponse) = try await self.session.data(for: request)
             let decoded: IMAResponse<T> = try decodeIMAResponse(data: data, urlResponse: urlResponse)
             IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: String(data: data, encoding: .utf8), requestId: decoded.requestId)
             return decoded
