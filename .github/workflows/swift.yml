@@ -15,6 +15,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Build Universal Release Binary (arm64 + x86_64)
       run: |
@@ -49,15 +51,37 @@ jobs:
 
     - name: Generate Release Notes Template
       run: |
+        # 1. Write Chinese header
         cat << 'EOF' > release_notes.md
-        ### 🇨🇳 中文说明
-        感谢您使用 FileSyncMonitor！此版本包含性能优化、问题修复和新功能。详情请参阅下方的自动更新日志。
+        ### 🇨🇳 中文更新日志 / Chinese Release Notes
+        感谢您使用 FileSyncMonitor！此版本包含以下更新：
+        
+        EOF
+        
+        # 2. Append Git commits safely without shell expansion
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        if [ -n "$PREV_TAG" ]; then
+          git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)" >> release_notes.md
+        else
+          git log --pretty=format:"- %s (%h)" >> release_notes.md
+        fi
+        echo -e "\n" >> release_notes.md
+        
+        # 3. Write English header
+        cat << 'EOF' >> release_notes.md
         
         ### 🇬🇧 English Release Notes
-        Thank you for using FileSyncMonitor! This release contains performance optimizations, bug fixes, and new features. Please refer to the automatically generated changelog below for details.
+        Thank you for using FileSyncMonitor! This release contains the following updates:
         
-        ---
         EOF
+        
+        # 4. Append Git commits again
+        if [ -n "$PREV_TAG" ]; then
+          git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)" >> release_notes.md
+        else
+          git log --pretty=format:"- %s (%h)" >> release_notes.md
+        fi
+        echo -e "\n\n---" >> release_notes.md
 
     - name: Create GitHub Release and Upload DMG
       uses: softprops/action-gh-release@v2

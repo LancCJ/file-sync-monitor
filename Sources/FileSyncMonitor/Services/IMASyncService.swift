@@ -1,5 +1,6 @@
 import Foundation
 import CommonCrypto
+import WebKit
 
 /// 负责对接 Tencent IMA H5 Web 私有接口的同步服务
 final class IMASyncService {
@@ -629,7 +630,27 @@ final class IMASyncService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        return try await send(request)
+        let response: IMAResponse<T> = try await send(request)
+        if response.code == 600001 {
+            print("[IMASyncService] Token expired (600001) during POST to \(path). Attempting silent refresh...")
+            let refreshSuccess = await refreshCredentialsSilently()
+            if refreshSuccess {
+                print("[IMASyncService] Silent refresh succeeded! Retrying POST to \(path)...")
+                var retriedRequest = URLRequest(url: baseURL.appendingPathComponent(path))
+                retriedRequest.httpMethod = "POST"
+                try applyPrivateWebHeaders(to: &retriedRequest)
+                retriedRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                retriedRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
+                let retriedResponse: IMAResponse<T> = try await send(retriedRequest)
+                return retriedResponse
+            } else {
+                print("[IMASyncService] Silent refresh failed or WeChat session expired. Clearing credentials and logging out.")
+                await MainActor.run {
+                    IMACredentialsManager.shared.clear(clearWebView: true)
+                }
+            }
+        }
+        return response
     }
 
     private func applyPrivateWebHeaders(to request: inout URLRequest) throws {
@@ -754,6 +775,224 @@ final class IMASyncService {
             }
             throw IMASyncError.apiError(response.displayMessage())
         }
+    }
+    
+    /// 静默刷新登录凭证（不影响全局状态，除非成功才更新）
+    @MainActor
+    func refreshCredentialsSilently() async -> Bool {
+        print("[IMASyncService] Starting silent credentials refresh via background WKWebView...")
+        
+        return await withCheckedContinuation { continuation in
+            let refresher = IMASilentTokenRefresher { success in
+                continuation.resume(returning: success)
+            }
+            refresher.start()
+        }
+    }
+}
+
+/// 负责在后台静默刷新 IMA Token 的辅助类，复用现有 Cookie 与微信登录态
+@MainActor
+final class IMASilentTokenRefresher: NSObject, WKNavigationDelegate {
+    private var webView: WKWebView?
+    private var timer: Timer?
+    private var completion: (Bool) -> Void
+    private var isFinished = false
+    private var isValidating = false
+    private let oldToken: String
+    private var selfRetain: IMASilentTokenRefresher?
+    
+    init(completion: @escaping (Bool) -> Void) {
+        self.completion = completion
+        self.oldToken = IMACredentialsManager.shared.imaToken
+        super.init()
+    }
+    
+    func start() {
+        selfRetain = self // 保持强引用，防止被 ARC 销毁导致 WebView / 定时器失效
+        
+        let configuration = WKWebViewConfiguration()
+        // 复用默认数据存储，直接读取现存 Cookie
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = self
+        self.webView = webView
+        
+        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        
+        let request = URLRequest(url: URL(string: "https://ima.qq.com/login/")!)
+        webView.load(request)
+        
+        // 开启每秒一次的凭证轮询扫描
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                await self.checkCredentials()
+            }
+        }
+        
+        // 15 秒超时兜底，防止挂起
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                if !self.isFinished {
+                    print("[IMASilentTokenRefresher] Silent refresh timed out after 15 seconds.")
+                    self.finish(success: false)
+                }
+            }
+        }
+    }
+    
+    private func finish(success: Bool) {
+        guard !isFinished else { return }
+        isFinished = true
+        
+        timer?.invalidate()
+        timer = nil
+        webView?.navigationDelegate = nil
+        webView = nil
+        
+        completion(success)
+        
+        selfRetain = nil // 释放自身强引用以完成内存销毁
+    }
+    
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if let url = navigationAction.request.url {
+            let urlString = url.absoluteString
+            print("[IMASilentTokenRefresher] Background WebView navigating to: \(urlString)")
+        }
+        decisionHandler(.allow)
+    }
+    
+    private func getCookies(from store: WKHTTPCookieStore) async -> [HTTPCookie] {
+        await withCheckedContinuation { continuation in
+            store.getAllCookies { cookies in
+                continuation.resume(returning: cookies)
+            }
+        }
+    }
+    
+    private func checkCredentials() async {
+        guard !isFinished, let webView = webView else { return }
+        
+        let store = webView.configuration.websiteDataStore.httpCookieStore
+        let cookies = await getCookies(from: store)
+        
+        var token = ""
+        var refreshToken = ""
+        var uid = ""
+        var guid = ""
+        
+        for cookie in cookies {
+            let name = cookie.name.uppercased()
+            let value = cookie.value.removingPercentEncoding ?? cookie.value
+            if name == "IMA-TOKEN" {
+                token = value
+            } else if name == "TOKEN" && (token.isEmpty || token == "guest") {
+                token = value
+            } else if name == "IMA-REFRESH-TOKEN" {
+                refreshToken = value
+            } else if name == "REFRESH-TOKEN" && refreshToken.isEmpty {
+                refreshToken = value
+            } else if name == "IMA-UID" {
+                uid = value
+            } else if (name == "UID" || name == "USER_ID") && uid.isEmpty {
+                uid = value
+            } else if name == "IMA-GUID" {
+                guid = value
+            } else if name == "GUID" && guid.isEmpty {
+                guid = value
+            }
+        }
+        
+        if verifyAndSaveIfValid(token: token, refreshToken: refreshToken, uid: uid, guid: guid) {
+            return
+        }
+        
+        // 尝试通过 JS document.cookie 获取
+        if let cookieStr = try? await webView.evaluateJavaScript("document.cookie") as? String, !cookieStr.isEmpty {
+            if parseAndVerifyCookieString(cookieStr) {
+                return
+            }
+        }
+    }
+    
+    private func parseAndVerifyCookieString(_ str: String) -> Bool {
+        let pairs = str.components(separatedBy: ";")
+        var token = ""
+        var refreshToken = ""
+        var uid = ""
+        var guid = ""
+        
+        for pair in pairs {
+            let parts = pair.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            if parts.count == 2 {
+                let name = parts[0].uppercased()
+                let value = String(parts[1]).removingPercentEncoding ?? String(parts[1])
+                
+                if name == "IMA-TOKEN" {
+                    token = value
+                } else if name == "TOKEN" && (token.isEmpty || token == "guest") {
+                    token = value
+                } else if name == "IMA-REFRESH-TOKEN" {
+                    refreshToken = value
+                } else if name == "REFRESH-TOKEN" && refreshToken.isEmpty {
+                    refreshToken = value
+                } else if name == "IMA-UID" {
+                    uid = value
+                } else if (name == "UID" || name == "USER_ID") && uid.isEmpty {
+                    uid = value
+                } else if name == "IMA-GUID" {
+                    guid = value
+                } else if name == "GUID" && guid.isEmpty {
+                    guid = value
+                }
+            }
+        }
+        
+        return verifyAndSaveIfValid(token: token, refreshToken: refreshToken, uid: uid, guid: guid)
+    }
+    
+    private func verifyAndSaveIfValid(token: String, refreshToken: String, uid: String, guid: String) -> Bool {
+        guard !token.isEmpty && !uid.isEmpty && token != oldToken else { return false }
+        guard !isValidating else { return true }
+        isValidating = true
+        
+        let finalGuid = guid.isEmpty ? "7460830660542107" : guid
+        let finalRefreshToken = refreshToken.isEmpty ? token : refreshToken
+        
+        print("[IMASilentTokenRefresher] Detected new credentials in background WebView. Validating...")
+        
+        Task { @MainActor in
+            let isValid = await IMASyncService.shared.validateCredentials(
+                token: token,
+                refreshToken: finalRefreshToken,
+                uid: uid,
+                guid: finalGuid
+            )
+            
+            if isValid {
+                print("[IMASilentTokenRefresher] Background refresh validated successfully! Saving to Keychain...")
+                IMACredentialsManager.shared.save(
+                    token: token,
+                    refreshToken: finalRefreshToken,
+                    uid: uid,
+                    guid: finalGuid
+                )
+                
+                if let profile = try? await IMASyncService.shared.getUserProfile() {
+                    IMACredentialsManager.shared.avatarUrl = profile.avatarUrl
+                    IMACredentialsManager.shared.nickname = profile.nickname
+                }
+                
+                self.finish(success: true)
+            } else {
+                print("[IMASilentTokenRefresher] Background credentials validation failed. Continuing search...")
+                self.isValidating = false
+            }
+        }
+        
+        return true
     }
 }
 
