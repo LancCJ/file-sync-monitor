@@ -35,18 +35,38 @@ jobs:
         cp FileSyncMonitor.app/Contents/Resources/FileSyncMonitor_FileSyncMonitor.bundle/Contents/Resources/AppIcon.icns FileSyncMonitor.app/Contents/Resources/
 
     - name: Create DMG Installer
+      id: build_dmg
       run: |
         mkdir -p dmg_root
         cp -R FileSyncMonitor.app dmg_root/
         ln -s /Applications dmg_root/Applications
-        hdiutil create -volname "FileSyncMonitor" -srcfolder dmg_root -ov -format UDZO ${{ github.workspace }}/FileSyncMonitor-macOS.dmg
+        
+        VERSION_NAME="${{ github.ref_name }}"
+        DMG_NAME="FileSyncMonitor_${VERSION_NAME}_macOS_Universal.dmg"
+        
+        hdiutil create -volname "FileSyncMonitor" -srcfolder dmg_root -ov -format UDZO "${{ github.workspace }}/${DMG_NAME}"
+        echo "dmg_name=${DMG_NAME}" >> $GITHUB_OUTPUT
+
+    - name: Generate Release Notes Template
+      run: |
+        cat << 'EOF' > release_notes.md
+        ### 🇨🇳 中文说明
+        感谢您使用 FileSyncMonitor！此版本包含性能优化、问题修复和新功能。详情请参阅下方的自动更新日志。
+        
+        ### 🇬🇧 English Release Notes
+        Thank you for using FileSyncMonitor! This release contains performance optimizations, bug fixes, and new features. Please refer to the automatically generated changelog below for details.
+        
+        ---
+        EOF
 
     - name: Create GitHub Release and Upload DMG
       uses: softprops/action-gh-release@v2
       with:
-        files: ${{ github.workspace }}/FileSyncMonitor-macOS.dmg
+        files: ${{ github.workspace }}/${{ steps.build_dmg.outputs.dmg_name }}
         draft: false
         prerelease: false
         fail_on_unmatched_files: true
+        body_path: release_notes.md
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
