@@ -337,6 +337,12 @@ struct MainView: View {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SelectSidebarItem"))) { notification in
+                if let rawValue = notification.object as? String,
+                   let item = SidebarItem(rawValue: rawValue) {
+                    selectedSidebarItem = item
+                }
+            }
         }
     }
 

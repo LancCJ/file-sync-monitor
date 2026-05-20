@@ -14,11 +14,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #endif
         
+        // 监听窗口状态，有可见窗口时切换为 .regular，全关闭时切换为 .accessory
+        NotificationCenter.default.addObserver(self, selector: #selector(windowStateChanged), name: NSWindow.didBecomeKeyNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(windowStateChanged), name: NSWindow.willCloseNotification, object: nil)
+        
         cleanupInvalidLaunchAtLoginRegistrationIfNeeded()
         NSApp.setActivationPolicy(.accessory)
         NotificationManager.shared.requestAuthorization()
         MenuBarManager.shared.setupMenuBar()
         _ = FileMonitorService.shared // Trigger initialization and monitoring
+    }
+
+    @objc private func windowStateChanged(_ notification: Notification) {
+        DispatchQueue.main.async {
+            let hasVisibleWindows = NSApp.windows.contains { window in
+                return window.isVisible && window.className != "NSStatusBarWindow"
+            }
+            if hasVisibleWindows {
+                if NSApp.activationPolicy() != .regular {
+                    NSApp.setActivationPolicy(.regular)
+                    // 确保激活应用并显示在最前
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            } else {
+                if NSApp.activationPolicy() != .accessory {
+                    NSApp.setActivationPolicy(.accessory)
+                }
+            }
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
