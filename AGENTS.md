@@ -63,6 +63,7 @@ Menu bar macOS app that monitors directories via FSEvents, records file changes 
 - **DO NOT use `FileEvent` directly in JSONEncoder** — it's a `@Model` class, not `Codable`. Always map through `ExportableFileEvent` or equivalent
 - **DO NOT add SPM dependencies** — project convention is zero external deps, Apple frameworks only
 - **DO NOT change singleton pattern** — all services accessed via `.shared`, not dependency injection
+- **DO NOT automatically tag or release new versions** without explicit instructions from the user. Only commit and push to the `main` branch when requested, leaving release tagging for explicit user requests.
 
 ## COMMANDS
 ```bash
