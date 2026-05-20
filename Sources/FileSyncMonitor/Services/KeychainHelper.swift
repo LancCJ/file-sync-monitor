@@ -9,17 +9,25 @@ final class KeychainHelper {
     func save(_ value: String, service: String, account: String) {
         guard let data = value.data(using: .utf8) else { return }
 
-        let query: [String: Any] = [
+        // Deletion query should only match service and account attributes, not the data itself
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+
+        let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
+        print("[KeychainHelper] SecItemDelete status for \(account): \(deleteStatus)")
+
+        let addQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecValueData as String: data
         ]
 
-        // 先尝试删除旧值
-        SecItemDelete(query as CFDictionary)
-        // 插入新值
-        SecItemAdd(query as CFDictionary, nil)
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        print("[KeychainHelper] SecItemAdd status for \(account): \(addStatus)")
     }
 
     func read(service: String, account: String) -> String? {
