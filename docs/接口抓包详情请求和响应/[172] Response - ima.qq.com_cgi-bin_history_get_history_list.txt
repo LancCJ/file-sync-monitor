@@ -34,7 +34,7 @@ Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requeste
     {
       "ai_session": {
         "attachments": [],
-        "desc": "根据知识库中的记录，您的 MinMax API Key 是：**sk-cp-S5RCLBaHydQg0yNgbvPF1VOjid_Xnpkyclp234iX1cMEUwjNXzCge8d0Eyz9dzHmrnIH4BZTZM**（注意：为保护您的密钥安全，建议您在使用后妥善保管，避免泄露。）",
+        "desc": "根据知识库中的记录，您的 MinMax API Key 是：**[REDACTED_MINIMAX_KEY_1]**（注意：为保护您的密钥安全，建议您在使用后妥善保管，避免泄露。）",
         "icon": "https://img.ima.qq.com/wupload/xy/ima_tool/Bp55ApHI.png",
         "id": "6a065bc39b7ca22fb41288d49a12696155f5",
         "jump_url": "https://ima.qq.com/ai-search/?sessionId=6a065bc39b7ca22fb41288d49a12696155f5",
@@ -86,10 +86,10 @@ Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requeste
             "create_ts": "1778801604210",
             "format_answer": {
               "abstract_summary": "",
-              "answer": "{\"Text\":\"根据知识库中的记录，您的 MinMax API Key 是：\\n\\n**sk-cp-S5RCLBaHydQg0yNgbvPF1VOjid_Xnpkyclp234iX1cMEUwjNXzCge8d0Eyz9dzHmrnIH4BZTZM**\\n\\n（注意：为保护您的密钥安全，建议您在使用后妥善保管，避免泄露。）\"}",
+              "answer": "{\"Text\":\"根据知识库中的记录，您的 MinMax API Key 是：\\n\\n**[REDACTED_MINIMAX_KEY_1]**\\n\\n（注意：为保护您的密钥安全，建议您在使用后妥善保管，避免泄露。）\"}",
               "attach_block_list": [],
               "block_list": [
-                "{\"Type\":\"message\",\"Data\":\"{\\\"Text\\\":\\\"根据知识库中的记录，您的 MinMax API Key 是：\\\\n\\\\n**sk-cp-S5RCLBaHydQg0yNgbvPF1VOjid_Xnpkyclp234iX1cMEUwjNXzCge8d0Eyz9dzHmrnIH4BZTZM**\\\\n\\\\n（注意：为保护您的密钥安全，建议您在使用后妥善保管，避免泄露。）\\\"}\"}"
+                "{\"Type\":\"message\",\"Data\":\"{\\\"Text\\\":\\\"根据知识库中的记录，您的 MinMax API Key 是：\\\\n\\\\n**[REDACTED_MINIMAX_KEY_1]**\\\\n\\\\n（注意：为保护您的密钥安全，建议您在使用后妥善保管，避免泄露。）\\\"}\"}"
               ],
               "complete_info": {
                 "code": 0,

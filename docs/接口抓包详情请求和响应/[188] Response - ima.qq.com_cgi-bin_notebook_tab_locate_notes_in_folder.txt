@@ -175,7 +175,7 @@ Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requeste
             "modify_time": "1778976710155",
             "resource_size": "0",
             "status": 0,
-            "summary": "gitlab token\nglpat-0Pnq8d3LdtsDtxvKX6UNcm86MQp1OjIH.01.0w0wwe6cx\nGITHUB\n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\nAntigravity (repo workflow)\n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",
+            "summary": "gitlab token\n[REDACTED_GLPAT]\nGITHUB\n[REDACTED_GITHUB_PAT]\nAntigravity (repo workflow)\n[REDACTED_GITHUB_GHP]",
             "summary_style": {},
             "tags": [],
             "title": "git token"
@@ -249,7 +249,7 @@ Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requeste
             "modify_time": "1778850376224",
             "resource_size": "0",
             "status": 0,
-            "summary": "DeepSeek\nsk-ac465bd92a824eefa64b373ef8fde35f\nMinMax\nsk-cp-S5RCLBaHydQg0iK5WHizZUKtswWtj-6s-jTPgU7Ag7sCRhlFu3l_kclfa0yNgbvPF1VOjid_Xnpkyclp234iX1cMEUwjNXzCge8d0Eyz9dzHmrnIH4BZTZM\nopenapi\n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\nopenrouter\nsk-or-v1-4173dfcd21d567b7c78",
+            "summary": "DeepSeek\n[REDACTED_DEEPSEEK_KEY]\nMinMax\n[REDACTED_MINIMAX_KEY_2]\nopenapi\n[REDACTED_OPENAI_KEY]\nopenrouter\n[REDACTED_OPENROUTER_KEY]",
             "summary_style": {},
             "tags": [],
             "title": "Ai ApiKey"
