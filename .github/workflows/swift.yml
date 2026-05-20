@@ -65,7 +65,7 @@ jobs:
       if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       run: |
         python3 << 'PYEOF'
-        import subprocess, re
+        import subprocess, re, textwrap
 
         # Compute previous tag
         try:
@@ -109,23 +109,23 @@ jobs:
             cn_lines.append(line)
         cn = "\n".join(cn_lines)
 
-        content = f"""\
-### \U0001f1e8\U0001f1f3 \u4e2d\u6587\u66f4\u65b0\u65e5\u5fd7
+        content = textwrap.dedent(f"""\
+        ### \U0001f1e8\U0001f1f3 \u4e2d\u6587\u66f4\u65b0\u65e5\u5fd7
 
-\u611f\u8c22\u60a8\u4f7f\u7528 FileSyncMonitor\uff01\u6b64\u7248\u672c\u5305\u542b\u4ee5\u4e0b\u66f4\u65b0\uff1a
+        \u611f\u8c22\u60a8\u4f7f\u7528 FileSyncMonitor\uff01\u6b64\u7248\u672c\u5305\u542b\u4ee5\u4e0b\u66f4\u65b0\uff1a
 
-{cn}
+        {cn}
 
----
+        ---
 
-### \U0001f1ec\U0001f1e7 English Release Notes
+        ### \U0001f1ec\U0001f1e7 English Release Notes
 
-Thank you for using FileSyncMonitor! This release contains the following updates:
+        Thank you for using FileSyncMonitor! This release contains the following updates:
 
-{raw}
+        {raw}
 
----
-"""
+        ---
+        """)
         with open("release_notes.md", "w", encoding="utf-8") as f:
             f.write(content)
         print("release_notes.md generated successfully.")
