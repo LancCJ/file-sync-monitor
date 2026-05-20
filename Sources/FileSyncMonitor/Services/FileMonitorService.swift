@@ -222,8 +222,8 @@ final class FileMonitorService {
                                 existing.timestamp = event.timestamp
                             }
                         } else if oldType == "deleted" {
-                            if newType == "created" || newType == "renamed" {
-                                // 用户删除了文件后又重新添加了同名文件，在 UI 上应重新显示为新增
+                            if newType != "deleted" {
+                                // 用户删除了文件后又重新添加了同名文件，或者在此基础上进行了修改，在 UI 上均应显示为新增
                                 existing.type = "created"
                                 existing.timestamp = event.timestamp
                             } else {
@@ -269,6 +269,10 @@ final class FileMonitorService {
                         
                         if let lastSynced = try? context.fetch(syncedDescriptor).first {
                             event.remoteId = lastSynced.remoteId
+                            // 如果最近一次同步记录的状态是“已删除”，说明云端无此文件，任何非删除操作本质上都是“新增”
+                            if lastSynced.type == "deleted" && event.type != "deleted" {
+                                event.type = "created"
+                            }
                         } else {
                             // 核心兜底：如果这个文件在数据库中从未有过“已同步”记录，
                             // 那么无论底层抛出的是 modified 还是其他属性变更，对于云端而言它就是纯粹的“新增”
