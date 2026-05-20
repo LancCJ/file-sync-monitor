@@ -904,8 +904,8 @@ enum AppLanguage: String, CaseIterable {
         switch self {
         case .system: return "跟随系统".appLocalized
         case .en: return "English"
-        case .zhHans: return "简体中文".appLocalized
-        case .zhHant: return "繁体中文".appLocalized
+        case .zhHans: return "简体中文"
+        case .zhHant: return "繁体中文"
         }
     }
 }
