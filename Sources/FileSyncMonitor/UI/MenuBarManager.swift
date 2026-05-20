@@ -4,7 +4,7 @@ import SwiftData
 
 /// 负责菜单栏图标及其下拉菜单的管理
 @MainActor
-final class MenuBarManager: NSObject {
+final class MenuBarManager: NSObject, NSMenuDelegate {
     static let shared = MenuBarManager()
 
     private var statusItem: NSStatusItem?
@@ -17,6 +17,10 @@ final class MenuBarManager: NSObject {
             button.imagePosition = .imageLeft
             updateBadge(count: 0)
         }
+
+        let menu = NSMenu()
+        menu.delegate = self
+        statusItem?.menu = menu
 
         setupMenu()
     }
@@ -53,8 +57,13 @@ final class MenuBarManager: NSObject {
         setupMenu()
     }
 
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        setupMenu()
+    }
+
     private func setupMenu() {
-        let menu = NSMenu()
+        guard let menu = statusItem?.menu else { return }
+        menu.removeAllItems()
 
         // 1. 状态头部展示 (包含待同步计数)
         let headerItem = NSMenuItem()
@@ -107,8 +116,6 @@ final class MenuBarManager: NSObject {
         quitItem.target = self
         quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         menu.addItem(quitItem)
-
-        self.statusItem?.menu = menu
     }
 
     @objc private func openMainWindow() {
