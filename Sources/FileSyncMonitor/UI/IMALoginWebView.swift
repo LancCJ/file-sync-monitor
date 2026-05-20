@@ -285,7 +285,7 @@ struct IMALoginWebView: NSViewRepresentable {
             guard !token.isEmpty && !uid.isEmpty else { return }
             guard !isValidating else { return }
             
-            let finalGuid = guid.isEmpty ? "7460830660542107" : guid
+            let finalGuid = guid.isEmpty ? IMACredentialsManager.fallbackGuid() : guid
             let finalRefreshToken = refreshToken.isEmpty ? token : refreshToken
 
             isValidating = true
