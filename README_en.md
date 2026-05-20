@@ -174,3 +174,7 @@ FileSyncMonitor is fully open-source and free to use. If it has saved you time a
    - The "Donation & Support" channel is completely **voluntary and gratuitous**. Donations are voluntary gifts to support the author's open-source maintenance.
    - **Donations do not establish any purchase, employment, agency, or service contract**. Donating does not waive the user's own legal risks or represent that the author will bear any joint liability for legal disputes, intellectual property issues, or data issues caused by the software APIs.
 5. **No Warranty**: The software is provided "AS IS", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and non-infringement.
+
+## 📄 License
+
+This project is licensed under the [GPL-3.0 License](LICENSE). See the `LICENSE` file for details.
