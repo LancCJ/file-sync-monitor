@@ -2,8 +2,32 @@ import SwiftUI
 import AppKit
 
 enum AppResourceLoader {
+    /// 检测当前是否作为打包后的 macOS App Bundle (.app) 运行
+    private static var isPackagedApp: Bool {
+        return Bundle.main.bundlePath.contains(".app")
+    }
+
     static func url(forResource name: String, withExtension ext: String) -> URL? {
-        for directory in candidateDirectories {
+        // 1. 如果在打包后的 .app 内运行，资源已被平铺到 Contents/Resources，直接使用 main bundle
+        // 绝不调用 Bundle.module 从而彻底杜绝其硬编码构建路径失效导致的 fatalError 崩溃。
+        if isPackagedApp {
+            for directory in fallbackDirectories {
+                let directURL = directory.appendingPathComponent("\(name).\(ext)")
+                if FileManager.default.fileExists(atPath: directURL.path) {
+                    return directURL
+                }
+            }
+            return nil
+        }
+
+        // 2. 如果在开发环境（Xcode 直接调试运行，或命令行 swift run）下运行
+        // 此时原生 Bundle.module 绝对可用且稳定，优先使用它以完美契合沙盒调试需求
+        if let url = Bundle.module.url(forResource: name, withExtension: ext) {
+            return url
+        }
+
+        // 3. 开发环境下的兜底搜索（寻找与可执行文件同级的子 bundle 或直存文件）
+        for directory in fallbackDirectories {
             let directURL = directory.appendingPathComponent("\(name).\(ext)")
             if FileManager.default.fileExists(atPath: directURL.path) {
                 return directURL
@@ -19,15 +43,18 @@ enum AppResourceLoader {
         return nil
     }
 
-    private static var candidateDirectories: [URL] {
+    /// 供 AppLocalization 的 .lproj 搜索使用
+    static var moduleBundleForLocalization: Bundle? {
+        return isPackagedApp ? nil : Bundle.module
+    }
+
+    private static var fallbackDirectories: [URL] {
         var urls: [URL] = []
 
         if let resourceURL = Bundle.main.resourceURL {
             urls.append(resourceURL)
         }
-
         urls.append(Bundle.main.bundleURL)
-        urls.append(Bundle.main.bundleURL.deletingLastPathComponent())
 
         if let executableURL = Bundle.main.executableURL {
             urls.append(executableURL.deletingLastPathComponent())
@@ -296,7 +323,7 @@ private final class AppLocalization {
         default: lprojName = "Base"
         }
 
-        let bundlesToSearch = [Bundle.main]
+        let bundlesToSearch = [AppResourceLoader.moduleBundleForLocalization, Bundle.main].compactMap { $0 }
         for searchBundle in bundlesToSearch {
             if let bundlePath = searchBundle.path(forResource: lprojName, ofType: "lproj"),
                let bundle = Bundle(path: bundlePath) {

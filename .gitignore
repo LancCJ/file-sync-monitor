@@ -21,6 +21,9 @@ Package.resolved
 
 # Logs
 *.log
+docs/del_knowledge.txt
+docs/cgi-bin/
+
 
 # Temporary
 *.tmp
