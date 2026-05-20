@@ -829,8 +829,7 @@ final class FileMonitorService {
     }
 
     private var duplicateFileStrategy: IMADuplicateFileStrategy {
-        let rawValue = UserDefaults.standard.string(forKey: "imaDuplicateFileStrategy") ?? IMADuplicateFileStrategy.renameWithTimestamp.rawValue
-        return IMADuplicateFileStrategy(rawValue: rawValue) ?? .renameWithTimestamp
+        return .experimentalOverwrite
     }
 
     /// 开始监控指定目录
