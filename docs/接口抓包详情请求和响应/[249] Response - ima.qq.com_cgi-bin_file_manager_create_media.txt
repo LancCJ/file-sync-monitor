@@ -1,0 +1,40 @@
+HTTP/1.1 200 OK
+Date: Mon, 18 May 2026 08:23:07 GMT
+Content-Type: application/json
+Content-Length: 2025
+Connection: keep-alive
+Server: tRPC-Gateway
+X-Content-Type-Options: nosniff
+X-Upstream-Latency: 86
+X-Proxy-Latency: 0
+Access-Control-Allow-Origin: chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "code": 0,
+  "cos_credential": {
+    "appid": "1258344701",
+    "bucket_name": "ima-share-kb-1258344701",
+    "cos_key": "5/Y7EYKW8C4VpykeUaeq1bwH/file_manager/019e3a2e834874a6898e7e61d5c7127a.md",
+    "custom_domain": "ima-share-kb.image.myqcloud.com",
+    "expired_time": "1779135787",
+    "region": "ap-shanghai",
+    "secret_id": "AKIDm2wPo6rr8Rcgphp7UwpR5WDlQtEkEiwO5Qe2cndaszVzgiA9uCVBUB3r3sAGOdWI",
+    "secret_key": "ZEPHvHjUnFvr/tnfzm+T9C8b1yTvS3KxAWAe8qo7iPU=",
+    "start_time": "1779092587",
+    "token": "j9c0UE112JRU3S4lryzs8i2oeJ2U7H5a5b7ce31ec6224d029c4272b82871e8c6clIt4vszkuyNLKCFZ560c9Xe4ek3pZjmRs839fqtfuF2m5aCe6Xrz7_CBghkgULNr0cu9hJ2ePvg7S_YQl7K820ahbHxyDUx4sQSRFgkQVs74tXiwZL2-YWYMPTRLApC-qyEVgbFygcUw40yK5VrNvFmvsw2slC4-CPDjIvzbC3bAQ4uQ38UHuQV5NeoSLyIWPnWg1vqtgDQVCg72ihZHI_pvLVY4raxPrCJPF2MOey3oVFNL4H__LrKH5MQ7p5ohR2XF_iKyNuehn7COczSmCCZ8rqVFNuoTWDkWQQG74CaFVGAop2POcM4Ce8sJsld5d5TPH8vVOgvGjq-qFNey_FtJ8OJS53EMh0byyFtRD58TOVSzJl5WPXK3gzvleQFcr_jsOZRY8Y4dvNjVdLL16Sl8h-MYqdrTF9DQgiS0Cx0MHVBZu-9Xb9fwFkCkLKN3o55x2SbR4q4MvN093qPH1YUCz0zi8GPYP7zB2qr6uX-UljVRFuRNnpC6qK7bi8sUFnSl78leiDuvo2Wj0U5ClDh5DY5VRgBiic3j8FyR0xqOMSWGlGryj5e7r7JJ-8CTDxljaDNOJ71N8UwMa7YtH7fuySlrHK6fYyImDJGE7w4xFPEEs_D_Kn7WUOSawKbGt1-Kq3U00Fd1i0FEmnSeilXtRe2B-MxT0dw_-LfV6_5i-6cZIvhqS6b7E9-wkoTdAXq2eWbd61P02On0rqdJSROBKxP3Ko9tL88bfnYaS86RAsylg_Cd2bkfi7Z932dv3GqPbgqCweakSLcT00Q4An6lUWkrEc8wj3iF0Un_sQ"
+  },
+  "media_id": "markdown_d7e923a0f9f269d379916372bd31684e_dc6ae7b10e98e01fe8f04a0d2e5e39337461896470929763",
+  "msg": "ok",
+  "url": "https://ima-share-kb.image.myqcloud.com/5/Y7EYKW8C4VpykeUaeq1bwH/file_manager/019e3a2e834874a6898e7e61d5c7127a.md?sign=d2c0d82fe02b195fedc0406db00b0704&t=1779092587&response-content-type=text%2Fmarkdown%3B+charset%3Dutf-8",
+  "url_info": {
+    "access_status": 0,
+    "has_deleted": false,
+    "headers": {},
+    "type": 1,
+    "url": "https://ima-share-kb.image.myqcloud.com/5/Y7EYKW8C4VpykeUaeq1bwH/file_manager/019e3a2e834874a6898e7e61d5c7127a.md?sign=d2c0d82fe02b195fedc0406db00b0704&t=1779092587&response-content-type=text%2Fmarkdown%3B+charset%3Dutf-8",
+    "url_expired_ts": "43200"
+  }
+}

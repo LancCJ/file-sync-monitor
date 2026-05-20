@@ -6,6 +6,8 @@ import AppKit
 struct MainView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FileEvent.timestamp, order: .reverse) private var events: [FileEvent]
+    
+    @State private var credsManager = IMACredentialsManager.shared
 
     // 观测语言变化，确保切换语言时 body 重新执行，所有 LocalizedText / .appLocalized 使用新语言
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
@@ -20,6 +22,9 @@ struct MainView: View {
     @State private var isShowingBatchDeleteConfirmation = false
     @State private var isShowingOnboarding = false
     @State private var onboardingStep = 0
+    @State private var showingPullConfirmDialog = false
+    @State private var pullConfirmUrls: [URL] = []
+    @State private var pullConfirmContinuation: CheckedContinuation<Bool, Never>?
 
     enum SidebarItem: String, CaseIterable, Identifiable {
         case home, pendingSync, allEvents, reports, settings, help
@@ -164,6 +169,7 @@ struct MainView: View {
                                 typeFilter: $typeFilter,
                                 markAllPendingSynced: markAllPendingSynced,
                                 syncAllToIMA: syncAllToIMA,
+                                pullFromRemote: pullFromRemote,
                                 deleteAllFilteredEvents: deleteAllFilteredEvents,
                                 upload: upload,
                                 markSynced: markSynced,
@@ -220,6 +226,58 @@ struct MainView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
 
+                if showingPullConfirmDialog {
+                    SyncConfirmOverlay(
+                        urls: pullConfirmUrls,
+                        onConfirm: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                pullConfirmContinuation?.resume(returning: true)
+                                pullConfirmContinuation = nil
+                                showingPullConfirmDialog = false
+                            }
+                        },
+                        onCancel: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                pullConfirmContinuation?.resume(returning: false)
+                                pullConfirmContinuation = nil
+                                showingPullConfirmDialog = false
+                            }
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                }
+
+                if !credsManager.isLoggedIn {
+                    ZStack {
+                        Color.black.opacity(0.12)
+                        
+                        Circle()
+                            .fill(Color.appMint.opacity(0.15))
+                            .frame(width: 400, height: 400)
+                            .blur(radius: 80)
+                            .offset(x: -120, y: -80)
+                        
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.15))
+                            .frame(width: 450, height: 450)
+                            .blur(radius: 90)
+                            .offset(x: 150, y: 100)
+                        
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .opacity(0.55)
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    
+                    IMALoginView(onLoginSuccess: {
+                        print("[MainView] WeChat login success, unlocking interface.")
+                    })
+                    .transition(.scale.combined(with: .opacity))
+                }
+                
+                // 全局高端同步进度遮罩卡片
+                SyncProgressOverlay()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(IMAWindowBackground())
@@ -248,6 +306,16 @@ struct MainView: View {
                 typeFilter = .all
             }
             .onAppear {
+                if credsManager.isLoggedIn && credsManager.avatarUrl.isEmpty {
+                    Task {
+                        if let profile = try? await IMASyncService.shared.getUserProfile() {
+                            await MainActor.run {
+                                credsManager.avatarUrl = profile.avatarUrl
+                                credsManager.nickname = profile.nickname
+                            }
+                        }
+                    }
+                }
                 if !hasCompletedOnboarding {
                     selectedSidebarItem = .home
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
@@ -366,6 +434,7 @@ struct IMARailView: View {
     let layout: MainLayoutMetrics
     let requestQuit: () -> Void
     @Environment(\.colorScheme) var scheme
+    @State private var credsManager = IMACredentialsManager.shared
 
     var body: some View {
         VStack(spacing: 18) {
@@ -402,6 +471,15 @@ struct IMARailView: View {
 
                 VStack(spacing: 18) {
                     IMARailLanguageButton()
+                    
+                    if credsManager.isLoggedIn {
+                        IMARailAvatarButton {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                credsManager.clear(clearWebView: true)
+                            }
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    }
 
                     Button(action: requestQuit) {
                         IMARailExitButton()
@@ -454,6 +532,67 @@ struct IMARailExitButton: View {
             )
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
+    }
+}
+
+struct IMARailAvatarButton: View {
+    @State private var isHovered = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .bottomTrailing) {
+                let avatarUrl = IMACredentialsManager.shared.avatarUrl
+                
+                Group {
+                    if !avatarUrl.isEmpty, let url = URL(string: avatarUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .clipShape(Circle())
+                        } placeholder: {
+                            Circle()
+                                .fill(Color.appMint.opacity(0.2))
+                                .overlay(
+                                    ProgressView()
+                                        .scaleEffect(0.5)
+                                )
+                        }
+                    } else {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.appMint, Color.appMint.opacity(0.85)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.white)
+                            )
+                    }
+                }
+                .frame(width: 28, height: 28)
+                .shadow(color: Color.appMint.opacity(isHovered ? 0.35 : 0.15), radius: isHovered ? 5 : 2.5, y: 1)
+                
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white, lineWidth: 1.5)
+                    )
+                    .offset(x: 1, y: 1)
+            }
+            .scaleEffect(isHovered ? 1.06 : 1.0)
+            .animation(.snappy(duration: 0.15), value: isHovered)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(IMACredentialsManager.shared.nickname.isEmpty ? "微信已登录 - 点击注销".appLocalized : "\(IMACredentialsManager.shared.nickname) - 点击注销".appLocalized)
     }
 }
 
@@ -1220,6 +1359,7 @@ struct IMASecondarySidebar: View {
     @Binding var typeFilter: MainView.EventTypeFilter
     let markAllPendingSynced: () -> Void
     let syncAllToIMA: () -> Void
+    let pullFromRemote: () -> Void
     let deleteAllFilteredEvents: () -> Void
     let upload: (FileEvent) -> Void
     let markSynced: (FileEvent) -> Void
@@ -1317,22 +1457,7 @@ struct IMASecondarySidebar: View {
                         .buttonStyle(PillButtonStyle(isPrimary: true))
                         .disabled(pendingCount == 0 || isSyncing)
 
-                        Button(action: {
-                            Task {
-                                await FileMonitorService.shared.pullFromRemote(confirmDownloadForDeleted: { urls in
-                                    let alert = NSAlert()
-                                    alert.messageText = "检测到本地已删除的云端文件".appLocalized
-                                    let fileListString = urls.map { $0.lastPathComponent }.joined(separator: "\n")
-                                    alert.informativeText = String(format: "以下文件已被本地删除，但云端仍然存在：\n\n%@\n\n是否重新下载拉回到本地目录？".appLocalized, fileListString)
-                                    alert.alertStyle = .informational
-                                    alert.addButton(withTitle: "重新拉回本地".appLocalized)
-                                    alert.addButton(withTitle: "保持本地删除状态".appLocalized)
-                                    
-                                    let response = alert.runModal()
-                                    return response == .alertFirstButtonReturn
-                                })
-                            }
-                        }) {
+                        Button(action: pullFromRemote) {
                             HStack {
                                 if FileMonitorService.shared.isPulling {
                                     ProgressView().controlSize(.small)
@@ -1449,15 +1574,14 @@ struct IMAEventListRow: View {
                         Spacer()
                         if !event.isSynced {
                             HStack(spacing: 4) {
-                                if event.remoteId != nil {
-                                    LocalizedText("更新")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 1)
-                                        .background(Color.appMint.opacity(0.15))
-                                        .foregroundStyle(Color.appMint)
-                                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                                }
+                                Text(EventVisuals.title(for: event.type))
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(EventVisuals.color(for: event.type).opacity(0.15))
+                                    .foregroundStyle(EventVisuals.color(for: event.type))
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                                
                                 Circle()
                                     .fill(Color.appAmber)
                                     .frame(width: 6, height: 6)
@@ -1660,32 +1784,15 @@ extension MainView {
     private func upload(_ event: FileEvent) {
         isSyncing = true
         Task {
+            FileMonitorService.shared.startSyncProgress(title: "正在同步到云端...".appLocalized)
             defer { isSyncing = false }
-            
-            // 如果是删除类型的事件，无需上传文件（防止因找不到本地文件而闪退/报错）
-            if event.type == "deleted" {
-                await MainActor.run {
-                    event.isSynced = true
-                    try? modelContext.save()
-                    MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
-                }
-                
-                let alert = NSAlert()
-                alert.messageText = "已同步本地删除状态".appLocalized
-                alert.informativeText = "该文件已在本地标记为“已同步”。\n由于腾讯 IMA 官方目前未开放删除云端文档的 API，如需完全移出云端文档，请前往 IMA 客户端或网页版手动删除该文档，以保持云端一致。".appLocalized
-                alert.alertStyle = .informational
-                alert.addButton(withTitle: "我知道了".appLocalized)
-                alert.runModal()
-                return
-            }
             
             do {
                 try await FileMonitorService.shared.syncEventToIMA(event, in: modelContext)
+                FileMonitorService.shared.finishSyncProgressSuccess(status: event.type == "deleted" ? "已自动从云端移除".appLocalized : "同步完成".appLocalized)
             } catch {
                 print("IMA Sync failed: \(error)")
-                await MainActor.run {
-                    showSyncFailureAlert(message: error.localizedDescription)
-                }
+                FileMonitorService.shared.finishSyncProgressError(message: error.localizedDescription)
             }
         }
     }
@@ -1697,21 +1804,11 @@ extension MainView {
         
         isSyncing = true
         Task {
+            FileMonitorService.shared.startSyncProgress(title: "正在同步到云端...".appLocalized)
             defer { isSyncing = false }
-            var hasDeletedEvent = false
             var failedMessages: [String] = []
             
             for event in targets {
-                if event.type == "deleted" {
-                    hasDeletedEvent = true
-                    await MainActor.run {
-                        event.isSynced = true
-                        try? modelContext.save()
-                        MenuBarManager.shared.updateBadge(count: currentUnsyncedCount())
-                    }
-                    continue
-                }
-                
                 do {
                     try await FileMonitorService.shared.syncEventToIMA(event, in: modelContext)
                 } catch {
@@ -1720,21 +1817,10 @@ extension MainView {
                 }
             }
             
-            if hasDeletedEvent {
-                await MainActor.run {
-                    let alert = NSAlert()
-                    alert.messageText = "已同步全部变动（包含删除事件）".appLocalized
-                    alert.informativeText = "部分本地删除的文件已在 App 内标记为“已同步”。\n由于腾讯 IMA 官方目前未开放删除云端文档的 API，如需完全移出云端文档，请前往 IMA 客户端或网页版手动删除对应文档。".appLocalized
-                    alert.alertStyle = .informational
-                    alert.addButton(withTitle: "我知道了".appLocalized)
-                    alert.runModal()
-                }
-            }
-
             if !failedMessages.isEmpty {
-                await MainActor.run {
-                    showSyncFailureAlert(message: failedMessages.prefix(5).joined(separator: "\n\n"))
-                }
+                FileMonitorService.shared.finishSyncProgressError(message: failedMessages.joined(separator: "\n\n"))
+            } else {
+                FileMonitorService.shared.finishSyncProgressSuccess(status: "全部同步完成".appLocalized)
             }
         }
     }
@@ -1787,6 +1873,24 @@ extension MainView {
     private func currentUnsyncedCount() -> Int {
         let descriptor = FetchDescriptor<FileEvent>(predicate: #Predicate<FileEvent> { $0.isSynced == false })
         return (try? modelContext.fetchCount(descriptor)) ?? 0
+    }
+
+    private func pullFromRemote() {
+        Task {
+            FileMonitorService.shared.startSyncProgress(title: "正在从云端拉取更新...".appLocalized)
+            await FileMonitorService.shared.pullFromRemote(confirmDownloadForDeleted: { urls in
+                await MainActor.run {
+                    self.pullConfirmUrls = urls
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        self.showingPullConfirmDialog = true
+                    }
+                }
+                return await withCheckedContinuation { continuation in
+                    self.pullConfirmContinuation = continuation
+                }
+            })
+            FileMonitorService.shared.finishSyncProgressSuccess(status: "已完成从云端同步".appLocalized)
+        }
     }
 
     private func deleteAllFilteredEvents() {
@@ -2362,15 +2466,13 @@ struct TreeFileEventRow: View {
 
                 // 同步状态指示
                 if !event.isSynced {
-                    if event.remoteId != nil {
-                        LocalizedText("更新")
-                            .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.appMint.opacity(0.15))
-                            .foregroundStyle(Color.appMint)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                    }
+                    Text(EventVisuals.title(for: event.type))
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(EventVisuals.color(for: event.type).opacity(0.15))
+                        .foregroundStyle(EventVisuals.color(for: event.type))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
                     Circle()
                         .fill(Color.appAmber)
                         .frame(width: 6, height: 6)
@@ -2480,3 +2582,95 @@ struct IMAConfigReminderBanner: View {
         .padding(.bottom, 24)
     }
 }
+
+struct SyncConfirmOverlay: View {
+    let urls: [URL]
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.appInk.opacity(0.16)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onCancel)
+
+            VStack(spacing: 18) {
+                Image(systemName: "arrow.clockwise.icloud.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 54, height: 54)
+                    .background(Color.accentColor.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(spacing: 8) {
+                    LocalizedText("检测到本地已删除的云端文件")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color.appInk)
+
+                    LocalizedText("以下文件已被本地删除，但云端仍然存在：")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.appInk)
+                        .multilineTextAlignment(.center)
+                    
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(urls, id: \.self) { url in
+                                HStack(spacing: 6) {
+                                    Image(systemName: "doc.text")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Color.appMuted)
+                                    Text(url.lastPathComponent)
+                                        .font(.system(size: 12, design: .monospaced))
+                                        .foregroundStyle(Color.appMuted)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.appLine.opacity(0.3))
+                                .cornerRadius(6)
+                            }
+                        }
+                        .padding(4)
+                    }
+                    .frame(maxHeight: 120)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.appLine.opacity(0.5), lineWidth: 1)
+                    )
+
+                    LocalizedText("是否重新下载拉回到本地目录？")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.appMuted)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 4)
+                }
+
+                HStack(spacing: 10) {
+                    Button(action: onCancel) {
+                        LocalizedText("保持本地删除")
+                    }
+                    .buttonStyle(QuietButtonStyle())
+
+                    Button(action: onConfirm) {
+                        LocalizedText("重新拉回本地")
+                    }
+                    .buttonStyle(PillButtonStyle(isPrimary: true))
+                }
+            }
+            .padding(24)
+            .frame(width: 380)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.appSurface.opacity(0.98))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.appLine.opacity(0.78), lineWidth: 1)
+                    )
+            )
+            .shadow(color: Color.appInk.opacity(0.16), radius: 24, x: 0, y: 16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+

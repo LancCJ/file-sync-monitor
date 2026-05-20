@@ -1,0 +1,65 @@
+HTTP/1.1 200 OK
+Date: Mon, 18 May 2026 08:22:53 GMT
+Content-Type: application/json
+Content-Length: 783
+Connection: keep-alive
+Server: tRPC-Gateway
+X-Content-Type-Options: nosniff
+X-Upstream-Latency: 6
+X-Proxy-Latency: 1
+Access-Control-Allow-Origin: chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "code": 0,
+  "is_default_enhancement": true,
+  "models": [
+    {
+      "describe": "通用逻辑推理",
+      "enable_enhancement": true,
+      "is_default": true,
+      "is_new": true,
+      "model_id": "official_3",
+      "model_name": "DeepSeek V4-Flash",
+      "model_type": 3,
+      "short_model_name": "DS",
+      "sub_model_types": {
+        "0": 3,
+        "1": 1
+      }
+    },
+    {
+      "describe": "复杂任务分析",
+      "enable_enhancement": true,
+      "is_default": false,
+      "is_new": false,
+      "model_id": "official_3000",
+      "model_name": "智谱 GLM-5.1",
+      "model_type": 3000,
+      "short_model_name": "GLM",
+      "sub_model_types": {
+        "0": 3000,
+        "1": 3001
+      }
+    },
+    {
+      "describe": "适合长文分析",
+      "enable_enhancement": true,
+      "is_default": false,
+      "is_new": false,
+      "model_id": "official_0",
+      "model_name": "Tencent Hy3 preview",
+      "model_type": 0,
+      "short_model_name": "HY",
+      "sub_model_types": {
+        "0": 0,
+        "1": 2
+      }
+    }
+  ],
+  "msg": "ok",
+  "red_dot_version": "2",
+  "version": "1777391265"
+}

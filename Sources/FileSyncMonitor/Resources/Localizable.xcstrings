@@ -6814,6 +6814,118 @@
           }
         }
       }
+    },
+    "同名文件策略": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate File Strategy"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同名文件策略"
+          }
+        }
+      }
+    },
+    "自动改名上传": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename and Upload"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動改名上傳"
+          }
+        }
+      }
+    },
+    "实验性覆盖上传": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Experimental Overwrite"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "實驗性覆蓋上傳"
+          }
+        }
+      }
+    },
+    "同名时先用 IMA Web 私有接口删除旧文件，再上传新文件；接口可能失效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When names conflict, delete the old file using the private IMA Web API before uploading. This API may stop working."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同名時先用 IMA Web 私有接口刪除舊文件，再上傳新文件；接口可能失效。"
+          }
+        }
+      }
+    },
+    "同名时在文件名后追加年月日时分秒，避免覆盖旧文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When names conflict, append yyyyMMddHHmmss to the file name to keep the old file."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同名時在文件名後追加年月日時分秒，避免覆蓋舊文件。"
+          }
+        }
+      }
+    },
+    "实验性覆盖使用，仅保存在本机，请粘贴 x-ima-cookie 请求头内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used only for experimental overwrite and stored locally. Paste the x-ima-cookie request header value."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅用於實驗性覆蓋並保存在本機，請貼上 x-ima-cookie 請求頭內容。"
+          }
+        }
+      }
+    },
+    "实验性覆盖使用，请粘贴删除接口请求头里的 x-ima-bkn": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used only for experimental overwrite. Paste the x-ima-bkn header from the delete request."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅用於實驗性覆蓋，請貼上刪除接口請求頭裡的 x-ima-bkn。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

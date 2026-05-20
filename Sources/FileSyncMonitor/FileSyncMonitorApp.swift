@@ -5,6 +5,15 @@ import ServiceManagement
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if CommandLine.arguments.contains("--run-tests") {
+            Task {
+                await BidirectionalSyncTests.run()
+            }
+            return
+        }
+        #endif
+        
         cleanupInvalidLaunchAtLoginRegistrationIfNeeded()
         NSApp.setActivationPolicy(.accessory)
         NotificationManager.shared.requestAuthorization()

@@ -1,0 +1,20 @@
+HTTP/1.1 200 OK
+Date: Wed, 20 May 2026 01:16:38 GMT
+Content-Type: application/json
+Content-Length: 78
+Connection: keep-alive
+Trpc-Trans-Info: {"affinity_attribute":"dHJwYy5odHRwLnVwc2VydmVyLnVwc2VydmljZeKUglBDRy0xMjMuaW1hLm5vdGVfYm9va19sb2dpY+KUgjI=","aitools_context":"ChA3NDYwODMwNjYwNTQyMTA3EgUyLjUuMRoDTUFDKiRlNzQ5MjY3YjQ4YjM2MjJiNTkyZjlkMmQyMDAwMThjMTkzMTEyuAFQUj1JTUEmUFA9Y29tLnRlbmNlbnQuaW1hbWFjJlBQVk49Mi41LjEmUEw9TUFDJkNPVkM9MTQzLjAuNzQ5OS40NDU2JlJMPTMwMjQqMTk2NCZNTz1NYWMgT1MgWCZPUz0xNS43LjcmU1lTQVJDSD1Bcm0mRE49JkJDPXJlbGVhc2UmQk49NDI2MiZCVD0xNzc4MzE4NjU1NDQ1JkNIPTljYWFjNDE4ODcmREM9MTAwMDAwNzQmRVY9OgY0LjM4LjdCA0lNQViU0A+gBgKqBhAwMDFhNjM2MDU1MDA0NTUx2AYO4gawAUN1c3JWTFlnNWo4V2d4VGo2NlFYN21tWThsN2hSMFQybUdtSFpzdVM2ODN5Kzh1VjZUUTFYa1lGeFBnRDUrNC9qWEhuY0FvN1VPdzdxWGwxTlpYTlhwNXQ0b0NRN0ZSYmc2RVRsVGJBREJXQ1BpeWRTMjMvbmhuSWkwdlZQU3lTUFlpSXRaM1FER0F4MUtGWk1VWThEZ25HejFEUm9iZU55bFErOHVxcW5BRVlGdz09wgwNMTgwLjk4LjI2LjIyNA=="}
+X-Content-Type-Options: nosniff
+Access-Control-Allow-Origin: chrome-extension://cninonkgpcmdognjppglnkelbkhlhhee
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "code": 0,
+  "doc_ver": {
+    "doc_ver": "1779171645810"
+  },
+  "loop_time": "2000",
+  "msg": "ok"
+}

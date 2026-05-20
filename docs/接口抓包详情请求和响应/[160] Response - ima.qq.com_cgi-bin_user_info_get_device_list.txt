@@ -1,0 +1,39 @@
+HTTP/1.1 200 OK
+Date: Mon, 18 May 2026 08:22:50 GMT
+Content-Type: application/json
+Content-Length: 562
+Connection: keep-alive
+Server: tRPC-Gateway
+X-Content-Type-Options: nosniff
+X-Upstream-Latency: 7
+X-Proxy-Latency: 6
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "code": 0,
+  "device_list": [
+    {
+      "create_ts": "0",
+      "device_name": "Mac OS X",
+      "device_type": "MAC 15.7.7",
+      "is_logout": false,
+      "platform": 0,
+      "qimei36": "e749267b48b3622b592f9d2d200018c19311",
+      "session_id": "dcc3128690314722217bfacbc1e87e668e8b2f0cb233fe982ea7229a0dd6d89d",
+      "update_ts": "1779092569970"
+    },
+    {
+      "create_ts": "0",
+      "device_name": "iPhone 13 Pro Max",
+      "device_type": "IOS 26.2.1",
+      "is_logout": false,
+      "platform": 2,
+      "qimei36": "02475be75b0c111bb8fb30bc000012f16412",
+      "session_id": "38a7b0e8eda7179cebf7040ab96e8f8437aa222c455abb5f27edf89e3eeca8bf",
+      "update_ts": "1770881676469"
+    }
+  ],
+  "msg": "ok"
+}
