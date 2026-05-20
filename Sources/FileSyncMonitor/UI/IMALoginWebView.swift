@@ -50,12 +50,31 @@ struct IMALoginWebView: NSViewRepresentable {
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         
         // 清理缓存以展示全新的扫码界面，避免失效的旧凭证导致自动跳转与无限循环
+        // 仅清理 Cookie 和 Local/Session 存储，防止清理沙盒数据库或磁盘缓存时因文件锁/沙盒权限挂起
         let store = WKWebsiteDataStore.default()
-        store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: Date.distantPast) {
+        let types = Set([
+            WKWebsiteDataTypeCookies,
+            WKWebsiteDataTypeLocalStorage,
+            WKWebsiteDataTypeSessionStorage
+        ])
+        
+        var hasLoaded = false
+        let loadRequest = {
+            guard !hasLoaded else { return }
+            hasLoaded = true
             DispatchQueue.main.async {
                 let request = URLRequest(url: URL(string: "https://ima.qq.com/login/")!)
                 webView.load(request)
             }
+        }
+        
+        // 设置 1.0 秒超时防挂起兜底，保证即使 WebKit 清理超时也必定加载网页
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            loadRequest()
+        }
+        
+        store.removeData(ofTypes: types, modifiedSince: Date.distantPast) {
+            loadRequest()
         }
         
         return webView
@@ -83,6 +102,7 @@ struct IMALoginWebView: NSViewRepresentable {
         var parent: IMALoginWebView
         weak var webView: WKWebView?
         private var timer: Timer?
+        private var isValidating = false
 
         init(_ parent: IMALoginWebView) {
             self.parent = parent
@@ -118,6 +138,7 @@ struct IMALoginWebView: NSViewRepresentable {
 
         private func checkCredentials() {
             guard let webView = webView else { return }
+            guard !isValidating else { return }
             
             // Skip credentials scanning if the user is still on the login/sign-in page to prevent capturing guest or partial temporary cookies.
             if let url = webView.url {
@@ -169,14 +190,15 @@ struct IMALoginWebView: NSViewRepresentable {
 
             for cookie in cookies {
                 let name = cookie.name.uppercased()
+                let value = cookie.value.removingPercentEncoding ?? cookie.value
                 if name == "IMA-TOKEN" || name == "TOKEN" {
-                    token = cookie.value
+                    token = value
                 } else if name == "IMA-REFRESH-TOKEN" || name == "REFRESH-TOKEN" {
-                    refreshToken = cookie.value
+                    refreshToken = value
                 } else if name == "IMA-UID" || name == "UID" || name == "USER_ID" {
-                    uid = cookie.value
+                    uid = value
                 } else if name == "IMA-GUID" || name == "GUID" {
-                    guid = cookie.value
+                    guid = value
                 }
             }
 
@@ -194,7 +216,7 @@ struct IMALoginWebView: NSViewRepresentable {
                 let parts = pair.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
                 if parts.count == 2 {
                     let name = parts[0].uppercased()
-                    let value = parts[1]
+                    let value = String(parts[1]).removingPercentEncoding ?? String(parts[1])
                     
                     if name == "IMA-TOKEN" || name == "TOKEN" {
                         token = value
@@ -245,14 +267,15 @@ struct IMALoginWebView: NSViewRepresentable {
                     for (k, v) in dictVal {
                         let upperK = k.uppercased()
                         if let s = v as? String, !s.isEmpty {
+                            let value = s.removingPercentEncoding ?? s
                             if upperK == "TOKEN" || (upperK.contains("TOKEN") && upperK.contains("IMA") && !upperK.contains("REFRESH")) {
-                                token = s
+                                token = value
                             } else if upperK == "REFRESH_TOKEN" || upperK == "REFRESH-TOKEN" || (upperK.contains("REFRESH") && upperK.contains("TOKEN")) {
-                                refreshToken = s
+                                refreshToken = value
                             } else if upperK == "USER_ID" || upperK == "UID" || upperK == "USERID" || (upperK.contains("UID") && upperK.contains("IMA")) {
-                                uid = s
+                                uid = value
                             } else if upperK == "GUID" || (upperK.contains("GUID") && upperK.contains("IMA")) {
-                                guid = s
+                                guid = value
                             }
                         }
                         // 递归扫描其值（可能包含嵌套字典或嵌套序列化字符串）
@@ -268,41 +291,54 @@ struct IMALoginWebView: NSViewRepresentable {
 
         private func saveIfValid(token: String, refreshToken: String, uid: String, guid: String) {
             guard !token.isEmpty && !uid.isEmpty else { return }
+            guard !isValidating else { return }
             
             let finalGuid = guid.isEmpty ? "7460830660542107" : guid
             let finalRefreshToken = refreshToken.isEmpty ? token : refreshToken
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                // 防止多次触发
-                guard self.timer != nil else { return }
-                
-                self.timer?.invalidate()
-                self.timer = nil
-                
-                print("[IMALoginWebView] Captured Session Credentials Successfully!")
-                print("Token: \(token.prefix(15))...")
-                print("UID: \(uid)")
-                
-                IMACredentialsManager.shared.save(
+            isValidating = true
+            
+            Task {
+                print("[IMALoginWebView] Testing captured token for validation...")
+                let isValid = await IMASyncService.shared.validateCredentials(
                     token: token,
                     refreshToken: finalRefreshToken,
                     uid: uid,
                     guid: finalGuid
                 )
                 
-                // 异步获取微信头像和昵称
-                Task {
-                    if let profile = try? await IMASyncService.shared.getUserProfile() {
-                        await MainActor.run {
-                            IMACredentialsManager.shared.avatarUrl = profile.avatarUrl
-                            IMACredentialsManager.shared.nickname = profile.nickname
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
+                    if isValid {
+                        print("[IMALoginWebView] Captured Session Credentials Validated Successfully!")
+                        
+                        // 验证成功，停止轮询定时器
+                        self.timer?.invalidate()
+                        self.timer = nil
+                        
+                        IMACredentialsManager.shared.save(
+                            token: token,
+                            refreshToken: finalRefreshToken,
+                            uid: uid,
+                            guid: finalGuid
+                        )
+                        
+                        // 异步获取微信头像和昵称
+                        Task {
+                            if let profile = try? await IMASyncService.shared.getUserProfile() {
+                                await MainActor.run {
+                                    IMACredentialsManager.shared.avatarUrl = profile.avatarUrl
+                                    IMACredentialsManager.shared.nickname = profile.nickname
+                                }
+                            }
                         }
+                        
+                        self.parent.onLoginSuccess()
+                    } else {
+                        print("[IMALoginWebView] Temporary or invalid credentials detected, skipping and continuing polling...")
+                        self.isValidating = false
                     }
                 }
-                
-                self.parent.onLoginSuccess()
             }
         }
     }

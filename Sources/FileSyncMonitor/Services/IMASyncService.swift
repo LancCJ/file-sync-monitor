@@ -610,6 +610,10 @@ final class IMASyncService {
 
     private func applyPrivateWebHeaders(to request: inout URLRequest) throws {
         let creds = IMACredentialsManager.shared
+        if !creds.isLoggedIn {
+            // Keychain might be locked on system startup, try to load it again
+            creds.load()
+        }
         guard creds.isLoggedIn else {
             throw IMASyncError.missingCredentials
         }
@@ -643,16 +647,7 @@ final class IMASyncService {
                 let (data, urlResponse) = try await self.session.data(for: request)
                 let decoded: IMAResponse<T> = try decodeIMAResponse(data: data, urlResponse: urlResponse)
                 
-                // If it is transient rate limit or service busy (600001), perform retry!
-                if decoded.code == 600001 {
-                    let delay = Double(attempts) * 2.0 // Exponential backoff: 2s, 4s, 6s, 8s
-                    IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: "Transient 600001 (service busy) detected. Retrying in \(delay)s (attempt \(attempts)/\(maxAttempts))...", requestId: decoded.requestId)
-                    
-                    if attempts < maxAttempts {
-                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                        continue
-                    }
-                }
+                // Do NOT retry on 600001 (unauthorized) to avoid long UI freezes/spins
                 
                 IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: String(data: data, encoding: .utf8), requestId: decoded.requestId)
                 return decoded
@@ -690,6 +685,38 @@ final class IMASyncService {
                 throw IMASyncError.apiError("HTTP \(statusCode)：\(preview)")
             }
             throw IMASyncError.invalidResponse(preview.isEmpty ? error.localizedDescription : String(preview))
+        }
+    }
+
+    /// 验证指定的登录凭证是否有效（不改变全局凭证管理器状态）
+    func validateCredentials(token: String, refreshToken: String, uid: String, guid: String) async -> Bool {
+        do {
+            var request = URLRequest(url: baseURL.appendingPathComponent("cgi-bin/user_info/get_user_info"))
+            request.httpMethod = "POST"
+            
+            request.setValue("ima.qq.com", forHTTPHeaderField: "Host")
+            request.setValue("keep-alive", forHTTPHeaderField: "Connection")
+            request.setValue("macOS", forHTTPHeaderField: "sec-ch-ua-platform")
+            request.setValue("1", forHTTPHeaderField: "from_browser_ima")
+            request.setValue("\"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"", forHTTPHeaderField: "sec-ch-ua")
+            request.setValue(String(IMACredentialsManager.calculateBkn(token: token)), forHTTPHeaderField: "x-ima-bkn")
+            request.setValue("?0", forHTTPHeaderField: "sec-ch-ua-mobile")
+            
+            let cookieStr = IMACredentialsManager.getCookieString(token: token, refreshToken: refreshToken, uid: uid, guid: guid)
+            request.setValue(cookieStr, forHTTPHeaderField: "x-ima-cookie")
+            request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 IMA/143.0.7499.4456", forHTTPHeaderField: "User-Agent")
+            request.setValue("application/json", forHTTPHeaderField: "accept")
+            request.setValue("4.25.3", forHTTPHeaderField: "extension_version")
+            request.setValue("chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi", forHTTPHeaderField: "Origin")
+            request.setValue("zh-CN,zh;q=0.9", forHTTPHeaderField: "Accept-Language")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: [:])
+            
+            let (data, _) = try await self.session.data(for: request)
+            let response = try JSONDecoder().decode(IMAResponse<H5UserInfoDetail>.self, from: data)
+            return response.code == 0
+        } catch {
+            return false
         }
     }
 
