@@ -119,6 +119,14 @@ struct IMALoginWebView: NSViewRepresentable {
         private func checkCredentials() {
             guard let webView = webView else { return }
             
+            // Skip credentials scanning if the user is still on the login/sign-in page to prevent capturing guest or partial temporary cookies.
+            if let url = webView.url {
+                let urlString = url.absoluteString.lowercased()
+                if urlString.contains("/login") {
+                    return
+                }
+            }
+            
             // 1. 读取 WKHTTPCookieStore（涵盖 HTTPOnly 饼干）
             let cookieStore = webView.configuration.websiteDataStore.httpCookieStore
             cookieStore.getAllCookies { [weak self] cookies in
