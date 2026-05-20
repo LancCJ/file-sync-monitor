@@ -35,7 +35,7 @@ The current version is built with SwiftUI + SwiftData, with underlying monitorin
 - **Pending Sync Confirmation**: New events default to pending sync status, and can be marked as completed individually or in bulk.
 - **Menu Bar Access**: Resides in the menu bar, displays the number of pending syncs, and provides recent pending records.
 - **Report Export**: Aggregate records by time range, supporting CSV and JSON export.
-- **IMA Cloud Integration**: Configure Client ID and API Key to upload files to IMA.
+- **IMA Cloud Integration**: Supports WeChat QR scan login to sync files to designated cloud knowledge bases with one click.
 - **Ignore Rules**: By default, it filters noise files like `.DS_Store`, temporary files, system directories, build caches, etc. It also supports custom file names, extensions, and directory names in the settings.
 - **Modern Desktop UI**: Features a FileSync dashboard, ultra-narrow icon rail, secondary list sidebar, and a fully adaptive dark/light appearance.
 
@@ -97,16 +97,13 @@ In "Settings > Ignore Rules", you can:
 - Add custom ignored directory names, e.g., `node_modules`, `DerivedData`.
 - Restore default settings.
 
-## IMA Cloud Configuration
+## IMA Cloud Sync Usage
 
-Go to "Settings > IMA Cloud" and fill in:
+Click **WeChat Login** at the bottom-left of the main window or under "Settings > Cloud Sync". The system will display the official WeChat QR login page. Once logged in, you can:
 
-- `Client ID`
-- `API Key`
-
-After configuration, you can test the connection and click "Upload to IMA" in the file details. The current upload uses the default knowledge base ID, which can be extended to a knowledge base selector in the future.
-
-> Credentials are currently saved to UserDefaults via `@AppStorage`. If used in a production environment, it is recommended to migrate them to Keychain later.
+- Test connection and storage quota.
+- Bind specific monitored directories to designated IMA knowledge bases in Settings.
+- Manually sync files or enable automatic background sync.
 
 ## Project Structure
 
@@ -139,7 +136,7 @@ After configuration, you can test the connection and click "Upload to IMA" in th
 ## Data and Privacy
 
 - File event records are saved in the local SwiftData/SQLite database.
-- The app will not automatically sync file content unless the user actively clicks "Upload to IMA" on the detail page.
+- The app will not automatically sync file content unless the user actively clicks "Upload to IMA" or enables automatic sync.
 - Exported files are saved to a location chosen by the user via a save panel.
 - Monitored directory permissions are persisted via Security-Scoped Bookmarks.
 
@@ -148,14 +145,32 @@ After configuration, you can test the connection and click "Upload to IMA" in th
 - Currently, file content diffing is not performed; only file system events are recorded.
 - FSEvents will coalesce high-frequency events in a short period; the event granularity depends on system callbacks.
 - Historical records already in the database will not be automatically deleted due to newly added ignore rules.
-- IMA API credentials have not yet been migrated to Keychain.
 
 ## 💖 Donation & Support
 
 FileSyncMonitor is fully open-source and free to use. If it has saved you time and boosted your productivity, feel free to support its active development via donation. Your contribution is the best fuel to keep this project growing!
+
+**⚠️ Read Before Donating (Disclaimer Supplement):**
+- Donations are purely voluntary and act as gratuitous sponsorship to support the author's learning and open-source maintenance.
+- **Donation does not establish any purchase, employment, agency, or service contract**.
+- Please make sure you fully understand the [⚠️ Disclaimer](#-disclaimer) below before making a donation. Donating does not waive your legal risks or potential account issues resulting from the use of unofficial APIs.
 
 | WeChat Pay | Alipay |
 | --- | --- |
 | <img src="docs/pay/wechat.jpg" width="260" alt="WeChat Pay" /> | <img src="docs/pay/alipay.jpg" width="260" alt="Alipay" /> |
 
 > 💡 Donation is entirely voluntary, and all features remain fully unlocked. Thank you for your support!
+
+## ⚠️ Disclaimer
+
+**Please read the following terms carefully. By using this software, you agree to and accept all contents of this disclaimer:**
+
+1. **Educational & Personal Use Only**: This software (FileSyncMonitor) and its entire source code are intended for **academic research, educational purposes, and personal technical exchange only**. Any commercial use or illegal activity is strictly prohibited.
+2. **Unofficial API Statement**: The Tencent IMA cloud synchronization integrated in this software uses APIs obtained through **unofficial packet analysis and reverse engineering**. The author of this software has no relationship or affiliation with Tencent Holdings Ltd. (or any of its affiliates). These unofficial APIs may stop working or return errors at any time due to server-side updates.
+3. **Legal Risk & User Responsibility**:
+   - The use of reverse-engineered APIs carries legal risks and potential account suspension/ban risks. Users assume all responsibility and consequences (including but not limited to account suspension, data loss, network issues) resulting from using unofficial APIs.
+   - The author shall not be held liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including but not limited to loss of profits, data loss, business interruption) arising in any way out of the use of this software.
+4. **Donation Terms**:
+   - The "Donation & Support" channel is completely **voluntary and gratuitous**. Donations are voluntary gifts to support the author's open-source maintenance.
+   - **Donations do not establish any purchase, employment, agency, or service contract**. Donating does not waive the user's own legal risks or represent that the author will bear any joint liability for legal disputes, intellectual property issues, or data issues caused by the software APIs.
+5. **No Warranty**: The software is provided "AS IS", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and non-infringement.
