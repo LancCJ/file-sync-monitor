@@ -51,37 +51,48 @@ jobs:
 
     - name: Generate Release Notes Template
       run: |
-        # 1. Write Chinese header
-        cat << 'EOF' > release_notes.md
-        ### 🇨🇳 中文更新日志 / Chinese Release Notes
-        感谢您使用 FileSyncMonitor！此版本包含以下更新：
-        
-        EOF
-        
-        # 2. Append Git commits safely without shell expansion
+        # Compute commit range since last tag
         PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
         if [ -n "$PREV_TAG" ]; then
-          git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)" >> release_notes.md
+          RAW_COMMITS=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)")
         else
-          git log --pretty=format:"- %s (%h)" >> release_notes.md
+          RAW_COMMITS=$(git log --pretty=format:"- %s (%h)")
         fi
-        echo -e "\n" >> release_notes.md
-        
-        # 3. Write English header
-        cat << 'EOF' >> release_notes.md
-        
-        ### 🇬🇧 English Release Notes
-        Thank you for using FileSyncMonitor! This release contains the following updates:
-        
-        EOF
-        
-        # 4. Append Git commits again
-        if [ -n "$PREV_TAG" ]; then
-          git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)" >> release_notes.md
-        else
-          git log --pretty=format:"- %s (%h)" >> release_notes.md
-        fi
-        echo -e "\n\n---" >> release_notes.md
+
+        # Translate conventional commit prefixes to Chinese for the CN section
+        CN_COMMITS=$(echo "$RAW_COMMITS" \
+          | sed 's/^- feat!:/- 💥 破坏性新功能：/g' \
+          | sed 's/^- fix!:/- 💥 破坏性修复：/g' \
+          | sed 's/^- feat:/- ✨ 新功能：/g' \
+          | sed 's/^- fix:/- 🐛 问题修复：/g' \
+          | sed 's/^- refactor:/- 🔧 代码重构：/g' \
+          | sed 's/^- perf:/- ⚡ 性能优化：/g' \
+          | sed 's/^- docs:/- 📝 文档更新：/g' \
+          | sed 's/^- chore:/- 🛠 维护更新：/g' \
+          | sed 's/^- style:/- 🎨 样式调整：/g' \
+          | sed 's/^- test:/- 🧪 测试更新：/g' \
+          | sed 's/^- ci:/- 🚀 CI\/CD 更新：/g' \
+          | sed 's/^- revert:/- ⏪ 回滚：/g' \
+          | sed 's/^- build:/- 📦 构建相关：/g')
+
+        # Write Chinese section
+        cat > release_notes.md << MDEOF
+### 🇨🇳 中文更新日志
+
+感谢您使用 FileSyncMonitor！此版本包含以下更新：
+
+$CN_COMMITS
+
+---
+
+### 🇬🇧 English Release Notes
+
+Thank you for using FileSyncMonitor! This release contains the following updates:
+
+$RAW_COMMITS
+
+---
+MDEOF
 
     - name: Create GitHub Release and Upload DMG
       uses: softprops/action-gh-release@v2
