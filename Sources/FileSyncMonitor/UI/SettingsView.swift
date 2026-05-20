@@ -15,8 +15,6 @@ struct SettingsView: View {
     @AppStorage("autoSync") private var autoSync = false
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
 
-    @AppStorage("imaDuplicateFileStrategy") private var duplicateFileStrategy = IMADuplicateFileStrategy.renameWithTimestamp.rawValue
-
     @State private var devices: [H5Device] = []
     @State private var quota: H5SpaceQuota? = nil
 
@@ -134,18 +132,6 @@ struct SettingsView: View {
                 IMASettingsGroup(title: "同步") {
                     IMASettingsRow(title: "同步模式", subtitle: autoSync ? "自动同步：文件稳定 30 秒后上传到云端" : "手动同步：点击同步按钮时上传") {
                         AppToggle(isOn: $autoSync)
-                    }
-
-                    IMASettingsRow(title: "同名文件策略", subtitle: duplicateStrategyDescription) {
-                        AppDropdownMenu(
-                            selection: $duplicateFileStrategy,
-                            options: [
-                                (IMADuplicateFileStrategy.renameWithTimestamp.rawValue, "自动改名上传".appLocalized),
-                                (IMADuplicateFileStrategy.experimentalOverwrite.rawValue, "实验性覆盖上传".appLocalized)
-                            ],
-                            label: AppMenuValue(text: duplicateStrategyTitle)
-                        )
-                        .frame(width: 154)
                     }
 
                     // 微信登录状态与个人看板
@@ -376,17 +362,6 @@ struct SettingsView: View {
 
     private var defaultIgnoreSummary: String {
         "过滤 .DS_Store、Office 临时文件、系统目录和常见构建缓存"
-    }
-
-    private var duplicateStrategyTitle: String {
-        duplicateFileStrategy == IMADuplicateFileStrategy.experimentalOverwrite.rawValue ? "实验性覆盖上传".appLocalized : "自动改名上传".appLocalized
-    }
-
-    private var duplicateStrategyDescription: String {
-        if duplicateFileStrategy == IMADuplicateFileStrategy.experimentalOverwrite.rawValue {
-            return "同名时先用 IMA Web 私有接口删除旧文件，再上传新文件；接口可能失效"
-        }
-        return "同名时在文件名后追加年月日时分秒，避免覆盖旧文件"
     }
 
     private func addDirectory() {
