@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WebKit
 
 /// 管理 IMA 登录凭证（Cookie/Token）的安全存储与计算
 @Observable
@@ -108,7 +109,7 @@ final class IMACredentialsManager {
     }
     
     /// 退出登录，清空凭证
-    func clear() {
+    func clear(clearWebView: Bool = false) {
         // 清理合并 Key
         KeychainHelper.shared.delete(service: serviceName, account: singleCredentialsKey)
         
@@ -124,6 +125,15 @@ final class IMACredentialsManager {
         self.imaGuid = ""
         self.avatarUrl = ""
         self.nickname = ""
+        
+        if clearWebView {
+            DispatchQueue.main.async {
+                let store = WKWebsiteDataStore.default()
+                store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: Date.distantPast) {
+                    print("[IMACredentialsManager] WebView session and cookies cleared successfully.")
+                }
+            }
+        }
     }
     
     /// 动态装配 x-ima-cookie 请求头的值

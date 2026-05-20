@@ -1,0 +1,166 @@
+HTTP/1.1 200 OK
+Date: Wed, 20 May 2026 01:16:29 GMT
+Content-Type: application/json
+Content-Length: 3474
+Connection: keep-alive
+Server: tRPC-Gateway
+X-Content-Type-Options: nosniff
+X-Upstream-Latency: 60
+X-Proxy-Latency: 1
+Access-Control-Allow-Origin: chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Cookie,X-Ima-Cookie,From_browser_ima,Extension_version,X-Ima-Bkn,Traceparent
+
+{
+  "code": 0,
+  "current_path": [
+    {
+      "file_number": "0",
+      "folder_id": "7461896470929763",
+      "folder_number": "0",
+      "is_top": false,
+      "name": "新创建知识库",
+      "parent_folder_id": ""
+    }
+  ],
+  "initializing": false,
+  "is_end": false,
+  "is_update": true,
+  "knowledge_base_info": {
+    "basic_info": {
+      "ai_key_points_available": false,
+      "cover_audit_status": 2,
+      "cover_background_color": 4,
+      "cover_url": "https://ima-media-prod.image.myqcloud.com/1/pub/kbcover/kb_default_cover.png?imageMogr2%2Fthumbnail%2F%21128x128r%2Fcrop%2F128x128%2Fgravity%2Fcenter=&q-ak=AKIDAAzd3ECwTmrmTwBC1cz3ziDTXO2VmvqX&q-header-list=&q-key-time=1778958000%3B1779735600&q-sign-algorithm=sha1&q-sign-time=1778958000%3B1779735600&q-signature=baa0270a9e66825d54d3e8d60836e7f5a384207a&q-url-param-list=",
+      "create_timestamp_sec": "1779054754599",
+      "creator": {
+        "avatar_url": "https://ima-media-pub-prod.image.myqcloud.com/2/a3kYHeYB67SnJtVdefofxe/ec4629cc7f8e48ae8b0c3eb12fa50c16",
+        "certification_info": {
+          "certification_jump_url": "",
+          "company_certification_info": null,
+          "icon": "",
+          "personal_certification_info": null,
+          "title": "",
+          "type": 0,
+          "type_desc": ""
+        },
+        "icons": [],
+        "knowledge_matrix_id": "",
+        "nickname": "LancCJ"
+      },
+      "description": "",
+      "forbidden_info": null,
+      "guest_cover_cos_key": "1/pub/kbcover/kb_default_cover.png",
+      "has_deleted": false,
+      "join_timestamp": "1779239789462",
+      "knowledge_total_size": "2",
+      "name": "新创建知识库",
+      "recommended_questions": [],
+      "session_by_keyword": "7461896470929763",
+      "size": "258",
+      "update_timestamp_sec": "1779239789475"
+    },
+    "comment_info": {
+      "comment_count": "0"
+    },
+    "has_intro_page": false,
+    "id": "7461896470929763",
+    "is_top": false,
+    "knowledge_base_status_toast": "最近更新 09:16",
+    "like_info": {
+      "has_liked": false,
+      "like_count": 0
+    },
+    "member_info": {
+      "apply_count": 0,
+      "member_count": 1
+    },
+    "new_is_top": false,
+    "new_type": 1002,
+    "payment_info": {
+      "default_price": "0",
+      "expire_time": "0",
+      "refundable": false,
+      "start_time": "0",
+      "status": 0
+    },
+    "permission_info": {
+      "access_status": 1,
+      "ai_key_points_visibility": 0,
+      "comment_visibility": 1,
+      "forbid_member_access_content": false,
+      "join_type": 2,
+      "requires_approval_for_join": true,
+      "visible_export_status": 3
+    },
+    "statistics": {
+      "view_and_qa": 3
+    },
+    "type": 2,
+    "user_permission_info": {
+      "is_in_apply_list": false,
+      "role_type": 10000
+    }
+  },
+  "knowledge_list": [
+    {
+      "abstract": "",
+      "access_status": 3,
+      "access_status_update_ts": "0",
+      "cover_urls": [
+        "https://qbtool.img.qq.com/wupload/xy/qb_tool/ZTq645gG.png?isDefaultCover=1&noBorder=1"
+      ],
+      "create_time": "1779239789432",
+      "creator_info": null,
+      "file_size": "0",
+      "folder_info": {
+        "file_number": "0",
+        "folder_id": "folder_7462672563965236",
+        "folder_number": "0",
+        "is_top": false,
+        "name": "新增文件夹",
+        "parent_folder_id": ""
+      },
+      "forbidden_info": null,
+      "highlight_tags": [],
+      "introduction": "",
+      "is_repeated": false,
+      "is_top": false,
+      "jump_url": "",
+      "last_modify_time": "1779239789432",
+      "last_open_time": "1779239789432",
+      "logo": "",
+      "md5_sum": "",
+      "media_audit_status": 0,
+      "media_id": "folder_7462672563965236",
+      "media_state": 2,
+      "media_type": 99,
+      "media_type_info": {
+        "icon": "https://qbtool.img.qq.com/wupload/xy/qb_tool/4LWS1QDK.png",
+        "name": "文件夹",
+        "tips": "请升级到最新版本尝试打开文件夹"
+      },
+      "parent_folder_id": "7461896470929763",
+      "parse_err_info": null,
+      "parse_progress": 0,
+      "parsed_file_url": "",
+      "password": "",
+      "podcast_duration": 0,
+      "raw_file_url": "",
+      "second_index": "",
+      "sound_recording_duration": "0",
+      "source_path": "",
+      "sub_media_type": 0,
+      "summary_state": 0,
+      "tags": [],
+      "time_wording": "09:16创建",
+      "title": "新增文件夹",
+      "update_time": "1779239789432"
+    }
+  ],
+  "msg": "ok",
+  "next_cursor": "CAE=",
+  "total_size": "2",
+  "version": "1779239789475177923978946810000"
+}

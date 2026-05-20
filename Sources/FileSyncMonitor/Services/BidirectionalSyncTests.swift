@@ -255,8 +255,6 @@ class BidirectionalSyncTests {
                 throw NSError(domain: "Test", code: 303, userInfo: [NSLocalizedDescriptionKey: "Scenario 3 Failed: Local modifications backup content mismatch: '\(backupContents)'"])
             }
             
-            print("✅ Scenario 3 Passed: Conflict resolved perfectly with local backup and safe pull!")
-            
             print("\n==============================================================")
             print("🎉 ALL Bidirectional Sync Tests Completed Flawlessly! 100% OK")
             print("==============================================================")

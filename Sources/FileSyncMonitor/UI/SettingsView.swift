@@ -168,7 +168,7 @@ struct SettingsView: View {
                                 Spacer()
                                 
                                 Button(action: {
-                                    IMACredentialsManager.shared.clear()
+                                    IMACredentialsManager.shared.clear(clearWebView: true)
                                     devices = []
                                     quota = nil
                                 }) {

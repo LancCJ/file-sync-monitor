@@ -24,6 +24,9 @@ final class IMASyncService {
         existingRemoteId: String? = nil,
         duplicateStrategy: IMADuplicateFileStrategy = .renameWithTimestamp
     ) async throws -> String {
+        await MainActor.run {
+            FileMonitorService.shared.updateSyncProgress(status: String(format: "正在上传: %@".appLocalized, fileURL.lastPathComponent))
+        }
         if let kbId = knowledgeBaseId, !kbId.isEmpty && kbId != "default" {
             // 如果指定了具体知识库 ID，走 Wiki 上传流
             let folderId = try await resolveFolderIdIfNeeded(knowledgeBaseId: kbId, relativeFolderPath: relativeFolderPath)
@@ -145,8 +148,10 @@ final class IMASyncService {
         return MediaInfoPayload(mediaType: data.knowledge.mediaType, urlInfo: urlInfo)
     }
 
-    /// 从云端下载文件
     func downloadFile(mediaId: String, knowledgeBaseId: String, to destinationURL: URL) async throws {
+        await MainActor.run {
+            FileMonitorService.shared.updateSyncProgress(status: String(format: "正在拉取: %@".appLocalized, destinationURL.lastPathComponent))
+        }
         let info = try await getMediaInfo(mediaId: mediaId, knowledgeBaseId: knowledgeBaseId)
         guard let urlInfo = info.urlInfo, let downloadURL = URL(string: urlInfo.url) else {
             throw IMASyncError.apiError("该媒体类型暂不支持导出或无法获取下载链接")
@@ -182,7 +187,20 @@ final class IMASyncService {
         duplicateStrategy: IMADuplicateFileStrategy = .renameWithTimestamp
     ) async throws -> String {
         let originalFileName = fileURL.lastPathComponent
-        let fileSize = try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        
+        // 1. 直接将文件数据读入内存，锁定字节流。这既消除了在上传期间被编辑/写入导致的 race condition（Content-Length 与数据不一致），
+        //    同时也彻底绕过了 macOS 沙盒环境下，对临时文件夹进行 copyItem 文件系统操作可能遭遇的权限受限风险。
+        let fileData: Data
+        do {
+            fileData = try Data(contentsOf: fileURL)
+        } catch {
+            let errorMsg = "读取本地文件内容失败（可能尚未写入完成或沙盒受限），已拦截本次同步：\(error.localizedDescription)"
+            let logId = IMALogService.shared.logRequest(method: "PREFLIGHT", url: "wiki/v1/upload", headers: nil, body: "File: \(originalFileName)")
+            IMALogService.shared.logError(id: logId, code: nil, error: errorMsg, requestId: nil)
+            throw IMASyncError.apiError(errorMsg)
+        }
+
+        let fileSize = fileData.count
         
         if fileSize == 0 {
             let errorMsg = "检测到文件大小为 0（可能尚未写入完成或沙盒受限），已拦截本次无效同步，防止触发腾讯云端 code 51 参数错误。"
@@ -229,8 +247,11 @@ final class IMASyncService {
         
         // 3. Upload to COS
         let step2LogId = IMALogService.shared.logRequest(method: "STEP 2", url: "cos_upload", headers: nil, body: "开始上传文件流到腾讯云 COS...")
-        try await uploadToCOS(fileURL: fileURL, payload: payload, contentType: contentType, fileSize: fileSize)
+        try await uploadToCOS(fileData: fileData, fileName: originalFileName, payload: payload, contentType: contentType, fileSize: fileSize)
         IMALogService.shared.logResponse(id: step2LogId, code: 200, body: "文件流上传完成", requestId: nil)
+        
+        // 增加 1.0 秒的短暂冷却等待，让云端有足够的时间对刚写入 COS 的文件流进行持久化和元数据就绪
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
         
         // 4. Add Knowledge (私有 H5 /add_knowledge 接口关联知识库)
         // file_info 必须携带 "content_type": "" (空字符串) 以完全符合 H5 私有 API 校验
@@ -367,7 +388,7 @@ final class IMASyncService {
         return items.first { !$0.isFolder && $0.displayName == fileName }?.mediaId
     }
 
-    private func deleteKnowledgeByWebAPI(mediaIds: [String], knowledgeBaseId: String) async throws {
+    func deleteKnowledgeByWebAPI(mediaIds: [String], knowledgeBaseId: String) async throws {
         var request = URLRequest(url: baseURL.appendingPathComponent("cgi-bin/knowledge_tab_writer/del_knowledge"))
         request.httpMethod = "POST"
         try applyPrivateWebHeaders(to: &request)
@@ -425,6 +446,25 @@ final class IMASyncService {
         }
     }
 
+    func createFolder(title: String, knowledgeBaseId: String, parentFolderId: String?) async throws -> String {
+        let actualFolderId = parentFolderId ?? knowledgeBaseId
+        
+        let response: IMAResponse<IMACreateFolderResponse> = try await postJson(
+            path: "cgi-bin/knowledge_tab_writer/create_folder",
+            body: [
+                "knowledge_base_id": knowledgeBaseId,
+                "folder_id": actualFolderId,
+                "title": title
+            ]
+        )
+        
+        guard response.code == 0, let data = response.data else {
+            throw IMASyncError.apiError(response.displayMessage())
+        }
+        
+        return data.knowledge.mediaId
+    }
+
     private func timestampedFileName(_ fileName: String) -> String {
         let url = URL(fileURLWithPath: fileName)
         let ext = url.pathExtension
@@ -443,7 +483,7 @@ final class IMASyncService {
         return "\(baseName)_\(timestamp).\(ext)"
     }
 
-    private func resolveFolderIdIfNeeded(knowledgeBaseId: String, relativeFolderPath: String?) async throws -> String? {
+    func resolveFolderIdIfNeeded(knowledgeBaseId: String, relativeFolderPath: String?) async throws -> String? {
         guard let relativeFolderPath,
               !relativeFolderPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
@@ -467,14 +507,25 @@ final class IMASyncService {
                 continue
             }
 
-            let currentPath = traversed.isEmpty ? "/" : traversed.joined(separator: "/")
-            throw IMASyncError.apiError("IMA 知识库中未找到本地子目录对应的文件夹：\(segment)（当前位置：\(currentPath)）。请先在 IMA 中创建同名文件夹，或把该文件移动到已存在的目录后再同步。")
+            // Automatically create folder instead of throwing
+            do {
+                let newFolderId = try await createFolder(
+                    title: segment,
+                    knowledgeBaseId: knowledgeBaseId,
+                    parentFolderId: parentFolderId
+                )
+                parentFolderId = newFolderId
+                traversed.append(segment)
+            } catch {
+                let currentPath = traversed.isEmpty ? "/" : traversed.joined(separator: "/")
+                throw IMASyncError.apiError("自动创建云端文件夹 '\(segment)' 失败（当前位置：\(currentPath)）：\(error.localizedDescription)")
+            }
         }
 
         return parentFolderId
     }
 
-    private func fetchAllKnowledgeItems(knowledgeBaseId: String, folderId: String?) async throws -> [KnowledgeInfo] {
+    func fetchAllKnowledgeItems(knowledgeBaseId: String, folderId: String?) async throws -> [KnowledgeInfo] {
         var allItems: [KnowledgeInfo] = []
         var cursor = ""
 
@@ -491,7 +542,7 @@ final class IMASyncService {
         return allItems
     }
 
-    private func uploadToCOS(fileURL: URL, payload: CreateMediaPayload, contentType: String, fileSize: Int) async throws {
+    private func uploadToCOS(fileData: Data, fileName: String, payload: CreateMediaPayload, contentType: String, fileSize: Int) async throws {
         let cos = payload.cosCredential
         let hostname = "\(cos.bucketName).cos.\(cos.region).myqcloud.com"
         let urlString = "https://\(hostname)/\(cos.cosKey)"
@@ -522,8 +573,8 @@ final class IMASyncService {
         )
         request.setValue(signature, forHTTPHeaderField: "Authorization")
         
-        let logId = IMALogService.shared.logRequest(method: "PUT (COS)", url: urlString, headers: request.allHTTPHeaderFields, body: "[Binary Data: \(fileURL.lastPathComponent)]")
-        let (_, response) = try await self.session.upload(for: request, fromFile: fileURL)
+        let logId = IMALogService.shared.logRequest(method: "PUT (COS)", url: urlString, headers: request.allHTTPHeaderFields, body: "[Binary Data: \(fileName)]")
+        let (_, response) = try await self.session.upload(for: request, from: fileData)
         
         if let httpResponse = response as? HTTPURLResponse {
             IMALogService.shared.logResponse(id: logId, code: httpResponse.statusCode, body: "COS Upload Finished", requestId: nil)
@@ -569,7 +620,7 @@ final class IMASyncService {
         let logId = IMALogService.shared.logRequest(method: request.httpMethod ?? "GET", url: request.url?.absoluteString ?? "", headers: request.allHTTPHeaderFields, body: bodyString)
         
         var attempts = 0
-        let maxAttempts = 3
+        let maxAttempts = 5
         var lastError: Error? = nil
         
         while attempts < maxAttempts {
@@ -580,7 +631,7 @@ final class IMASyncService {
                 
                 // If it is transient rate limit or service busy (600001), perform retry!
                 if decoded.code == 600001 {
-                    let delay = Double(attempts) * 1.5 // Exponential backoff: 1.5s, 3.0s
+                    let delay = Double(attempts) * 2.0 // Exponential backoff: 2s, 4s, 6s, 8s
                     IMALogService.shared.logResponse(id: logId, code: (urlResponse as? HTTPURLResponse)?.statusCode ?? 0, body: "Transient 600001 (service busy) detected. Retrying in \(delay)s (attempt \(attempts)/\(maxAttempts))...", requestId: decoded.requestId)
                     
                     if attempts < maxAttempts {
@@ -630,6 +681,11 @@ final class IMASyncService {
 
     private func validate<T>(_ response: IMAResponse<T>) throws {
         if response.code != 0 {
+            if response.code == 600001 {
+                DispatchQueue.main.async {
+                    IMACredentialsManager.shared.clear(clearWebView: true)
+                }
+            }
             throw IMASyncError.apiError(response.displayMessage())
         }
     }
@@ -753,7 +809,11 @@ struct IMAResponse<T: Decodable>: Decodable {
             parts.append("HTTP \(httpStatus)")
         }
         parts.append("code \(code)")
-        parts.append(message)
+        if code == 80001 {
+            parts.append("权限不足 (可能是由于您切换了微信账号或该同步文件夹绑定的知识库不存在，请在‘设置 -> 常规’中为该文件夹重新选择正确的同步目标知识库)".appLocalized)
+        } else {
+            parts.append(message)
+        }
         if let requestId, !requestId.isEmpty {
             parts.append("request_id \(requestId)")
         }
@@ -1039,6 +1099,19 @@ struct DeleteKnowledgeResult: Decodable {
     enum CodingKeys: String, CodingKey {
         case mediaId = "media_id"
         case retCode = "ret_code"
+    }
+}
+
+
+struct IMACreateFolderResponse: Decodable {
+    let knowledge: IMAFolderKnowledge
+}
+
+struct IMAFolderKnowledge: Decodable {
+    let mediaId: String
+    
+    enum CodingKeys: String, CodingKey {
+        case mediaId = "media_id"
     }
 }
 

@@ -49,11 +49,11 @@ struct IMALoginWebView: NSViewRepresentable {
         // 伪装成标准的 macOS Desktop Chrome User-Agent 以通过微信 OAuth 安全风控
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         
-        // 清理旧缓存和 Cookie，确保每次弹出都是崭新的二维码
-        let store = webView.configuration.websiteDataStore
+        // 清理缓存以展示全新的扫码界面，避免失效的旧凭证导致自动跳转与无限循环
+        let store = WKWebsiteDataStore.default()
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: Date.distantPast) {
-            let request = URLRequest(url: URL(string: "https://ima.qq.com/login/")!)
             DispatchQueue.main.async {
+                let request = URLRequest(url: URL(string: "https://ima.qq.com/login/")!)
                 webView.load(request)
             }
         }
