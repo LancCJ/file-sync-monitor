@@ -49,33 +49,9 @@ struct IMALoginWebView: NSViewRepresentable {
         // 伪装成标准的 macOS Desktop Chrome User-Agent 以通过微信 OAuth 安全风控
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         
-        // 清理缓存以展示全新的扫码界面，避免失效的旧凭证导致自动跳转与无限循环
-        // 仅清理 Cookie 和 Local/Session 存储，防止清理沙盒数据库或磁盘缓存时因文件锁/沙盒权限挂起
-        let store = WKWebsiteDataStore.default()
-        let types = Set([
-            WKWebsiteDataTypeCookies,
-            WKWebsiteDataTypeLocalStorage,
-            WKWebsiteDataTypeSessionStorage
-        ])
-        
-        var hasLoaded = false
-        let loadRequest = {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            DispatchQueue.main.async {
-                let request = URLRequest(url: URL(string: "https://ima.qq.com/login/")!)
-                webView.load(request)
-            }
-        }
-        
-        // 设置 1.0 秒超时防挂起兜底，保证即使 WebKit 清理超时也必定加载网页
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            loadRequest()
-        }
-        
-        store.removeData(ofTypes: types, modifiedSince: Date.distantPast) {
-            loadRequest()
-        }
+        // 直接加载登录页，利用已持有的 Cookie 自动登录或进入扫码界面
+        let request = URLRequest(url: URL(string: "https://ima.qq.com/login/")!)
+        webView.load(request)
         
         return webView
     }
