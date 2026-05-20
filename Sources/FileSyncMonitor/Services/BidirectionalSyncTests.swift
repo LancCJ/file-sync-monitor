@@ -255,6 +255,88 @@ class BidirectionalSyncTests {
                 throw NSError(domain: "Test", code: 303, userInfo: [NSLocalizedDescriptionKey: "Scenario 3 Failed: Local modifications backup content mismatch: '\(backupContents)'"])
             }
             
+            print("✅ Scenario 3 Passed: Cloud version was pulled successfully and conflict was backed up!")
+            
+            // --- SCENARIO 4: Cloud-to-Local Rename ---
+            print("\n📁 --- Scenario 4: File renamed on Cloud ---")
+            
+            MockURLProtocol.handler = { request in
+                let urlString = request.url?.absoluteString ?? ""
+                
+                if urlString.contains("get_knowledge_list") {
+                    let json = """
+                    {
+                      "code": 0,
+                      "msg": "ok",
+                      "is_end": true,
+                      "next_cursor": "",
+                      "knowledge_list": [
+                        {
+                          "media_id": "media_updated_file_888",
+                          "title": "cloud_renamed_file.txt",
+                          "media_type": 7,
+                          "update_time": "1779094000000"
+                        }
+                      ]
+                    }
+                    """
+                    let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                    return (response, json.data(using: .utf8)!)
+                }
+                
+                let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+                return (response, Data())
+            }
+            
+            await FileMonitorService.shared.pullFromRemote()
+            
+            let renamedFile = tempDir.appendingPathComponent("cloud_renamed_file.txt")
+            guard !FileManager.default.fileExists(atPath: downloadedFile.path) else {
+                throw NSError(domain: "Test", code: 401, userInfo: [NSLocalizedDescriptionKey: "Scenario 4 Failed: Old file 'cloud_only_file.txt' still exists."])
+            }
+            guard FileManager.default.fileExists(atPath: renamedFile.path) else {
+                throw NSError(domain: "Test", code: 402, userInfo: [NSLocalizedDescriptionKey: "Scenario 4 Failed: Renamed file 'cloud_renamed_file.txt' does not exist."])
+            }
+            print("✅ Scenario 4 Passed: File successfully renamed locally!")
+            
+            // --- SCENARIO 5: Cloud-to-Local Delete ---
+            print("\n📁 --- Scenario 5: File deleted on Cloud ---")
+            
+            MockURLProtocol.handler = { request in
+                let urlString = request.url?.absoluteString ?? ""
+                
+                if urlString.contains("get_knowledge_list") {
+                    let json = """
+                    {
+                      "code": 0,
+                      "msg": "ok",
+                      "is_end": true,
+                      "next_cursor": "",
+                      "knowledge_list": []
+                    }
+                    """
+                    let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                    return (response, json.data(using: .utf8)!)
+                }
+                
+                let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+                return (response, Data())
+            }
+            
+            await FileMonitorService.shared.pullFromRemote()
+            
+            guard !FileManager.default.fileExists(atPath: renamedFile.path) else {
+                throw NSError(domain: "Test", code: 501, userInfo: [NSLocalizedDescriptionKey: "Scenario 5 Failed: Renamed file 'cloud_renamed_file.txt' was not deleted locally."])
+            }
+            
+            let events5 = try context.fetch(FetchDescriptor<FileEvent>(
+                predicate: #Predicate<FileEvent> { $0.path == renamedFile.path }
+            ))
+            guard events5.contains(where: { $0.type == "deleted" && $0.isSynced }) else {
+                throw NSError(domain: "Test", code: 502, userInfo: [NSLocalizedDescriptionKey: "Scenario 5 Failed: Delete event was not recorded in SwiftData."])
+            }
+            print("✅ Scenario 5 Passed: File successfully deleted locally and recorded in SwiftData!")
+            
             print("\n==============================================================")
             print("🎉 ALL Bidirectional Sync Tests Completed Flawlessly! 100% OK")
             print("==============================================================")
