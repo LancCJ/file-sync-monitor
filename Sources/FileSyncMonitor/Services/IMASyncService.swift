@@ -958,7 +958,7 @@ final class IMASilentTokenRefresher: NSObject, WKNavigationDelegate {
         guard !isValidating else { return true }
         isValidating = true
         
-        let finalGuid = guid.isEmpty ? "7460830660542107" : guid
+        let finalGuid = guid.isEmpty ? IMACredentialsManager.fallbackGuid() : guid
         let finalRefreshToken = refreshToken.isEmpty ? token : refreshToken
         
         print("[IMASilentTokenRefresher] Detected new credentials in background WebView. Validating...")

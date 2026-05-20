@@ -4,12 +4,16 @@ build/
 Package.resolved
 .swiftpm/xcode/package.xcworkspace/xcuserdata
 .swiftpm/xcode/xcuserdata
+.swiftpm/**/*.xcuserstate
 
 # macOS
 .DS_Store
+**/.DS_Store
 *.xcworkspace/xcuserdata
 *.xcodeproj/xcuserdata
 *.xcodeproj/project.xcworkspace/xcuserdata
+*.xcuserstate
+*.xcscmblueprint
 
 # IDE
 .idea/
@@ -21,8 +25,21 @@ Package.resolved
 
 # Logs
 *.log
+sync_debug.log
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+
+# Raw packet captures / sensitive API dumps
 docs/del_knowledge.txt
 docs/cgi-bin/
+docs/接口/
+docs/接口*/
+docs/*抓包详情请求和响应*/
+docs/*抓包接口整理*.md
+docs/*抓包原始*.md
 
 
 # Temporary
@@ -30,6 +47,8 @@ docs/cgi-bin/
 *.swp
 *.swo
 *~
+test_*.swift
+*_debug.swift
 
 # Sisyphus
 .sisyphus/

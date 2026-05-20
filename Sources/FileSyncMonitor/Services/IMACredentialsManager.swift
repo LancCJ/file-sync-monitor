@@ -6,6 +6,7 @@ import WebKit
 @Observable
 final class IMACredentialsManager {
     static let shared = IMACredentialsManager()
+    private static let fallbackGuidKey = "ima_generated_fallback_guid"
     
     // 内存缓存以驱动 SwiftUI 视图流式更新
     var imaToken: String = ""
@@ -150,6 +151,20 @@ final class IMACredentialsManager {
                "IMA-TOKEN=\(token); " +
                "IMA-REFRESH-TOKEN=\(refreshToken); " +
                "UID-TYPE=2; TOKEN-TYPE=14"
+    }
+
+    static func fallbackGuid() -> String {
+        if let saved = UserDefaults.standard.string(forKey: fallbackGuidKey), !saved.isEmpty {
+            return saved
+        }
+
+        let generated = UUID().uuidString
+            .replacingOccurrences(of: "-", with: "")
+            .prefix(16)
+            .lowercased()
+        let value = String(generated)
+        UserDefaults.standard.set(value, forKey: fallbackGuidKey)
+        return value
     }
     
     /// 腾讯经典的 DJB2 哈希指纹算法，将 Token 转化为 32 位无符号防 CSRF 整数
