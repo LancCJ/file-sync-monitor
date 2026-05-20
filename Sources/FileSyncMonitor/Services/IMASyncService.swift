@@ -96,12 +96,26 @@ final class IMASyncService {
 
     /// 获取空间配额信息 (私有 H5 接口)
     func getSpaceQuota() async throws -> H5SpaceQuota {
-        let response: IMAResponse<H5SpaceQuota> = try await postJson(
-            path: "cgi-bin/notebook/tab/get_tab_space_quota",
-            body: [:]
+        let response: IMAResponse<H5SpaceQuotaResponse> = try await postJson(
+            path: "cgi-bin/space/get_user_space",
+            body: [
+                "condition": [
+                    "need_knowledge": true,
+                    "need_note": true,
+                    "need_total": true,
+                    "need_share": true
+                ]
+            ]
         )
         try validate(response)
-        return response.data ?? H5SpaceQuota(totalQuota: 0, usedQuota: 0)
+        
+        guard let space = response.data?.totalUserSpace else {
+            return H5SpaceQuota(totalQuota: 0, usedQuota: 0)
+        }
+        
+        let total = Int64(space.totalSpace) ?? 0
+        let used = Int64(space.usedSpace) ?? 0
+        return H5SpaceQuota(totalQuota: total, usedQuota: used)
     }
 
     /// 获取知识库内容列表 (私有 H5 接口)
@@ -746,13 +760,26 @@ struct H5Device: Decodable, Identifiable {
     }
 }
 
-struct H5SpaceQuota: Decodable {
+struct H5SpaceQuota {
     let totalQuota: Int64
     let usedQuota: Int64
+}
+
+struct H5SpaceQuotaResponse: Decodable {
+    let totalUserSpace: H5SpaceDetail?
     
     enum CodingKeys: String, CodingKey {
-        case totalQuota = "total_quota"
-        case usedQuota = "used_quota"
+        case totalUserSpace = "total_user_space"
+    }
+}
+
+struct H5SpaceDetail: Decodable {
+    let totalSpace: String
+    let usedSpace: String
+    
+    enum CodingKeys: String, CodingKey {
+        case totalSpace = "total_space"
+        case usedSpace = "used_space"
     }
 }
 
