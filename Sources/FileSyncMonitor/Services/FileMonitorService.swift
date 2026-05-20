@@ -921,8 +921,12 @@ final class FileMonitorService {
                 }
             } else if flag & UInt32(kFSEventStreamEventFlagItemCreated) != 0 {
                 type = "created"
-            } else {
+            } else if flag & UInt32(kFSEventStreamEventFlagItemModified) != 0 {
                 type = "modified"
+            } else {
+                // 如果既不是新建、删除、重命名，又没有数据修改标志（例如仅仅是读取、修改权限或元数据属性），
+                // 我们直接忽略以避免复制/读取文件时误报修改事件。
+                continue
             }
             
             let event = FileEvent(path: path, type: type, isDirectory: isDir)
