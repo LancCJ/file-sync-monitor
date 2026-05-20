@@ -43,7 +43,7 @@ final class IMACredentialsManager {
     
     var bkn: UInt32 {
         guard !imaToken.isEmpty else { return 0 }
-        return calculateBkn(token: imaToken)
+        return IMACredentialsManager.calculateBkn(token: imaToken)
     }
     
     private init() {
@@ -138,18 +138,22 @@ final class IMACredentialsManager {
     
     /// 动态装配 x-ima-cookie 请求头的值
     func getCookieString() -> String {
+        return IMACredentialsManager.getCookieString(token: imaToken, refreshToken: imaRefreshToken, uid: imaUid, guid: imaGuid)
+    }
+    
+    static func getCookieString(token: String, refreshToken: String, uid: String, guid: String) -> String {
         return "PLATFORM=H5; CLIENT-TYPE=256020; WEB-VERSION=4.25.3; " +
-               "IMA-GUID=\(imaGuid); " +
+               "IMA-GUID=\(guid); " +
                "IMA-Q36=e749267b48b3622b592f9d2d200018c19311; " +
                "IMA-IUA=PR=IMA&PP=com.tencent.imamac&PPVN=2.5.1&PL=MAC&COVC=143.0.7499.4456&RL=3024*1964&MO=Mac OS X&OS=15.7.7&SYSARCH=Arm&DN=&BC=release&BN=4262&BT=1778318655445&CH=9caac41887&DC=10000074&EV=; " +
-               "IMA-UID=\(imaUid); " +
-               "IMA-TOKEN=\(imaToken); " +
-               "IMA-REFRESH-TOKEN=\(imaRefreshToken); " +
+               "IMA-UID=\(uid); " +
+               "IMA-TOKEN=\(token); " +
+               "IMA-REFRESH-TOKEN=\(refreshToken); " +
                "UID-TYPE=2; TOKEN-TYPE=14"
     }
     
     /// 腾讯经典的 DJB2 哈希指纹算法，将 Token 转化为 32 位无符号防 CSRF 整数
-    private func calculateBkn(token: String) -> UInt32 {
+    static func calculateBkn(token: String) -> UInt32 {
         var hash: UInt32 = 5381
         for char in token.utf8 {
             hash = hash &+ (hash &<< 5) &+ UInt32(char)
