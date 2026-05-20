@@ -491,6 +491,34 @@ final class FileMonitorService {
             return count > 0
         }
         
+        func getEventByRemoteId(_ remoteId: String, under rootPath: String) -> FileEvent? {
+            let descriptor = FetchDescriptor<FileEvent>(
+                predicate: #Predicate<FileEvent> { $0.remoteId == remoteId && $0.isSynced == true }
+            )
+            if let events = try? context.fetch(descriptor) {
+                let sorted = events.filter { isSubpath(filePath: $0.path, of: rootPath) }
+                                   .sorted { $0.timestamp > $1.timestamp }
+                return sorted.first
+            }
+            return nil
+        }
+        
+        func updateChildPaths(from oldFolderPath: String, to newFolderPath: String) {
+            let descriptor = FetchDescriptor<FileEvent>()
+            if let allEvents = try? context.fetch(descriptor) {
+                for ev in allEvents {
+                    if ev.path.hasPrefix(oldFolderPath + "/") {
+                        let relative = String(ev.path.dropFirst(oldFolderPath.count))
+                        ev.path = newFolderPath + relative
+                    }
+                    if let oldP = ev.oldPath, oldP.hasPrefix(oldFolderPath + "/") {
+                        let relative = String(oldP.dropFirst(oldFolderPath.count))
+                        ev.oldPath = newFolderPath + relative
+                    }
+                }
+            }
+        }
+        
         var deletedFilesToPull: [(url: URL, mediaId: String, kbId: String)] = []
         let mapping = pathKnowledgeBaseMapping
         
@@ -502,6 +530,79 @@ final class FileMonitorService {
                 let (items, _, _) = try await IMASyncService.shared.getKnowledgeList(knowledgeBaseId: kbId)
                 
                 let localURL = URL(fileURLWithPath: localPath)
+                
+                // --- Phase 1: Cloud-to-Local Renames ---
+                for item in items {
+                    let mediaId = item.isFolder ? (item.folderIdentifier ?? item.mediaId) : item.mediaId
+                    if let existingEvent = getEventByRemoteId(mediaId, under: localPath) {
+                        let localName = URL(fileURLWithPath: existingEvent.path).lastPathComponent
+                        if localName != item.title {
+                            let oldPath = existingEvent.path
+                            let newURL = URL(fileURLWithPath: oldPath).deletingLastPathComponent().appendingPathComponent(item.title)
+                            let newPath = newURL.path
+                            
+                            do {
+                                if FileManager.default.fileExists(atPath: oldPath) {
+                                    try FileManager.default.moveItem(at: URL(fileURLWithPath: oldPath), to: newURL)
+                                    print("Sync: Local rename success from \(oldPath) to \(newPath)")
+                                }
+                                
+                                existingEvent.path = newPath
+                                if existingEvent.isDirectory {
+                                    updateChildPaths(from: oldPath, to: newPath)
+                                }
+                                try? context.save()
+                            } catch {
+                                print("Sync: Failed to rename local file/folder \(oldPath) to \(newPath): \(error)")
+                            }
+                        }
+                    }
+                }
+                
+                // --- Phase 2: Cloud-to-Local Deletions ---
+                let remoteMediaIds = Set(items.map { $0.isFolder ? ($0.folderIdentifier ?? $0.mediaId) : $0.mediaId })
+                let descriptor = FetchDescriptor<FileEvent>(
+                    predicate: #Predicate<FileEvent> { $0.remoteId != nil && $0.isSynced == true }
+                )
+                if let syncedEvents = try? context.fetch(descriptor) {
+                    let localSyncedEvents = syncedEvents.filter { isSubpath(filePath: $0.path, of: localPath) }
+                    
+                    var latestEventByPath: [String: FileEvent] = [:]
+                    for ev in localSyncedEvents {
+                        if let existing = latestEventByPath[ev.path] {
+                            if ev.timestamp > existing.timestamp {
+                                latestEventByPath[ev.path] = ev
+                            }
+                        } else {
+                            latestEventByPath[ev.path] = ev
+                        }
+                    }
+                    
+                    for (filePath, ev) in latestEventByPath {
+                        guard ev.type != "deleted" else { continue }
+                        
+                        if let remoteId = ev.remoteId, !remoteMediaIds.contains(remoteId) {
+                            print("Sync: File/Folder deleted on cloud, syncing deletion to local: \(filePath)")
+                            let fileURL = URL(fileURLWithPath: filePath)
+                            
+                            do {
+                                if FileManager.default.fileExists(atPath: filePath) {
+                                    try FileManager.default.trashItem(at: fileURL, resultingItemURL: nil)
+                                    print("Sync: Successfully moved local file/folder to Trash: \(filePath)")
+                                }
+                                
+                                let deleteEvent = FileEvent(path: filePath, type: "deleted", isDirectory: ev.isDirectory, remoteId: remoteId)
+                                deleteEvent.isSynced = true
+                                context.insert(deleteEvent)
+                                try? context.save()
+                            } catch {
+                                print("Sync: Failed to move local file/folder \(filePath) to Trash: \(error)")
+                            }
+                        }
+                    }
+                }
+                
+                // --- Phase 3: Cloud-to-Local Creations & Modifications ---
                 for item in items {
                     guard !item.isFolder else {
                         // 对于文件夹，我们只需确保本地目录存在，然后跳过内容下载
