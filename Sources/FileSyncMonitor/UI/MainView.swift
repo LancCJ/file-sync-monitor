@@ -1716,9 +1716,9 @@ struct EventDetailView: View {
                                             .controlSize(.small)
                                     } else {
                                         Label {
-                                            LocalizedText("同步到 IMA")
+                                            LocalizedText(event.isSynced ? "已同步到 IMA" : "同步到 IMA")
                                         } icon: {
-                                            Image(systemName: "icloud.and.arrow.up")
+                                            Image(systemName: event.isSynced ? "checkmark.icloud" : "icloud.and.arrow.up")
                                         }
                                     }
                                 }
