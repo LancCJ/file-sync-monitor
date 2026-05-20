@@ -140,14 +140,6 @@ struct IMALoginWebView: NSViewRepresentable {
             guard let webView = webView else { return }
             guard !isValidating else { return }
             
-            // Skip credentials scanning if the user is still on the login/sign-in page to prevent capturing guest or partial temporary cookies.
-            if let url = webView.url {
-                let urlString = url.absoluteString.lowercased()
-                if urlString.contains("/login") {
-                    return
-                }
-            }
-            
             // 1. 读取 WKHTTPCookieStore（涵盖 HTTPOnly 饼干）
             let cookieStore = webView.configuration.websiteDataStore.httpCookieStore
             cookieStore.getAllCookies { [weak self] cookies in
@@ -191,13 +183,21 @@ struct IMALoginWebView: NSViewRepresentable {
             for cookie in cookies {
                 let name = cookie.name.uppercased()
                 let value = cookie.value.removingPercentEncoding ?? cookie.value
-                if name == "IMA-TOKEN" || name == "TOKEN" {
+                if name == "IMA-TOKEN" {
                     token = value
-                } else if name == "IMA-REFRESH-TOKEN" || name == "REFRESH-TOKEN" {
+                } else if name == "TOKEN" && (token.isEmpty || token == "guest") {
+                    token = value
+                } else if name == "IMA-REFRESH-TOKEN" {
                     refreshToken = value
-                } else if name == "IMA-UID" || name == "UID" || name == "USER_ID" {
+                } else if name == "REFRESH-TOKEN" && refreshToken.isEmpty {
+                    refreshToken = value
+                } else if name == "IMA-UID" {
                     uid = value
-                } else if name == "IMA-GUID" || name == "GUID" {
+                } else if (name == "UID" || name == "USER_ID") && uid.isEmpty {
+                    uid = value
+                } else if name == "IMA-GUID" {
+                    guid = value
+                } else if name == "GUID" && guid.isEmpty {
                     guid = value
                 }
             }
@@ -218,13 +218,21 @@ struct IMALoginWebView: NSViewRepresentable {
                     let name = parts[0].uppercased()
                     let value = String(parts[1]).removingPercentEncoding ?? String(parts[1])
                     
-                    if name == "IMA-TOKEN" || name == "TOKEN" {
+                    if name == "IMA-TOKEN" {
                         token = value
-                    } else if name == "IMA-REFRESH-TOKEN" || name == "REFRESH-TOKEN" {
+                    } else if name == "TOKEN" && (token.isEmpty || token == "guest") {
+                        token = value
+                    } else if name == "IMA-REFRESH-TOKEN" {
                         refreshToken = value
-                    } else if name == "IMA-UID" || name == "UID" || name == "USER_ID" {
+                    } else if name == "REFRESH-TOKEN" && refreshToken.isEmpty {
+                        refreshToken = value
+                    } else if name == "IMA-UID" {
                         uid = value
-                    } else if name == "IMA-GUID" || name == "GUID" {
+                    } else if (name == "UID" || name == "USER_ID") && uid.isEmpty {
+                        uid = value
+                    } else if name == "IMA-GUID" {
+                        guid = value
+                    } else if name == "GUID" && guid.isEmpty {
                         guid = value
                     }
                 }
@@ -268,13 +276,21 @@ struct IMALoginWebView: NSViewRepresentable {
                         let upperK = k.uppercased()
                         if let s = v as? String, !s.isEmpty {
                             let value = s.removingPercentEncoding ?? s
-                            if upperK == "TOKEN" || (upperK.contains("TOKEN") && upperK.contains("IMA") && !upperK.contains("REFRESH")) {
+                            if upperK == "IMA-TOKEN" || upperK == "IMA_TOKEN" {
                                 token = value
-                            } else if upperK == "REFRESH_TOKEN" || upperK == "REFRESH-TOKEN" || (upperK.contains("REFRESH") && upperK.contains("TOKEN")) {
+                            } else if (upperK == "TOKEN" || upperK.contains("TOKEN")) && (token.isEmpty || token == "guest") {
+                                token = value
+                            } else if upperK == "IMA-REFRESH-TOKEN" || upperK == "IMA_REFRESH_TOKEN" {
                                 refreshToken = value
-                            } else if upperK == "USER_ID" || upperK == "UID" || upperK == "USERID" || (upperK.contains("UID") && upperK.contains("IMA")) {
+                            } else if (upperK == "REFRESH_TOKEN" || upperK == "REFRESH-TOKEN" || upperK.contains("REFRESH")) && refreshToken.isEmpty {
+                                refreshToken = value
+                            } else if upperK == "IMA-UID" || upperK == "IMA_UID" {
                                 uid = value
-                            } else if upperK == "GUID" || (upperK.contains("GUID") && upperK.contains("IMA")) {
+                            } else if (upperK == "USER_ID" || upperK == "UID" || upperK == "USERID") && uid.isEmpty {
+                                uid = value
+                            } else if upperK == "IMA-GUID" || upperK == "IMA_GUID" {
+                                guid = value
+                            } else if upperK == "GUID" && guid.isEmpty {
                                 guid = value
                             }
                         }

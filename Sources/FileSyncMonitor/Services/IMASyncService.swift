@@ -716,6 +716,7 @@ final class IMASyncService {
             let response = try JSONDecoder().decode(IMAResponse<H5UserInfoDetail>.self, from: data)
             return response.code == 0
         } catch {
+            print("[IMASyncService] validateCredentials failed with error: \(error)")
             return false
         }
     }
