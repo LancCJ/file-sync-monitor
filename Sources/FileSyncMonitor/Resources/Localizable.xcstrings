@@ -2299,6 +2299,28 @@
         }
       }
     },
+    "已同步到 IMA": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced to IMA"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已同步到 IMA"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已同步到 IMA"
+          }
+        }
+      }
+    },
     "仅标记完成": {
       "localizations": {
         "en": {
