@@ -2,6 +2,10 @@ name: Build and Release
 
 on:
   push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
   workflow_dispatch: # Allow manually triggering the release build from GitHub UI
 
 jobs:
