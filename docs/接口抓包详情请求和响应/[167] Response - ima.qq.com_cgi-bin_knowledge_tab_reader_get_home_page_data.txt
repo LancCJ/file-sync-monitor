@@ -140,7 +140,7 @@ Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requeste
         "folder_info": null,
         "forbidden_info": null,
         "highlight_tags": [],
-        "introduction": "gitlabtoken glpat-0Pnq8d3LdtsDtxvKX6UNcm86MQp1OjIH.01.0w0wwe6cx GITHUB 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 Antigravity(repoworkflow) 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",
+        "introduction": "gitlabtoken [REDACTED_GLPAT] GITHUB [REDACTED_GITHUB_PAT] Antigravity(repoworkflow) [REDACTED_GITHUB_GHP]",
         "is_repeated": false,
         "is_top": false,
         "jump_url": "",
@@ -175,7 +175,7 @@ Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requeste
         "update_time": "1778976713538"
       },
       {
-        "abstract": "AI摘要: 1. 提供了IMA的API密钥（sBTqAdTp0JqobUaNTkPn8IC7fJkMdlvEG4jGG6+wu2p9g0bDiz7H0H8VocMtBydCkAe5mtURBQ==）。  \n2. 提供了对应的客户端ID（fb6e1171bae15bed9e996a365e019735）。",
+        "abstract": "AI摘要: 1. 提供了IMA的API密钥（[REDACTED_IMA_KEY]）。  \n2. 提供了对应的客户端ID（fb6e1171bae15bed9e996a365e019735）。",
         "access_status": 3,
         "access_status_update_ts": "0",
         "cover_urls": [],
@@ -230,7 +230,7 @@ Access-Control-Allow-Headers: DNT,X-Mx-ReqToken,Keep-Alive,User-Agent,X-Requeste
         "folder_info": null,
         "forbidden_info": null,
         "highlight_tags": [],
-        "introduction": "DeepSeek sk-ac465bd92a824eefa64b373ef8fde35f MinMax sk-cp-S5RCLBaHydQg0iK5WHizZUKtswWtj-6s-jTPgU7Ag7sCRhlFu3l_kclfa0yNgbvPF1VOjid_Xnpkyclp234iX1cMEUwjNXzCge8d0Eyz9dzHmrnIH4BZTZM openapi sk-proj-Xfcka5WS7_0xhCpn42XOG159iuGm7kt_wQp6DlpFcEdFZORSuIzJJB3O6-9PV0gICJw3hYgI2fT3BlbkFJyJ12w9Y7CM53hf6vXywiXl2A",
+        "introduction": "DeepSeek [REDACTED_DEEPSEEK_KEY] MinMax [REDACTED_MINIMAX_KEY_2] openapi [REDACTED_OPENAI_KEY_SHORT]",
         "is_repeated": false,
         "is_top": false,
         "jump_url": "",
