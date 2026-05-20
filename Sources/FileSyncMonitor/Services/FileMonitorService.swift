@@ -602,99 +602,113 @@ final class FileMonitorService {
                     }
                 }
                 
-                // --- Phase 3: Cloud-to-Local Creations & Modifications ---
-                for item in items {
-                    guard !item.isFolder else {
-                        // 对于文件夹，我们只需确保本地目录存在，然后跳过内容下载
-                        let folderURL = localURL.appendingPathComponent(item.title)
-                        try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                        print("Sync: Ensured local directory exists for folder: \(item.title)")
-                        continue
-                    }
-                    
-                    let fileURL = localURL.appendingPathComponent(item.title)
-                    let filePath = fileURL.path
-                    
-                    // 2. 检查本地是否存在
-                    if !FileManager.default.fileExists(atPath: filePath) {
-                        // 3. 检查是否有本地删除记录
-                        if hasLocalDeletionRecord(for: filePath) {
-                            // 暂存，稍后统一确认
-                            deletedFilesToPull.append((fileURL, item.mediaId, kbId))
-                            print("Sync: Found locally deleted file still on cloud (pending choice): \(item.title)")
-                        } else {
-                            // 无删除记录，安全直接下载
-                            print("Sync: Downloading new file from cloud: \(item.title)")
-                            try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
+                // --- Phase 3: Cloud-to-Local Creations & Modifications (recursive) ---
+                func processItems(_ items: [KnowledgeInfo], localDir: URL) async throws {
+                    for item in items {
+                        if item.isFolder {
+                            // 确保本地目录存在
+                            let folderURL = localDir.appendingPathComponent(item.title)
+                            try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                            print("Sync: Ensured local directory exists for folder: \(item.title)")
                             
-                            let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
-                            event.isSynced = true
-                            context.insert(event)
-                            try? context.save()
+                            // 递归拉取子文件夹内的文件
+                            let folderId = item.folderIdentifier ?? item.mediaId
+                            var childCursor = ""
+                            repeat {
+                                let (childItems, childIsEnd, nextChildCursor) = try await IMASyncService.shared.getKnowledgeList(
+                                    knowledgeBaseId: kbId,
+                                    folderId: folderId,
+                                    cursor: childCursor
+                                )
+                                try await processItems(childItems, localDir: folderURL)
+                                if childIsEnd { break }
+                                childCursor = nextChildCursor
+                            } while true
+                            continue
                         }
-                    } else {
-                        // 本地存在该文件，比对状态
-                        let latestSynced = getLatestSyncedEvent(for: filePath)
-                        let hasUnsynced = hasUnsyncedLocalChanges(for: filePath)
                         
-                        if let lastRemoteId = latestSynced?.remoteId {
-                            if item.mediaId == lastRemoteId {
-                                print("Sync: File identical (mediaId matches): \(item.title)")
+                        let fileURL = localDir.appendingPathComponent(item.title)
+                        let filePath = fileURL.path
+
+                        if !FileManager.default.fileExists(atPath: filePath) {
+                            if hasLocalDeletionRecord(for: filePath) {
+                                deletedFilesToPull.append((fileURL, item.mediaId, kbId))
+                                print("Sync: Found locally deleted file still on cloud (pending choice): \(item.title)")
                             } else {
-                                if hasUnsynced {
-                                    print("Sync: CONFLICT detected for \(item.title). Cloud changed and local has unsynced changes.")
-                                    
-                                    let ext = fileURL.pathExtension
-                                    let baseName = fileURL.deletingPathExtension().lastPathComponent
-                                    let timestamp = Int(Date().timeIntervalSince1970)
-                                    let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
-                                    let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
-                                    
-                                    try? FileManager.default.moveItem(at: fileURL, to: backupURL)
-                                    
-                                    let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
-                                    backupEvent.isSynced = true
-                                    context.insert(backupEvent)
-                                    
-                                    try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
-                                    
-                                    let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
-                                    event.isSynced = true
-                                    context.insert(event)
-                                    try? context.save()
-                                } else {
-                                    print("Sync: Safe pull (cloud updated, local untouched) for \(item.title)")
-                                    try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
-                                    
-                                    let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
-                                    event.isSynced = true
-                                    context.insert(event)
-                                    try? context.save()
-                                }
+                                print("Sync: Downloading new file from cloud: \(item.title)")
+                                try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
+                                
+                                let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
+                                event.isSynced = true
+                                context.insert(event)
+                                try? context.save()
                             }
                         } else {
-                            print("Sync: File exists locally but has no remoteId record. Treating as conflict.")
-                            let ext = fileURL.pathExtension
-                            let baseName = fileURL.deletingPathExtension().lastPathComponent
-                            let timestamp = Int(Date().timeIntervalSince1970)
-                            let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
-                            let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
+                            let latestSynced = getLatestSyncedEvent(for: filePath)
+                            let hasUnsynced = hasUnsyncedLocalChanges(for: filePath)
                             
-                            try? FileManager.default.moveItem(at: fileURL, to: backupURL)
-                            
-                            let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
-                            backupEvent.isSynced = true
-                            context.insert(backupEvent)
-                            
-                            try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
-                            
-                            let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
-                            event.isSynced = true
-                            context.insert(event)
-                            try? context.save()
+                            if let lastRemoteId = latestSynced?.remoteId {
+                                if item.mediaId == lastRemoteId {
+                                    print("Sync: File identical (mediaId matches): \(item.title)")
+                                } else {
+                                    if hasUnsynced {
+                                        print("Sync: CONFLICT detected for \(item.title). Cloud changed and local has unsynced changes.")
+                                        
+                                        let ext = fileURL.pathExtension
+                                        let baseName = fileURL.deletingPathExtension().lastPathComponent
+                                        let timestamp = Int(Date().timeIntervalSince1970)
+                                        let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
+                                        let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
+                                        
+                                        try? FileManager.default.moveItem(at: fileURL, to: backupURL)
+                                        
+                                        let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
+                                        backupEvent.isSynced = true
+                                        context.insert(backupEvent)
+                                        
+                                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
+                                        
+                                        let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
+                                        event.isSynced = true
+                                        context.insert(event)
+                                        try? context.save()
+                                    } else {
+                                        print("Sync: Safe pull (cloud updated, local untouched) for \(item.title)")
+                                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
+                                        
+                                        let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
+                                        event.isSynced = true
+                                        context.insert(event)
+                                        try? context.save()
+                                    }
+                                }
+                            } else {
+                                print("Sync: File exists locally but has no remoteId record. Treating as conflict.")
+                                let ext = fileURL.pathExtension
+                                let baseName = fileURL.deletingPathExtension().lastPathComponent
+                                let timestamp = Int(Date().timeIntervalSince1970)
+                                let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
+                                let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
+                                
+                                try? FileManager.default.moveItem(at: fileURL, to: backupURL)
+                                
+                                let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
+                                backupEvent.isSynced = true
+                                context.insert(backupEvent)
+                                
+                                try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
+                                
+                                let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
+                                event.isSynced = true
+                                context.insert(event)
+                                try? context.save()
+                            }
                         }
                     }
                 }
+                
+                try await processItems(items, localDir: localURL)
+
             } catch {
                 print("Pull from remote failed for \(localPath): \(error)")
             }
