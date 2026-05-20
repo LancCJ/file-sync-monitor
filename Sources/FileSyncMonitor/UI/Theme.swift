@@ -7,8 +7,19 @@ enum AppResourceLoader {
         return Bundle.main.bundlePath.contains(".app")
     }
 
+    /// 定位并实例化子 Bundle FileSyncMonitor_FileSyncMonitor.bundle
+    static var subBundle: Bundle? {
+        for directory in fallbackDirectories {
+            let bundleURL = directory.appendingPathComponent("FileSyncMonitor_FileSyncMonitor.bundle")
+            if FileManager.default.fileExists(atPath: bundleURL.path) {
+                return Bundle(url: bundleURL)
+            }
+        }
+        return nil
+    }
+
     static func url(forResource name: String, withExtension ext: String) -> URL? {
-        // 1. 如果在打包后的 .app 内运行，资源已被平铺到 Contents/Resources，直接使用 main bundle
+        // 1. 如果在打包后的 .app 内运行，优先搜索主资源目录，找不到则从子 Bundle 内加载
         // 绝不调用 Bundle.module 从而彻底杜绝其硬编码构建路径失效导致的 fatalError 崩溃。
         if isPackagedApp {
             for directory in fallbackDirectories {
@@ -16,6 +27,9 @@ enum AppResourceLoader {
                 if FileManager.default.fileExists(atPath: directURL.path) {
                     return directURL
                 }
+            }
+            if let bundle = subBundle, let url = bundle.url(forResource: name, withExtension: ext) {
+                return url
             }
             return nil
         }
@@ -45,7 +59,10 @@ enum AppResourceLoader {
 
     /// 供 AppLocalization 的 .lproj 搜索使用
     static var moduleBundleForLocalization: Bundle? {
-        return isPackagedApp ? nil : Bundle.module
+        if isPackagedApp {
+            return subBundle
+        }
+        return Bundle.module
     }
 
     private static var fallbackDirectories: [URL] {
