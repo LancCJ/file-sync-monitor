@@ -681,6 +681,26 @@ final class FileMonitorService {
                             print("Sync: Failed to delete remote folder \(remoteId) for \(event.path): \(error)")
                         }
                     }
+                } else if event.type == "renamed", let oldPath = event.oldPath,
+                          let oldRemoteId = getLatestRemoteId(for: oldPath, in: context) {
+                    do {
+                        let parentFolderId = try await IMASyncService.shared.resolveFolderIdIfNeeded(
+                            knowledgeBaseId: folderTarget.knowledgeBaseId,
+                            relativeFolderPath: folderTarget.relativeParentFolderPath
+                        )
+                        
+                        try await IMASyncService.shared.renameKnowledge(
+                            mediaId: oldRemoteId,
+                            title: folderTarget.folderName,
+                            knowledgeBaseId: folderTarget.knowledgeBaseId,
+                            folderId: parentFolderId
+                        )
+                        print("Sync: Successfully renamed remote folder \(oldRemoteId) to \(folderTarget.folderName)")
+                        event.remoteId = oldRemoteId
+                    } catch {
+                        print("Sync: Failed to rename remote folder \(oldRemoteId) to \(folderTarget.folderName): \(error)")
+                        throw error
+                    }
                 } else {
                     do {
                         let parentFolderId = try await IMASyncService.shared.resolveFolderIdIfNeeded(
@@ -738,6 +758,28 @@ final class FileMonitorService {
 
         let target = getKnowledgeBaseTarget(for: event.path)
         
+        var resolvedRemoteId = event.remoteId
+        if event.type == "renamed", let oldPath = event.oldPath,
+           let oldRemoteId = getLatestRemoteId(for: oldPath, in: context) {
+            do {
+                let folderId = try await IMASyncService.shared.resolveFolderIdIfNeeded(
+                    knowledgeBaseId: target.knowledgeBaseId,
+                    relativeFolderPath: target.relativeFolderPath
+                )
+                let newFileName = URL(fileURLWithPath: event.path).lastPathComponent
+                try await IMASyncService.shared.renameKnowledge(
+                    mediaId: oldRemoteId,
+                    title: newFileName,
+                    knowledgeBaseId: target.knowledgeBaseId,
+                    folderId: folderId
+                )
+                print("Sync: Successfully renamed remote file \(oldRemoteId) to \(newFileName)")
+                resolvedRemoteId = oldRemoteId
+            } catch {
+                print("Sync: Failed to rename remote file \(oldRemoteId) to \(event.path): \(error)")
+            }
+        }
+        
         // 寻找包含此文件路径的已授权根目录安全 scoped URL
         let sortedPaths = monitoredPaths.sorted { $0.count > $1.count }
         var rootUrl: URL? = nil
@@ -748,7 +790,7 @@ final class FileMonitorService {
             }
         }
         
-        // 显式开启沙盒内该父目录的读取权限（防 fileSize 因沙盒限制返回 0 / code 51）
+        // 显式开启沙盒内该开发目录的读取权限（防 fileSize 因沙盒限制返回 0 / code 51）
         let didAccess = rootUrl?.startAccessingSecurityScopedResource() ?? false
         defer {
             if didAccess {
@@ -760,7 +802,7 @@ final class FileMonitorService {
             fileURL: URL(fileURLWithPath: event.path),
             knowledgeBaseId: target.knowledgeBaseId,
             relativeFolderPath: target.relativeFolderPath,
-            existingRemoteId: event.remoteId,
+            existingRemoteId: resolvedRemoteId,
             duplicateStrategy: duplicateFileStrategy
         )
         event.isSynced = true

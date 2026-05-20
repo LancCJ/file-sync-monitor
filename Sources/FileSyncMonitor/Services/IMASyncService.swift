@@ -479,6 +479,30 @@ final class IMASyncService {
         return data.knowledge.mediaId
     }
 
+    /// 重命名知识库中的文档或文件夹
+    func renameKnowledge(
+        mediaId: String,
+        title: String,
+        knowledgeBaseId: String,
+        folderId: String?
+    ) async throws {
+        let actualFolderId = folderId ?? knowledgeBaseId
+        
+        let response: IMAResponse<EmptyPayload> = try await postJson(
+            path: "cgi-bin/knowledge_tab_writer/rename_knowledge",
+            body: [
+                "media_id": mediaId,
+                "knowledge_base_id": knowledgeBaseId,
+                "folder_id": actualFolderId,
+                "title": title
+            ]
+        )
+        
+        guard response.code == 0 else {
+            throw IMASyncError.apiError(response.displayMessage())
+        }
+    }
+
     private func timestampedFileName(_ fileName: String) -> String {
         let url = URL(fileURLWithPath: fileName)
         let ext = url.pathExtension
