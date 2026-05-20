@@ -112,7 +112,11 @@ final class MenuBarManager: NSObject {
     }
 
     @objc private func openMainWindow() {
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        
+        // 强制主窗口视图跳转到首页 (.home)
+        NotificationCenter.default.post(name: Notification.Name("SelectSidebarItem"), object: "home")
         
         // 过滤获得主界面窗口（排除设置窗口和气泡窗口）
         let mainWindows = NSApp.windows.filter { window in
@@ -131,12 +135,25 @@ final class MenuBarManager: NSObject {
     }
 
     @objc private func openSettings() {
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        // 兼容现代 macOS Sonoma (showSettingsWindow:) 和早期 macOS (showPreferencesWindow:)
-        if #available(macOS 13.0, *) {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        
+        // 引导主窗口视图跳转到设置页 (.settings)
+        NotificationCenter.default.post(name: Notification.Name("SelectSidebarItem"), object: "settings")
+        
+        // 过滤获得主界面窗口
+        let mainWindows = NSApp.windows.filter { window in
+            return window.canBecomeMain && !window.title.contains("设置") && !window.title.contains("Settings")
+        }
+        
+        if let window = mainWindows.first {
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
         } else {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+            // 如果窗口因彻底关闭不存在，同样拉起窗口并自动切换到设置
+            if let delegate = NSApp.delegate as? AppDelegate {
+                _ = delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false)
+            }
         }
     }
 
