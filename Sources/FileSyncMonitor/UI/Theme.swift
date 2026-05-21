@@ -498,14 +498,18 @@ struct SectionHeader: View {
 
 struct PillButtonStyle: ButtonStyle {
     var isPrimary: Bool = true
+    var color: Color = .appInk
+    var hoverColor: Color = .appMint
 
     func makeBody(configuration: Configuration) -> some View {
-        PillButtonContent(configuration: configuration, isPrimary: isPrimary)
+        PillButtonContent(configuration: configuration, isPrimary: isPrimary, color: color, hoverColor: hoverColor)
     }
 
     private struct PillButtonContent: View {
         let configuration: Configuration
         let isPrimary: Bool
+        let color: Color
+        let hoverColor: Color
         @State private var isHovered = false
 
         var body: some View {
@@ -531,7 +535,7 @@ struct PillButtonStyle: ButtonStyle {
 
         private var background: Color {
             if isPrimary {
-                return configuration.isPressed ? Color.appMint.opacity(0.8) : (isHovered ? Color.appMint : Color.appInk)
+                return configuration.isPressed ? hoverColor.opacity(0.8) : (isHovered ? hoverColor : color)
             } else {
                 return configuration.isPressed ? Color.appControlPressed : (isHovered ? Color.appSelection : Color.appControl)
             }
@@ -539,7 +543,7 @@ struct PillButtonStyle: ButtonStyle {
 
         private var stroke: Color {
             if isPrimary {
-                return isHovered ? Color.appMint : Color.appInk
+                return isHovered ? hoverColor : color
             } else {
                 return isHovered ? Color.appMint.opacity(0.48) : Color.appLine.opacity(0.72)
             }

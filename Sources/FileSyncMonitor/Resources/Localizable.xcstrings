@@ -6948,6 +6948,390 @@
           }
         }
       }
+    },
+    "常见问题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FAQ"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常見問題"
+          }
+        }
+      }
+    },
+    "同步逻辑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync Logic"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步邏輯"
+          }
+        }
+      }
+    },
+    "功能指南": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Features"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功能指南"
+          }
+        }
+      }
+    },
+    "关于与支持": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About & Support"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關於與支持"
+          }
+        }
+      }
+    },
+    "常见问题与解答 (FAQ)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frequently Asked Questions (FAQ)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常見問題與解答 (FAQ)"
+          }
+        }
+      }
+    },
+    "解决首次配置、微信登录失效、删除同步限制与本地文件安全等常见疑惑。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resolve common questions about initial setup, WeChat login expiry, deletion sync limits, and local file safety."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解決首次配置、微信登錄失效、刪除同步限制與本地檔案安全等常見疑惑。"
+          }
+        }
+      }
+    },
+    "首次使用如何快速开始监控和同步？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How to quickly start monitoring and syncing for the first time?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首次使用如何快速開始監控和同步？"
+          }
+        }
+      }
+    },
+    "首次打开应用，主界面会显示微信登录二维码。请使用微信扫码授权登录以绑定您的腾讯 IMA 账号。登录成功后，前往「设置 -> 监控目录」点击添加您想监控的文件夹，并为该文件夹绑定对应的云端知识库，即可开始监控和同步文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When you open the app for the first time, a WeChat login QR code will be displayed on the main interface. Please scan it to authorize login and bind your Tencent IMA account. Once logged in, go to \"Settings -> Monitored Directories\", click to add the folder you want to monitor, and bind it to a cloud knowledge base to start monitoring and syncing."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首次打開應用，主介面會顯示微信登錄二維碼。請使用微信掃碼授權登錄以綁定您的騰訊 IMA 帳號。登錄成功後，前往「設置 -> 監控目錄」點記添加您想監控的資料夾，並為該資料夾綁定對應的雲端知識庫，即可開始監控和同步檔案。"
+          }
+        }
+      }
+    },
+    "微信扫码登录的安全与授权失效如何处理？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How is WeChat scan login safety and authorization expiry handled?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "微信掃碼登錄的安全與授權失效如何處理？"
+          }
+        }
+      }
+    },
+    "本应用通过内嵌的腾讯官方安全页面进行登录，所有登录凭据（Token/Cookie）均在本地沙盒内安全加密存储，不会泄露。如果因为长时间未运行或腾讯侧策略调整导致授权失效，应用会在同步时提示“授权已过期”，此时只需在主界面重新扫码登录即可恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This app logs in via an embedded official Tencent security page. All login credentials (Token/Cookie) are encrypted and stored safely inside the local sandbox and will not be leaked. If the authorization expires due to inactivity or Tencent policy adjustments, the app will prompt \"Authorization Expired\" during sync. Simply scan the QR code on the main interface again to restore it."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本應用通過內嵌的騰訊官方安全頁面進行登錄，所有登錄憑據（Token/Cookie）均在本地沙盒內安全加密存儲，不會洩露。如果因為長時間未運行或騰訊側策略調整導致授權失效，應用會在同步時提示“授權已過期”，此時只需在主介面重新掃碼登錄即可恢復。"
+          }
+        }
+      }
+    },
+    "在设置中执行“清除记录”或“重置应用”会删除本地 of 物理文件吗？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Will performing \"Clear Records\" or \"Reset App\" in Settings delete local physical files?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在設置中執行“清除記錄”或“重置應用”會刪除本地的物理檔案嗎？"
+          }
+        }
+      }
+    },
+    "在设置中执行“清除记录”或“重置应用”会删除本地的物理文件吗？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Will performing \"Clear Records\" or \"Reset App\" in Settings delete local physical files?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在設置中執行“清除記錄”或“重置應用”會刪除本地的物理檔案嗎？"
+          }
+        }
+      }
+    },
+    "绝对不会。无论是在设置中点击「清除文件记录」还是「彻底重置应用」，都只属于应用自身数据的管理操作（清空本地 SQLite 数据库中的事件历史、断开文件夹监控或清除偏好设置），绝对不会以任何形式修改或删除您电脑磁盘上的任何物理文件，请放心操作。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Absolutely not. Whether you click \"Clear File Records\" or \"Reset App\" in Settings, it is only a data management operation for the app itself (clearing event history in the local SQLite database, disconnecting folder monitoring, or clearing preferences). It will never modify or delete any physical files on your computer disk in any way."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "絕對不會。無論是在設置中點擊「清除檔案記錄」還是「徹底重置應用」，都只屬於應用自身數據的管理操作（清空本地 SQLite 資料庫中的事件歷史、斷開資料夾監控或清除偏好設置），絕對不會以任何形式修改或刪除您電腦磁碟上的任何物理檔案，請放心操作。"
+          }
+        }
+      }
+    },
+    "忽略规则支持哪些过滤方式？怎么写？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What filtering methods do ignore rules support, and how to write them?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "忽略規則支援哪些過濾方式？怎麼寫？"
+          }
+        }
+      }
+    },
+    "忽略规则用于在事件产生前进行过滤，避免日志杂乱。您可以在「设置 -> 忽略规则」中通过以下三种方式过滤：\n1. 【全名过滤】：输入完整文件名（如 config.json），完全匹配的文件会被过滤。\n2. 【后缀过滤】：输入以点开头的扩展名（如 .tmp 或 .log），匹配该类型的所有临时文件。\n3. 【目录过滤】：输入文件夹名称（如 node_modules 或 build），匹配该目录下的所有变动均被屏蔽。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignore rules are used to filter events before they are generated to avoid cluttered logs. You can filter by three methods in \"Settings -> Ignore Rules\":\\n1. [Full Name Filtering]: Enter the complete filename (e.g. config.json) to filter files with an exact match.\\n2. [Suffix Filtering]: Enter an extension starting with a dot (e.g. .tmp or .log) to filter all temporary files of that type.\\n3. [Directory Filtering]: Enter a folder name (e.g. node_modules or build) to block all changes under that directory."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "忽略規則用於在事件產生前進行過濾，避免日誌雜亂。您可以在「設置 -> 忽略規則」中通過以下三種方式過濾：\\n1. 【全名過濾】：輸入完整檔名（如 config.json），完全匹配的檔案會被過濾。\\n2. 【後綴過濾】：輸入以點開頭的副檔名（如 .tmp 或 .log），匹配該類型的所有臨時檔案。\\n3. 【目錄過濾】：輸入資料夾名稱（如 node_modules 或 build），匹配該目錄下的所有變動均被屏蔽。"
+          }
+        }
+      }
+    },
+    "【免责声明】：本项目为非盈利开源项目。上述捐赠行为完全基于您的自愿，所得款项仅用于补贴开发者维护项目所产生的时间、网络与服务器等基本支出，捐赠并非此软件的牟利手段，且不代表任何商业化销售或服务承诺。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[Disclaimer]: This project is a non-profit open-source project. The donations are strictly voluntary. The funds received are only used to offset the developer's basic expenses such as time, network, and server maintenance. Donations are not a profit-making scheme of this software, and do not represent any commercial sales or service commitment."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "【免責聲明】：本項目為非盈利開源項目。上述捐贈行為完全基於您的自願，所得款項僅用於補貼開發者維護項目所產生的時間、網路與伺服器等基本支出，捐贈並非此軟件的牟利手段，且不代表任何商業化銷售或服務承諾。"
+          }
+        }
+      }
+    },
+    "为什么有时候修改了文件，待同步队列中没有立刻出现记录？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why doesn't a modified file immediately appear in the to-sync queue?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "為什麼有時候修改了檔案，待同步佇列中沒有立刻出現記錄？"
+          }
+        }
+      }
+    },
+    "为了防止编辑器保存临时状态时产生大量高频碎片记录，应用引入了 2 秒的防抖延迟机制（Debounce）。当您对文件进行连续编辑或保存时，应用会等待文件写入稳定后统一生成一条记录。另外，被忽略规则过滤的文件也不会进入队列。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To prevent generating excessive high-frequency fragmented records when editors save temporary states, the app introduces a 2-second debounce mechanism (Debounce). When you edit or save files continuously, the app waits for the file write to stabilize before generating a single record. Additionally, files filtered by ignore rules will not enter the queue."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "為了防止編輯器儲存臨時狀態時產生大量高頻碎片記錄，應用引入了 2 秒的防抖延遲機制（Debounce）。當您對檔案進行連續編輯或儲存時，應用會等待檔案寫入穩定後統一生成一條記錄。另外，被忽略規則過濾的檔案也不會進入佇列。"
+          }
+        }
+      }
+    },
+    "确认清除文件记录？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear File History?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認清除檔案記錄？"
+          }
+        }
+      }
+    },
+    "此操作将永久删除本地数据库中的所有文件变动记录和同步日志，但不会删除您的本地物理文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This will permanently delete all file change records and sync logs in the local database. Your physical files will not be deleted."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作將永久刪除本地資料庫中的所有檔案變動記錄和同步日誌，但不會刪除您的本地物理檔案。"
+          }
+        }
+      }
+    },
+    "确认彻底重置应用？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset Application?"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認徹底重置應用？"
+          }
+        }
+      }
+    },
+    "此操作将清空所有文件变动记录、停止监控所有文件夹、清除自定义忽略规则、恢复所有偏好设置至出厂默认，并退出您的腾讯 IMA 账号授权。本操作无法撤销。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This will clear all file change records, stop monitoring all folders, clear custom ignore rules, restore all preferences to defaults, and sign out of your Tencent IMA account. This cannot be undone."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作將清空所有檔案變動記錄、停止監控所有資料夾、清除自定義忽略規則、恢復所有偏好設置至出廠默認，並退出您的騰訊 IMA 帳號授權。本操作無法撤銷。"
+          }
+        }
+      }
+    },
+    "清除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除"
+          }
+        }
+      }
+    },
+    "重置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -128,3 +128,14 @@ struct FileSyncMonitorApp: App {
         }
     }
 }
+
+extension Bundle {
+    var appVersion: String {
+        object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.2.0"
+    }
+    
+    var appBuild: String {
+        object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "debug"
+    }
+}
+

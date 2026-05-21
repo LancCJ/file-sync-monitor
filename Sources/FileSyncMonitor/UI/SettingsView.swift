@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("customIgnoredDirectoryNames") private var customIgnoredDirectoryNames = ""
     @AppStorage("autoSync") private var autoSync = false
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
+    @AppStorage("showAppWelcomeBanner") private var showAppWelcomeBanner = true
 
     @State private var devices: [H5Device] = []
     @State private var quota: H5SpaceQuota? = nil
@@ -23,9 +24,15 @@ struct SettingsView: View {
     @State private var isShowingLogs = false
     @AppStorage("highlightIMAConfig") private var highlightIMAConfig = false
     @State private var highlightPulse = false
-    @State private var isShowingIMAHelp = false
     @State private var launchAtLoginEnabled = false
     @State private var launchAtLoginStatusMessage = ""
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var isShowingClearEventsAlert = false
+    @State private var isShowingResetAllAlert = false
+
+    var requestClearEvents: (() -> Void)? = nil
+    var requestResetAll: (() -> Void)? = nil
 
     enum AppearanceMode: String, CaseIterable {
         case system, light, dark
@@ -44,7 +51,8 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
+        ZStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 32) {
                     LocalizedText("设置")
@@ -57,7 +65,8 @@ struct SettingsView: View {
                         AppDropdownMenu(
                             selection: $appLanguage,
                             options: AppLanguage.allCases.map { ($0, $0.displayTitle) },
-                            label: AppMenuValue(text: appLanguage.displayTitle)
+                            label: AppMenuValue(text: appLanguage.displayTitle),
+                            localizeOptions: false
                         )
                         .frame(width: 120)
                         .onChange(of: appLanguage) { _, _ in
@@ -290,8 +299,40 @@ struct SettingsView: View {
                     }
                 }
 
+                IMASettingsGroup(title: "数据清理") {
+                    IMASettingsRow(title: "清除文件记录", subtitle: "清除本地数据库中所有的文件变动与同步记录") {
+                        Button(action: {
+                            if let requestClearEvents {
+                                requestClearEvents()
+                            } else {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                    isShowingClearEventsAlert = true
+                                }
+                            }
+                        }) {
+                            LocalizedText("清除")
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                    }
+
+                    IMASettingsRow(title: "彻底重置应用", subtitle: "清除记录、监控目录、忽略规则、登录授权，并将偏好设置恢复为默认值") {
+                        Button(action: {
+                            if let requestResetAll {
+                                requestResetAll()
+                            } else {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                    isShowingResetAllAlert = true
+                                }
+                            }
+                        }) {
+                            LocalizedText("重置")
+                        }
+                        .buttonStyle(QuietButtonStyle())
+                    }
+                }
+
                 IMASettingsGroup(title: "关于与开发") {
-                    IMASettingsRow(title: "关于 FileSyncMonitor", subtitle: "版本 v1.0.0-beta • 基于 macOS Sonoma") {
+                    IMASettingsRow(title: "关于 FileSyncMonitor", subtitle: "版本 v\(Bundle.main.appVersion) • 基于 macOS Sonoma") {
                         Text("FileSyncMonitor")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(Color.appMuted)
@@ -319,9 +360,6 @@ struct SettingsView: View {
             .background(WindowFocusActivator())
             .sheet(isPresented: $isShowingLogs) {
                 IMALogView()
-            }
-            .sheet(isPresented: $isShowingIMAHelp) {
-                IMAConfigHelpDialog(dismiss: { isShowingIMAHelp = false })
             }
             .onAppear {
                 refreshLaunchAtLoginStatus()
@@ -353,8 +391,61 @@ struct SettingsView: View {
             .onChange(of: customIgnoredFileNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
             .onChange(of: customIgnoredExtensions) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
             .onChange(of: customIgnoredDirectoryNames) { _, _ in FileMonitorService.shared.refreshIgnoreRules() }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("performClearAllEvents"))) { _ in
+                performClearAllEvents()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("performResetAll"))) { _ in
+                performResetAll()
+            }
+        }
+
+        if isShowingClearEventsAlert {
+            CustomSettingsConfirmationOverlay(
+                title: "确认清除文件记录？",
+                message: "此操作将永久删除本地数据库中的所有文件变动记录和同步日志，但不会删除您的本地物理文件。",
+                confirmTitle: "清除",
+                iconName: "trash.fill",
+                iconColor: Color.appRose,
+                cancel: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        isShowingClearEventsAlert = false
+                    }
+                },
+                confirm: {
+                    performClearAllEvents()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        isShowingClearEventsAlert = false
+                    }
+                }
+            )
+            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            .zIndex(70)
+        }
+
+        if isShowingResetAllAlert {
+            CustomSettingsConfirmationOverlay(
+                title: "确认彻底重置应用？",
+                message: "此操作将清空所有文件变动记录、停止监控所有文件夹、清除自定义忽略规则、恢复所有偏好设置至出厂默认，并退出您的腾讯 IMA 账号授权。本操作无法撤销。",
+                confirmTitle: "重置",
+                iconName: "exclamationmark.triangle.fill",
+                iconColor: Color.appRose,
+                cancel: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        isShowingResetAllAlert = false
+                    }
+                },
+                confirm: {
+                    performResetAll()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                        isShowingResetAllAlert = false
+                    }
+                }
+            )
+            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            .zIndex(70)
         }
     }
+}
 
     private var retentionText: String {
         retentionDays == 0 ? "永久" : String(format: "天_format".appLocalized, retentionDays)
@@ -403,6 +494,44 @@ struct SettingsView: View {
         customIgnoredFileNames = ""
         customIgnoredExtensions = ""
         customIgnoredDirectoryNames = ""
+    }
+
+    private func performClearAllEvents() {
+        do {
+            try modelContext.delete(model: FileEvent.self)
+            try modelContext.save()
+            print("Successfully cleared all file events from SwiftData.")
+        } catch {
+            print("Failed to clear file events: \(error)")
+        }
+    }
+
+    private func performResetAll() {
+        // 1. 停止并清空所有监控目录及安全书签
+        FileMonitorService.shared.clearAllMonitoredDirectories()
+        
+        // 2. 清除 SwiftData 里的所有文件记录
+        performClearAllEvents()
+        
+        // 3. 清空自定义忽略规则
+        resetIgnoreRules()
+        
+        // 4. 重置 @AppStorage 偏好设置
+        appearance = .system
+        notifyOnChanges = true
+        retentionDays = 365
+        defaultExportFormat = "csv"
+        autoSync = false
+        appLanguage = .system
+        showAppWelcomeBanner = true
+        
+        // 5. 退出 IMA 账号并清空凭据及 WebView 缓存
+        IMACredentialsManager.shared.clear(clearWebView: true)
+        devices = []
+        quota = nil
+        
+        // 6. 刷新登录项状态
+        refreshLaunchAtLoginStatus()
     }
 
     private func refreshLaunchAtLoginStatus() {
@@ -819,98 +948,67 @@ struct CredentialToolButton: View {
     }
 }
 
-struct IMAConfigHelpDialog: View {
-    let dismiss: () -> Void
-    @State private var isCloseHovered = false
-    
-    var body: some View {
-        VStack(spacing: 24) {
-            // Header
-            HStack {
-                LocalizedText("如何获取 Tencent IMA 凭证")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Color.appInk)
-                Spacer()
-                Button(action: dismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(isCloseHovered ? Color.red : Color.appMuted)
-                }
-                .buttonStyle(.plain)
-                .onHover { isCloseHovered = $0 }
-                .animation(.snappy(duration: 0.15), value: isCloseHovered)
-            }
-            .padding(.bottom, 8)
-            
-            Divider()
-            
-            // Steps
-            VStack(alignment: .leading, spacing: 18) {
-                HelpStepRow(
-                    number: "1",
-                    title: "登录并进入控制台".appLocalized,
-                    desc: "登录您的腾讯云账号，访问 Tencent IMA (腾讯云智能知识库) 平台并进入管理控制台。".appLocalized
-                )
-                
-                HelpStepRow(
-                    number: "2",
-                    title: "获取 API 密钥".appLocalized,
-                    desc: "在「API 密钥」或「安全凭证」管理页面，生成并获取您的 Client ID (客户端标识) 和 API Key (接口密钥)。".appLocalized
-                )
-                
-                HelpStepRow(
-                    number: "3",
-                    title: "获取知识库 ID".appLocalized,
-                    desc: "在「知识库管理」中，选择或创建目标知识库，复制其知识库 ID 并填入同步目录设置中。".appLocalized
-                )
-            }
-            
-            Spacer()
-            
-            // Action
-            Button(action: dismiss) {
-                LocalizedText("我知道了")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-                    .background(Color.appMint)
-                    .foregroundStyle(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(32)
-        .frame(width: 480, height: 400)
-        .background(IMAWindowBackground())
-    }
-}
-
-struct HelpStepRow: View {
-    let number: String
+struct CustomSettingsConfirmationOverlay: View {
     let title: String
-    let desc: String
-    
+    let message: String
+    let confirmTitle: String
+    let iconName: String
+    let iconColor: Color
+    let cancel: () -> Void
+    let confirm: () -> Void
+
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(Color.appMint.opacity(0.12))
-                    .frame(width: 24, height: 24)
-                Text(number)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color.appMint)
+        ZStack {
+            Color.appInk.opacity(0.16)
+                .ignoresSafeArea()
+                .onTapGesture(perform: cancel)
+
+            VStack(spacing: 18) {
+                Image(systemName: iconName)
+                    .font(.system(size: 28))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 54, height: 54)
+                    .background(iconColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(spacing: 8) {
+                    LocalizedText(title)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color.appInk)
+                        .multilineTextAlignment(.center)
+
+                    LocalizedText(message)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.appMuted)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+                .padding(.horizontal, 8)
+
+                HStack(spacing: 10) {
+                    Button(action: cancel) {
+                        LocalizedText("取消")
+                    }
+                    .buttonStyle(QuietButtonStyle())
+
+                    Button(action: confirm) {
+                        LocalizedText(confirmTitle)
+                    }
+                    .buttonStyle(PillButtonStyle(isPrimary: true, color: iconColor.opacity(0.92), hoverColor: iconColor))
+                }
             }
-            .padding(.top, 2)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.appInk)
-                Text(desc)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.appInk.opacity(0.6))
-                    .lineSpacing(4)
-            }
+            .padding(24)
+            .frame(width: 380)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.appSurface.opacity(0.98))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.appLine.opacity(0.78), lineWidth: 1)
+                    )
+            )
+            .shadow(color: Color.appInk.opacity(0.16), radius: 24, x: 0, y: 16)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -6,6 +6,7 @@ struct AppDropdownMenu<Value: Hashable, Label: View>: View {
     let label: Label
     var arrowEdge: Edge = .bottom
     var maxHeight: CGFloat? = nil
+    var localizeOptions: Bool = true
     
     @State private var isShowingPopover = false
     
@@ -25,8 +26,13 @@ struct AppDropdownMenu<Value: Hashable, Label: View>: View {
                             isShowingPopover = false
                         } label: {
                             HStack {
-                                LocalizedText(option.1)
-                                    .font(.system(size: 13, weight: selection == option.0 ? .semibold : .medium))
+                                if localizeOptions {
+                                    LocalizedText(option.1)
+                                        .font(.system(size: 13, weight: selection == option.0 ? .semibold : .medium))
+                                } else {
+                                    Text(option.1)
+                                        .font(.system(size: 13, weight: selection == option.0 ? .semibold : .medium))
+                                }
                                 Spacer()
                                 if selection == option.0 {
                                     Image(systemName: "checkmark")
