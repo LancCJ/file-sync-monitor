@@ -148,6 +148,29 @@ final class IMASyncService {
 
     /// 获取媒体信息与下载链接 (私有 H5 /get_knowledge 接口适配)
     func getMediaInfo(mediaId: String, knowledgeBaseId: String) async throws -> MediaInfoPayload {
+        do {
+            let webInfo = try await getMediaInfoFromWeb(mediaId: mediaId, knowledgeBaseId: knowledgeBaseId)
+            if webInfo.hasUsableContent {
+                return webInfo
+            }
+
+            do {
+                let openAPIInfo = try await getMediaInfoFromOpenAPI(mediaId: mediaId)
+                if openAPIInfo.hasUsableContent {
+                    return openAPIInfo
+                }
+            } catch {
+                print("IMA openapi get_media_info fallback failed for \(mediaId): \(error)")
+            }
+
+            return webInfo
+        } catch {
+            print("IMA H5 get_knowledge failed for \(mediaId), trying openapi get_media_info: \(error)")
+            return try await getMediaInfoFromOpenAPI(mediaId: mediaId)
+        }
+    }
+
+    private func getMediaInfoFromWeb(mediaId: String, knowledgeBaseId: String) async throws -> MediaInfoPayload {
         let response: IMAResponse<H5GetKnowledgeResponse> = try await postJson(
             path: "cgi-bin/knowledge_tab_reader/get_knowledge",
             body: [
@@ -159,8 +182,19 @@ final class IMASyncService {
         try validate(response)
         guard let data = response.data else { throw IMASyncError.apiError("未获取到媒体详情") }
         
-        let urlInfo = URLInfo(url: data.knowledge.jumpUrl, headers: nil)
-        return MediaInfoPayload(mediaType: data.knowledge.mediaType, urlInfo: urlInfo)
+        return data.knowledge.mediaInfo
+    }
+
+    private func getMediaInfoFromOpenAPI(mediaId: String) async throws -> MediaInfoPayload {
+        let response: IMAResponse<MediaInfoPayload> = try await postJson(
+            path: "openapi/wiki/v1/get_media_info",
+            body: [
+                "media_id": mediaId
+            ]
+        )
+        try validate(response)
+        guard let data = response.data else { throw IMASyncError.apiError("未获取到媒体详情") }
+        return data
     }
 
     func downloadFile(mediaId: String, knowledgeBaseId: String, to destinationURL: URL) async throws {
@@ -168,12 +202,35 @@ final class IMASyncService {
             FileMonitorService.shared.updateSyncProgress(status: String(format: "正在拉取: %@".appLocalized, destinationURL.lastPathComponent))
         }
         let info = try await getMediaInfo(mediaId: mediaId, knowledgeBaseId: knowledgeBaseId)
-        guard let urlInfo = info.urlInfo, let downloadURL = URL(string: urlInfo.url) else {
-            throw IMASyncError.apiError("该媒体类型暂不支持导出或无法获取下载链接")
+
+        if info.mediaType == 11 {
+            // 尝试从 mediaInfo 获取 noteId
+            guard let noteId = info.notebookExtInfo?.notebookId, !noteId.isEmpty else {
+                // 最后撤退：直接用 mediaId 作为 noteId 尝试
+                print("Sync: downloadFile note mediaType==11 but notebookExtInfo.notebookId is empty, trying mediaId as noteId")
+                let fallbackContent = try? await getNoteContent(noteId: mediaId)
+                if let fallbackContent, !fallbackContent.isEmpty {
+                    try FileManager.default.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try fallbackContent.write(to: destinationURL, atomically: true, encoding: .utf8)
+                    return
+                }
+                throw IMASyncError.apiError("该 IMA 笔记缺少 note_id，无法导出到本地")
+            }
+            let content = try await getNoteContent(noteId: noteId)
+            try FileManager.default.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try content.write(to: destinationURL, atomically: true, encoding: .utf8)
+            return
+        }
+
+        guard let urlInfo = info.urlInfo, let downloadURL = URL(string: urlInfo.url), !urlInfo.url.isEmpty else {
+            throw IMASyncError.apiError("该媒体类型暂不支持导出或无法获取下载链接 (mediaType=\(info.mediaType))")
         }
         
         var request = URLRequest(url: downloadURL)
         request.httpMethod = "GET"
+        for (key, value) in urlInfo.headers ?? [:] {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
         
         let logId = IMALogService.shared.logRequest(method: "DOWNLOAD", url: downloadURL.absoluteString, headers: request.allHTTPHeaderFields, body: "Downloading file...")
         let (tempURL, response) = try await self.session.download(for: request)
@@ -186,10 +243,60 @@ final class IMASyncService {
         }
         
         // 移动到目标位置
+        try FileManager.default.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: destinationURL.path) {
             try FileManager.default.removeItem(at: destinationURL)
         }
         try FileManager.default.moveItem(at: tempURL, to: destinationURL)
+    }
+
+    func getNoteContent(noteId: String) async throws -> String {
+        do {
+            let response: IMAResponse<NoteContentPayload> = try await postJson(
+                path: "openapi/note/v1/get_doc_content",
+                body: [
+                    "note_id": noteId,
+                    "target_content_format": 0
+                ]
+            )
+            try validate(response)
+            if let content = response.data?.content, !content.isEmpty {
+                return content
+            }
+        } catch {
+            print("IMA note openapi get_doc_content failed, trying H5 notebook_logic_get_doc: \(error)")
+        }
+
+        let h5Body: [String: Any] = [
+            "docid": noteId,
+            "op": [
+                "op_basic": true,
+                "op_content": true,
+                "op_resource": true,
+                "op_attach": true,
+                "disable_cover": false,
+                "op_attach_detail": true
+            ]
+        ]
+
+        var lastError: Error?
+        for path in ["cgi-bin/notebook_logic_get_doc", "cgi-bin/notebook_logic/get_doc"] {
+            do {
+                let response: IMAResponse<NoteContentPayload> = try await postJson(
+                    path: path,
+                    body: h5Body
+                )
+                try validate(response)
+                if let content = response.data?.content, !content.isEmpty {
+                    return content
+                }
+            } catch {
+                lastError = error
+                print("IMA note H5 \(path) failed: \(error)")
+            }
+        }
+
+        throw lastError ?? IMASyncError.apiError("未能读取 IMA 笔记正文")
     }
 
     /// 知识库模块：上传文件 (私有 H5 接口上传链路)
@@ -565,6 +672,21 @@ final class IMASyncService {
     }
 
     func fetchAllKnowledgeItems(knowledgeBaseId: String, folderId: String?) async throws -> [KnowledgeInfo] {
+        if folderId == nil {
+            let defaultRootItems = try await fetchKnowledgeItemsPageByPage(knowledgeBaseId: knowledgeBaseId, folderId: nil)
+            do {
+                let explicitRootItems = try await fetchKnowledgeItemsPageByPage(knowledgeBaseId: knowledgeBaseId, folderId: knowledgeBaseId)
+                return mergeKnowledgeItems(defaultRootItems + explicitRootItems)
+            } catch {
+                print("IMA root explicit folder_id fetch skipped for \(knowledgeBaseId): \(error)")
+                return defaultRootItems
+            }
+        }
+
+        return try await fetchKnowledgeItemsPageByPage(knowledgeBaseId: knowledgeBaseId, folderId: folderId)
+    }
+
+    private func fetchKnowledgeItemsPageByPage(knowledgeBaseId: String, folderId: String?) async throws -> [KnowledgeInfo] {
         var allItems: [KnowledgeInfo] = []
         var cursor = ""
 
@@ -579,6 +701,21 @@ final class IMASyncService {
         }
 
         return allItems
+    }
+
+    private func mergeKnowledgeItems(_ items: [KnowledgeInfo]) -> [KnowledgeInfo] {
+        var seenIds: Set<String> = []
+        var merged: [KnowledgeInfo] = []
+
+        for item in items {
+            let stableId = item.folderIdentifier ?? item.mediaId
+            guard !stableId.isEmpty else { continue }
+            if seenIds.insert(stableId).inserted {
+                merged.append(item)
+            }
+        }
+
+        return merged
     }
 
     private func uploadToCOS(fileData: Data, fileName: String, payload: CreateMediaPayload, contentType: String, fileSize: Int) async throws {
@@ -1012,14 +1149,40 @@ struct H5KnowledgeBaseListResponse: Decodable {
 
 struct H5GetKnowledgeResponse: Decodable {
     let knowledge: H5KnowledgeDetail
+
+    enum CodingKeys: String, CodingKey {
+        case knowledge
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let knowledge = try? container.decode(H5KnowledgeDetail.self, forKey: .knowledge) {
+            self.knowledge = knowledge
+        } else {
+            self.knowledge = try H5KnowledgeDetail(from: decoder)
+        }
+    }
     
     struct H5KnowledgeDetail: Decodable {
-        let jumpUrl: String
+        let jumpUrl: String?
+        let rawFileUrl: String?
         let mediaType: Int
+        let urlInfo: URLInfo?
+        let notebookExtInfo: NotebookExtInfo?
+
+        var mediaInfo: MediaInfoPayload {
+            let resolvedURLInfo = urlInfo
+                ?? jumpUrl.flatMap { $0.isEmpty ? nil : URLInfo(url: $0, headers: nil) }
+                ?? rawFileUrl.flatMap { $0.isEmpty ? nil : URLInfo(url: $0, headers: nil) }
+            return MediaInfoPayload(mediaType: mediaType, urlInfo: resolvedURLInfo, notebookExtInfo: notebookExtInfo)
+        }
         
         enum CodingKeys: String, CodingKey {
             case jumpUrl = "jump_url"
+            case rawFileUrl = "raw_file_url"
             case mediaType = "media_type"
+            case urlInfo = "url_info"
+            case notebookExtInfo = "notebook_ext_info"
         }
     }
 }
@@ -1244,15 +1407,20 @@ struct KnowledgeListPayload: Decodable {
         var items: [KnowledgeInfo] = []
         items.append(contentsOf: (try? container.decode([KnowledgeInfo].self, forKey: .knowledgeList)) ?? [])
         items.append(contentsOf: (try? container.decode([KnowledgeInfo].self, forKey: .folderList)) ?? [])
+        items.append(contentsOf: (try? container.decode([KnowledgeInfo].self, forKey: .infoList)) ?? [])
+        items.append(contentsOf: (try? container.decode([KnowledgeInfo].self, forKey: .list)) ?? [])
+        items.append(contentsOf: (try? container.decode([KnowledgeInfo].self, forKey: .items)) ?? [])
 
         if items.isEmpty {
-            items = (try? container.decode([KnowledgeInfo].self, forKey: .infoList))
-                ?? (try? container.decode([KnowledgeInfo].self, forKey: .list))
-                ?? (try? container.decode([KnowledgeInfo].self, forKey: .items))
-                ?? []
+            items = []
         }
 
-        knowledgeList = items
+        var seenIds: Set<String> = []
+        knowledgeList = items.filter { item in
+            let stableId = item.folderIdentifier ?? item.mediaId
+            guard !stableId.isEmpty else { return true }
+            return seenIds.insert(stableId).inserted
+        }
         isEnd = (try? container.decode(Bool.self, forKey: .isEnd)) ?? true
         nextCursor = (try? container.decode(String.self, forKey: .nextCursor)) ?? ""
     }
@@ -1265,19 +1433,58 @@ struct KnowledgeInfo: Codable, Identifiable, Hashable {
     let parentFolderId: String?
     let folderId: String?
     let name: String?
+    let mediaType: Int?
+    let folderInfo: FolderInfo?
+    let fileNumber: Int?
+    let folderNumber: Int?
+    let isTop: Bool?
+    let notebookExtInfo: NotebookExtInfo?
 
     var displayName: String {
         name?.isEmpty == false ? name! : title
     }
 
     var folderIdentifier: String? {
-        if let folderId, !folderId.isEmpty {
+        if let nestedFolderId = folderInfo?.folderId, !nestedFolderId.isEmpty {
+            return nestedFolderId
+        }
+        
+        // 明确声明不是文件夹类型（16）的媒体类型，绝对不能被当作文件夹
+        if let mediaType = mediaType, mediaType != 0, mediaType != 16 {
+            return nil
+        }
+        
+        if isFolderMediaType, let folderId, !folderId.isEmpty {
             return folderId
+        }
+        if isFolderMediaType, !mediaId.isEmpty {
+            return mediaId
+        }
+        if hasFolderMetadata, let folderId, !folderId.isEmpty {
+            return folderId
+        }
+        if hasFolderMetadata, !mediaId.isEmpty {
+            return mediaId
         }
         if mediaId.hasPrefix("folder_") {
             return mediaId
         }
+        if let folderId, folderId.hasPrefix("folder_"), mediaType == nil, mediaId.isEmpty || mediaId == folderId {
+            return folderId
+        }
         return nil
+    }
+
+    private var hasFolderMetadata: Bool {
+        fileNumber != nil || folderNumber != nil
+    }
+
+    private var isFolderMediaType: Bool {
+        mediaType == 16
+    }
+
+    var isNote: Bool {
+        mediaType == 11 || notebookExtInfo?.notebookId?.isEmpty == false
     }
 
     var isFolder: Bool {
@@ -1290,17 +1497,31 @@ struct KnowledgeInfo: Codable, Identifiable, Hashable {
         case title
         case name
         case parentFolderId = "parent_folder_id"
+        case mediaType = "media_type"
+        case folderInfo = "folder_info"
+        case fileNumber = "file_number"
+        case folderNumber = "folder_number"
+        case isTop = "is_top"
+        case notebookExtInfo = "notebook_ext_info"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         folderId = try? container.decode(String.self, forKey: .folderId)
+        mediaType = try? container.decode(Int.self, forKey: .mediaType)
+        folderInfo = try? container.decode(FolderInfo.self, forKey: .folderInfo)
+        fileNumber = try? container.decodeFlexibleInt(forKey: .fileNumber)
+        folderNumber = try? container.decodeFlexibleInt(forKey: .folderNumber)
+        isTop = try? container.decode(Bool.self, forKey: .isTop)
+        notebookExtInfo = try? container.decode(NotebookExtInfo.self, forKey: .notebookExtInfo)
         mediaId = (try? container.decode(String.self, forKey: .mediaId)) ?? folderId ?? ""
         title = (try? container.decode(String.self, forKey: .title))
             ?? (try? container.decode(String.self, forKey: .name))
+            ?? folderInfo?.name
             ?? ""
         name = try? container.decode(String.self, forKey: .name)
-        parentFolderId = try? container.decode(String.self, forKey: .parentFolderId)
+        parentFolderId = (try? container.decode(String.self, forKey: .parentFolderId))
+            ?? folderInfo?.parentFolderId
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1310,22 +1531,181 @@ struct KnowledgeInfo: Codable, Identifiable, Hashable {
         try container.encodeIfPresent(parentFolderId, forKey: .parentFolderId)
         try container.encodeIfPresent(folderId, forKey: .folderId)
         try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(mediaType, forKey: .mediaType)
+        try container.encodeIfPresent(folderInfo, forKey: .folderInfo)
+        try container.encodeIfPresent(fileNumber, forKey: .fileNumber)
+        try container.encodeIfPresent(folderNumber, forKey: .folderNumber)
+        try container.encodeIfPresent(isTop, forKey: .isTop)
+        try container.encodeIfPresent(notebookExtInfo, forKey: .notebookExtInfo)
+    }
+}
+
+struct FolderInfo: Codable, Hashable {
+    let folderId: String?
+    let name: String?
+    let parentFolderId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case folderId = "folder_id"
+        case name
+        case parentFolderId = "parent_folder_id"
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeFlexibleInt(forKey key: Key) throws -> Int? {
+        if let intValue = try? decode(Int.self, forKey: key) {
+            return intValue
+        }
+        if let stringValue = try? decode(String.self, forKey: key) {
+            return Int(stringValue)
+        }
+        return nil
     }
 }
 
 struct MediaInfoPayload: Decodable {
     let mediaType: Int
     let urlInfo: URLInfo?
+    let notebookExtInfo: NotebookExtInfo?
+
+    var hasUsableContent: Bool {
+        if mediaType == 11 {
+            return notebookExtInfo?.notebookId?.isEmpty == false
+        }
+        return urlInfo?.url.isEmpty == false
+    }
     
     enum CodingKeys: String, CodingKey {
         case mediaType = "media_type"
         case urlInfo = "url_info"
+        case notebookExtInfo = "notebook_ext_info"
     }
 }
 
 struct URLInfo: Decodable {
     let url: String
     let headers: [String: String]?
+}
+
+struct NotebookExtInfo: Codable, Hashable {
+    let notebookId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case notebookId = "notebook_id"
+        case noteId = "note_id"
+        case contentId = "content_id"
+    }
+
+    init(notebookId: String?) {
+        self.notebookId = notebookId
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        notebookId = (try? container.decode(String.self, forKey: .notebookId))
+            ?? (try? container.decode(String.self, forKey: .noteId))
+            ?? (try? container.decode(String.self, forKey: .contentId))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(notebookId, forKey: .notebookId)
+    }
+}
+
+struct NoteContentPayload: Decodable {
+    let content: String?
+
+    init(from decoder: Decoder) throws {
+        let object = try JSONValue(from: decoder)
+        content = object.firstString(forKeys: [
+            "content",
+            "doc_content",
+            "text",
+            "plain_text",
+            "markdown",
+            "md_content"
+        ])
+    }
+}
+
+private enum JSONValue: Decodable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case object([String: JSONValue])
+    case array([JSONValue])
+    case null
+
+    init(from decoder: Decoder) throws {
+        if let container = try? decoder.singleValueContainer() {
+            if container.decodeNil() {
+                self = .null
+                return
+            }
+            if let value = try? container.decode(String.self) {
+                self = .string(value)
+                return
+            }
+            if let value = try? container.decode(Double.self) {
+                self = .number(value)
+                return
+            }
+            if let value = try? container.decode(Bool.self) {
+                self = .bool(value)
+                return
+            }
+        }
+
+        if let container = try? decoder.container(keyedBy: DynamicCodingKey.self) {
+            var object: [String: JSONValue] = [:]
+            for key in container.allKeys {
+                object[key.stringValue] = try? container.decode(JSONValue.self, forKey: key)
+            }
+            self = .object(object)
+            return
+        }
+
+        var arrayContainer = try decoder.unkeyedContainer()
+        var array: [JSONValue] = []
+        while !arrayContainer.isAtEnd {
+            if let value = try? arrayContainer.decode(JSONValue.self) {
+                array.append(value)
+            } else {
+                _ = try? arrayContainer.decode(EmptyPayload.self)
+            }
+        }
+        self = .array(array)
+    }
+
+    func firstString(forKeys keys: Set<String>) -> String? {
+        switch self {
+        case .string(let value):
+            return value
+        case .object(let object):
+            for key in keys {
+                if case .string(let value)? = object[key], !value.isEmpty {
+                    return value
+                }
+            }
+            for value in object.values {
+                if let match = value.firstString(forKeys: keys) {
+                    return match
+                }
+            }
+            return nil
+        case .array(let array):
+            for value in array {
+                if let match = value.firstString(forKeys: keys) {
+                    return match
+                }
+            }
+            return nil
+        default:
+            return nil
+        }
+    }
 }
 
 struct EmptyPayload: Decodable {}

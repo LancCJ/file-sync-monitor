@@ -161,7 +161,7 @@ private struct HelpHero: View {
                             .foregroundStyle(Color.appMuted)
                         
                         HStack(spacing: 6) {
-                            Text("v1.0.0-beta")
+                            Text("v\(Bundle.main.appVersion)")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(Color.appMint)
                                 .padding(.horizontal, 6)
@@ -381,7 +381,7 @@ private struct AboutCard: View {
                     .foregroundStyle(Color.appInk)
 
                 HStack(spacing: 10) {
-                    Text("Version 1.2.0 Open Source")
+                    Text("Version \(Bundle.main.appVersion) Open Source")
                         .font(.system(size: 13, weight: .bold))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -389,7 +389,7 @@ private struct AboutCard: View {
                         .foregroundStyle(Color.appMint)
                         .clipShape(Capsule())
 
-                    Text("Build 20260517.Release")
+                    Text("Build \(Bundle.main.appBuild)")
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(Color.appMuted)
                 }
@@ -649,6 +649,13 @@ private struct DonationCard: View {
                         .foregroundStyle(Color.appMuted)
                         .lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
+                    
+                    LocalizedText("【免责声明】：本项目为非盈利开源项目。上述捐赠行为完全基于您的自愿，所得款项仅用于补贴开发者维护项目所产生的时间、网络与服务器等基本支出，捐赠并非此软件的牟利手段，且不代表任何商业化销售或服务承诺。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.appMuted.opacity(0.85))
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
                 }
                 .padding(.leading, 4)
 
@@ -814,16 +821,15 @@ private enum HelpContent {
             ]
         ),
         HelpCategory(
-            title: "获取 IMA API 凭据",
-            subtitle: "完成 Client ID 和 API Key 配置后，才能测试连接、同步文件和读取知识库。",
-            symbol: "key.horizontal",
+            title: "腾讯 IMA 账户登录",
+            subtitle: "使用微信扫码授权登录，快速绑定知识库并开启云端同步。",
+            symbol: "person.badge.key",
             color: .appMint,
             items: [
-                HelpItemModel(title: "打开凭据页面", description: "在浏览器访问 ima.qq.com/agent-interface，并使用你的腾讯 IMA 账号登录。", symbol: "safari", variant: 0),
-                HelpItemModel(title: "复制 Client ID", description: "在页面中找到 Client ID，复制后回到本应用的“设置 > 同步”区域粘贴到 Client ID 输入框。", symbol: "number.square", variant: 1),
-                HelpItemModel(title: "复制 API Key", description: "继续复制 API Key，粘贴到 API Key 输入框。API Key 属于敏感凭据，请不要发给他人或提交到代码仓库。", symbol: "key", variant: 2),
-                HelpItemModel(title: "测试连接", description: "点击“测试连接”。如果连接成功，应用会获取 IMA 知识库列表，并允许你给监控目录绑定目标知识库。", symbol: "checkmark.seal", variant: 3),
-                HelpItemModel(title: "凭据失效时重新生成", description: "如果测试失败，请确认账号是否登录正确、凭据是否完整；必要时回到 IMA 页面重新生成或复制新的凭据。", symbol: "arrow.clockwise.circle", variant: 0)
+                HelpItemModel(title: "微信扫码授权", description: "首次打开应用或在未登录状态下，主界面会显示微信登录二维码，扫码即可安全登录。", symbol: "qrcode", variant: 0),
+                HelpItemModel(title: "管理绑定设备", description: "在“设置 > 同步”中可查看当前账号已登录的其他多端设备，并可随时安全退出登录。", symbol: "laptopcomputer.and.iphone", variant: 1),
+                HelpItemModel(title: "查看存储容量", description: "登录后，在“设置 > 同步”中可直观查看云端个人空间的使用情况和总配额。", symbol: "chart.pie", variant: 2),
+                HelpItemModel(title: "同步至知识库", description: "登录成功后即可拉取云端知识库列表，在“设置 > 监控目录”中可以为不同监控目录绑定具体的同步知识库。", symbol: "checkmark.seal", variant: 3)
             ]
         ),
         HelpCategory(
@@ -840,13 +846,13 @@ private enum HelpContent {
         ),
         HelpCategory(
             title: "设置与体验",
-            subtitle: "让界面语言、外观与凭据配置保持可控。",
+            subtitle: "让界面语言、外观以及开机自启等偏好设置保持可控。",
             symbol: "gearshape",
             color: .appRose,
             items: [
                 HelpItemModel(title: "多语言界面", description: "支持跟随系统、English、简体中文和繁体中文，切换后主界面和菜单栏同步刷新。", symbol: "globe", variant: 0),
                 HelpItemModel(title: "浅色与深色模式", description: "可跟随系统，也可手动选择浅色或深色，整体保持清新简约风格。", symbol: "circle.lefthalf.filled", variant: 1),
-                HelpItemModel(title: "凭据输入与复制粘贴", description: "Client ID 和 API Key 支持键盘输入、复制、粘贴与隐藏显示。", symbol: "key", variant: 2)
+                HelpItemModel(title: "开机自动运行", description: "可在“设置 > 通知与导出”中开启开机自动运行，使本应用在后台静默为您守护文件。", symbol: "play.circle", variant: 2)
             ]
         )
     ]
@@ -881,32 +887,38 @@ private struct SyncLogicRow: Identifiable {
 
 private struct FAQCard: View {
     @State private var isHovered = false
-    @State private var expandedItem: Int? = 0 // 默认展开第一项（Gatekeeper 安装报错）
+    @State private var expandedItem: Int? = 0 // 默认展开第一项（快速开始指南）
     
     private let faqs: [FAQItem] = [
         FAQItem(
-            question: "打开时提示“Apple无法验证是否包含恶意软件”如何解决？",
-            answer: "这是 macOS 针对非 App Store 或未签名开发者程序的 Gatekeeper 安全防护机制。请使用以下任一方式解锁：\n\n1. 【右键打开 - 最常用】：在「应用程序」文件夹中找到 FileSyncMonitor，按住 Control 键点按（或右键点按）应用图标，选择「打开」，在弹出的对话框中点击「仍要打开」。此操作只需进行一次，以后双击便可秒开。\n2. 【系统设置放行】：前往「系统设置 -> 隐私与安全 -> 安全性」，点击底部的「仍要打开」并输入系统开机密码放行。\n3. 【终端指令秒解】：打开「终端」执行 `xattr -cr /Applications/FileSyncMonitor.app` 即可彻底抹除系统内置的隔离标志，双击无感秒开。",
-            symbol: "exclamationmark.shield",
-            color: .appRose
-        ),
-        FAQItem(
-            question: "为什么本地删除的文件无法同步删除 IMA 云端的知识库？",
-            answer: "目前腾讯 IMA OpenAPI 尚未开放「云端移出或删除 Wiki」的接口。为了不阻塞你的工作流，应用在检测到本地删除后会生成 deleted 类型的记录，并在同步时仅在本地标记为「已同步」。云端已导入的对应文档需要你手动登录 IMA 客户端进行清理。",
-            symbol: "trash.slash",
-            color: .appViolet
-        ),
-        FAQItem(
-            question: "自动同步是如何实现防抖并避免频繁重复上传的？",
-            answer: "本应用内置了「延迟稳定捕获」机制。为了防止你的编辑器在频繁保存或自动保存时产生大量冗余的上传任务，变动发生后应用会开始 30 秒的稳定静默计时。若你在 30 秒内再次修改该文件，计时将自动重置，直到文件连续 30 秒不再变动时才发起安全上传。",
-            symbol: "clock.arrow.circlepath",
+            question: "首次使用如何快速开始监控和同步？",
+            answer: "首次打开应用，主界面会显示微信登录二维码。请使用微信扫码授权登录以绑定您的腾讯 IMA 账号。登录成功后，前往「设置 -> 监控目录」点击添加您想监控的文件夹，并为该文件夹绑定对应的云端知识库，即可开始监控和同步文件。",
+            symbol: "play.circle",
             color: .appMint
         ),
         FAQItem(
-            question: "忽略规则可以支持哪些过滤方式？怎么写？",
-            answer: "忽略规则会先于记录入库前执行。你可以在「设置 -> 忽略规则」中添加三种过滤对象：\n1. 【全名过滤】：输入特定文件名（例如 config.json），完全匹配时自动跳过监控。\n2. 【后缀过滤】：输入以点开头的扩展名（例如 .tmp），所有临时文件均会被自动丢弃。\n3. 【目录过滤】：输入路径子项（例如 node_modules 或 build），匹配该文件夹名下的所有变动均被直接屏蔽。",
-            symbol: "line.3.horizontal.decrease.circle",
+            question: "微信扫码登录的安全与授权失效如何处理？",
+            answer: "本应用通过内嵌的腾讯官方安全页面进行登录，所有登录凭据（Token/Cookie）均在本地沙盒内安全加密存储，不会泄露。如果因为长时间未运行或腾讯侧策略调整导致授权失效，应用会在同步时提示“授权已过期”，此时只需在主界面重新扫码登录即可恢复。",
+            symbol: "key.fill",
             color: .appAmber
+        ),
+        FAQItem(
+            question: "为什么有时候修改了文件，待同步队列中没有立刻出现记录？",
+            answer: "为了防止编辑器保存临时状态时产生大量高频碎片记录，应用引入了 2 秒的防抖延迟机制（Debounce）。当您对文件进行连续编辑或保存时，应用会等待文件写入稳定后统一生成一条记录。另外，被忽略规则过滤的文件也不会进入队列。",
+            symbol: "clock",
+            color: .appRose
+        ),
+        FAQItem(
+            question: "在设置中执行“清除记录”或“重置应用”会删除本地的物理文件吗？",
+            answer: "绝对不会。无论是在设置中点击「清除文件记录」还是「彻底重置应用」，都只属于应用自身数据的管理操作（清空本地 SQLite 数据库中的事件历史、断开文件夹监控或清除偏好设置），绝对不会以任何形式修改或删除您电脑磁盘上的任何物理文件，请放心操作。",
+            symbol: "shield.righthalf.filled",
+            color: .appViolet
+        ),
+        FAQItem(
+            question: "忽略规则支持哪些过滤方式？怎么写？",
+            answer: "忽略规则用于在事件产生前进行过滤，避免日志杂乱。您可以在「设置 -> 忽略规则」中通过以下三种方式过滤：\n1. 【全名过滤】：输入完整文件名（如 config.json），完全匹配的文件会被过滤。\n2. 【后缀过滤】：输入以点开头的扩展名（如 .tmp 或 .log），匹配该类型的所有临时文件。\n3. 【目录过滤】：输入文件夹名称（如 node_modules 或 build），匹配该目录下的所有变动均被屏蔽。",
+            symbol: "line.3.horizontal.decrease.circle",
+            color: .appAccent
         )
     ]
 
@@ -919,7 +931,7 @@ private struct FAQCard: View {
                     LocalizedText("常见问题与解答 (FAQ)")
                         .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(Color.appInk)
-                    LocalizedText("解决安装警告、了解删除同步限制与自动稳定同步细节。")
+                    LocalizedText("解决首次配置、微信登录失效、删除同步限制与本地文件安全等常见疑惑。")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.appMuted)
                 }

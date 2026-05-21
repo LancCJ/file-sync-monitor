@@ -46,8 +46,21 @@ class BidirectionalSyncTests {
         
         let originalSession = IMASyncService.shared.session
         IMASyncService.shared.session = mockSession
+        let credentials = IMACredentialsManager.shared
+        let originalToken = credentials.imaToken
+        let originalRefreshToken = credentials.imaRefreshToken
+        let originalUid = credentials.imaUid
+        let originalGuid = credentials.imaGuid
+        credentials.imaToken = "debug-test-token"
+        credentials.imaRefreshToken = "debug-test-refresh-token"
+        credentials.imaUid = "debug-test-uid"
+        credentials.imaGuid = "debug-test-guid"
         defer {
             IMASyncService.shared.session = originalSession
+            credentials.imaToken = originalToken
+            credentials.imaRefreshToken = originalRefreshToken
+            credentials.imaUid = originalUid
+            credentials.imaGuid = originalGuid
         }
         
         // 2. Setup SwiftData database context
@@ -84,6 +97,244 @@ class BidirectionalSyncTests {
                 FileMonitorService.shared.monitoredPaths = originalPaths
                 FileMonitorService.shared.pathKnowledgeBaseMapping = originalMapping
             }
+
+            let folderShapeJSON = """
+            {
+              "code": 0,
+              "msg": "ok",
+              "data": {
+                "info_list": [
+                  {
+                    "media_id": "media_root_file_001",
+                    "folder_id": "kb_test_123",
+                    "title": "root_file.md",
+                    "media_type": 7
+                  }
+                ],
+                "folder_list": [
+                  {
+                    "media_id": "folder_remote_001",
+                    "title": "新建文件夹-测试",
+                    "media_type": 16,
+                    "folder_info": {
+                      "folder_id": "folder_remote_001",
+                      "name": "新建文件夹-测试",
+                      "file_number": 3,
+                      "folder_number": 0
+                    }
+                  }
+                ]
+              }
+            }
+            """
+            let decodedList = try JSONDecoder().decode(IMAResponse<KnowledgeListPayload>.self, from: Data(folderShapeJSON.utf8))
+            guard let directFile = decodedList.data?.knowledgeList.first(where: { $0.displayName == "root_file.md" }),
+                  directFile.isFolder == false else {
+                throw NSError(domain: "Test", code: 11, userInfo: [NSLocalizedDescriptionKey: "KnowledgeInfo decode regression: root file with folder_id was treated as a folder."])
+            }
+            guard let folder = decodedList.data?.knowledgeList.first(where: { $0.displayName == "新建文件夹-测试" }),
+                  folder.isFolder == true else {
+                throw NSError(domain: "Test", code: 12, userInfo: [NSLocalizedDescriptionKey: "KnowledgeInfo decode regression: folder_info item was treated as a file."])
+            }
+            guard decodedList.data?.knowledgeList.count == 2 else {
+                throw NSError(domain: "Test", code: 13, userInfo: [NSLocalizedDescriptionKey: "KnowledgeListPayload regression: folder_list caused info_list root files to be dropped."])
+            }
+            print("✅ KnowledgeInfo decode regression Passed!")
+
+            // --- SCENARIO 0: Full cloud tree pull (root files, IMA notes, nested folders) ---
+            print("\n📁 --- Scenario 0: Pull root files, notes, and nested folders from Cloud ---")
+
+            MockURLProtocol.handler = { request in
+                let urlString = request.url?.absoluteString ?? ""
+                let bodyObject = request.httpBody
+                    .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+                let folderId = bodyObject["folder_id"] as? String
+                let mediaId = bodyObject["media_id"] as? String
+
+                if urlString.contains("get_knowledge_list") {
+                    let json: String
+                    if folderId == nil || folderId == "kb_test_123" {
+                        json = """
+                        {
+                          "code": 0,
+                          "msg": "ok",
+                          "data": {
+                            "is_end": true,
+                            "next_cursor": "",
+                            "info_list": [
+                              {
+                                "media_id": "media_root_manual",
+                                "folder_id": "kb_test_123",
+                                "title": "root_manual.txt",
+                                "media_type": 13
+                              },
+                              {
+                                "media_id": "media_cloud_note",
+                                "folder_id": "kb_test_123",
+                                "title": "云端笔记",
+                                "media_type": 11
+                              }
+                            ],
+                            "folder_list": [
+                              {
+                                "media_id": "folder_remote_001",
+                                "title": "新建文件夹-测试",
+                                "media_type": 16,
+                                "folder_info": {
+                                  "folder_id": "folder_remote_001",
+                                  "name": "新建文件夹-测试",
+                                  "file_number": 1,
+                                  "folder_number": 1
+                                }
+                              }
+                            ]
+                          }
+                        }
+                        """
+                    } else if folderId == "folder_remote_001" {
+                        json = """
+                        {
+                          "code": 0,
+                          "msg": "ok",
+                          "data": {
+                            "is_end": true,
+                            "next_cursor": "",
+                            "info_list": [
+                              {
+                                "media_id": "media_inside_folder",
+                                "folder_id": "folder_remote_001",
+                                "title": "inside_A.txt",
+                                "media_type": 13
+                              }
+                            ],
+                            "folder_list": [
+                              {
+                                "media_id": "folder_child_001",
+                                "title": "子文件夹",
+                                "media_type": 16,
+                                "folder_info": {
+                                  "folder_id": "folder_child_001",
+                                  "name": "子文件夹",
+                                  "file_number": 1,
+                                  "folder_number": 0
+                                }
+                              }
+                            ]
+                          }
+                        }
+                        """
+                    } else {
+                        json = """
+                        {
+                          "code": 0,
+                          "msg": "ok",
+                          "data": {
+                            "is_end": true,
+                            "next_cursor": "",
+                            "info_list": [
+                              {
+                                "media_id": "media_deep_file",
+                                "folder_id": "folder_child_001",
+                                "title": "deep.txt",
+                                "media_type": 13
+                              }
+                            ]
+                          }
+                        }
+                        """
+                    }
+                    let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                    return (response, Data(json.utf8))
+                } else if urlString.contains("get_knowledge") {
+                    let json: String
+                    if mediaId == "media_cloud_note" {
+                        json = """
+                        {
+                          "code": 0,
+                          "msg": "ok",
+                          "data": {
+                            "knowledge": {
+                              "media_id": "media_cloud_note",
+                              "title": "云端笔记",
+                              "media_type": 11,
+                              "notebook_ext_info": {
+                                "notebook_id": "note_001"
+                              }
+                            }
+                          }
+                        }
+                        """
+                    } else {
+                        json = """
+                        {
+                          "code": 0,
+                          "msg": "ok",
+                          "data": {
+                            "knowledge": {
+                              "media_id": "\(mediaId ?? "")",
+                              "title": "download.txt",
+                              "media_type": 13,
+                              "url_info": {
+                                "url": "https://ima-share-kb.image.myqcloud.com/kb/\(mediaId ?? "file").txt"
+                              }
+                            }
+                          }
+                        }
+                        """
+                    }
+                    let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                    return (response, Data(json.utf8))
+                } else if urlString.contains("get_doc_content") {
+                    let json = """
+                    {
+                      "code": 0,
+                      "msg": "ok",
+                      "data": {
+                        "content": "Cloud note content"
+                      }
+                    }
+                    """
+                    let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                    return (response, Data(json.utf8))
+                } else if request.httpMethod == "GET" {
+                    let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                    return (response, "Cloud file content".data(using: .utf8)!)
+                }
+
+                let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+                return (response, Data())
+            }
+
+            await FileMonitorService.shared.pullFromRemote()
+
+            let pulledURLs = [
+                tempDir.appendingPathComponent("root_manual.txt"),
+                tempDir.appendingPathComponent("云端笔记.md"),
+                tempDir.appendingPathComponent("新建文件夹-测试").appendingPathComponent("inside_A.txt"),
+                tempDir.appendingPathComponent("新建文件夹-测试").appendingPathComponent("子文件夹").appendingPathComponent("deep.txt")
+            ]
+            for url in pulledURLs {
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    throw NSError(domain: "Test", code: 20, userInfo: [NSLocalizedDescriptionKey: "Scenario 0 Failed: \(url.lastPathComponent) was not pulled to local path \(url.path)."])
+                }
+            }
+            let noteContent = try String(contentsOf: tempDir.appendingPathComponent("云端笔记.md"), encoding: .utf8)
+            guard noteContent == "Cloud note content" else {
+                throw NSError(domain: "Test", code: 21, userInfo: [NSLocalizedDescriptionKey: "Scenario 0 Failed: IMA note content was not exported correctly."])
+            }
+            print("✅ Scenario 0 Passed: root files, IMA notes, and nested folders were pulled successfully!")
+
+            if let urls = try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil) {
+                for url in urls {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
+            if let existing = try? context.fetch(fetchDescriptor) {
+                for item in existing {
+                    context.delete(item)
+                }
+                try? context.save()
+            }
             
             // --- SCENARIO 1: Cloud -> Local Pull (New File) ---
             print("\n📁 --- Scenario 1: New file exists on Cloud but not Local ---")
@@ -102,6 +353,7 @@ class BidirectionalSyncTests {
                       "knowledge_list": [
                         {
                           "media_id": "media_new_file_999",
+                          "folder_id": "kb_test_123",
                           "title": "cloud_only_file.txt",
                           "media_type": 7,
                           "update_time": "1779092588127"
@@ -135,9 +387,27 @@ class BidirectionalSyncTests {
                 let response = HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!
                 return (response, Data())
             }
+
+            let preexistingDeleteEvent = FileEvent(
+                path: tempDir.appendingPathComponent("cloud_only_file.txt").path,
+                type: "deleted",
+                isDirectory: false,
+                remoteId: "media_new_file_999"
+            )
+            preexistingDeleteEvent.isSynced = true
+            context.insert(preexistingDeleteEvent)
+            try? context.save()
             
+            var didRequestRestoreConfirmation = false
+
             // Pull from remote
-            await FileMonitorService.shared.pullFromRemote()
+            await FileMonitorService.shared.pullFromRemote { urls in
+                didRequestRestoreConfirmation = urls.contains(where: { $0.lastPathComponent == "cloud_only_file.txt" })
+                return true
+            }
+            guard didRequestRestoreConfirmation else {
+                throw NSError(domain: "Test", code: 100, userInfo: [NSLocalizedDescriptionKey: "Scenario 1 Failed: locally deleted cloud file did not request restore confirmation."])
+            }
             
             // Verify new file downloaded
             let downloadedFile = tempDir.appendingPathComponent("cloud_only_file.txt")
@@ -200,6 +470,7 @@ class BidirectionalSyncTests {
                       "knowledge_list": [
                         {
                           "media_id": "media_updated_file_888",
+                          "folder_id": "kb_test_123",
                           "title": "cloud_only_file.txt",
                           "media_type": 7,
                           "update_time": "1779093000000"
@@ -273,6 +544,7 @@ class BidirectionalSyncTests {
                       "knowledge_list": [
                         {
                           "media_id": "media_updated_file_888",
+                          "folder_id": "kb_test_123",
                           "title": "cloud_renamed_file.txt",
                           "media_type": 7,
                           "update_time": "1779094000000"

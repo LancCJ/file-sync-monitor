@@ -20,6 +20,8 @@ struct MainView: View {
     @State private var isSyncing = false
     @State private var isShowingQuitConfirmation = false
     @State private var isShowingBatchDeleteConfirmation = false
+    @State private var isShowingClearEventsAlert = false
+    @State private var isShowingResetAllAlert = false
     @State private var isShowingOnboarding = false
     @State private var onboardingStep = 0
     @State private var showingPullConfirmDialog = false
@@ -110,17 +112,13 @@ struct MainView: View {
             let layout = MainLayoutMetrics(size: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
 
             ZStack {
-                VStack(spacing: 0) {
-                    Color.clear
-                        .frame(height: layout.titleBarInset)
-
-                    HStack(spacing: 0) {
-                        IMARailView(
-                            selection: $selectedSidebarItem,
-                            pendingCount: pendingEvents.count,
-                            layout: layout,
-                            requestQuit: { isShowingQuitConfirmation = true }
-                        )
+                HStack(spacing: 0) {
+                    IMARailView(
+                        selection: $selectedSidebarItem,
+                        pendingCount: pendingEvents.count,
+                        layout: layout,
+                        requestQuit: { isShowingQuitConfirmation = true }
+                    )
 
                         switch selectedSidebarItem {
                         case .home:
@@ -156,7 +154,13 @@ struct MainView: View {
                                 markAllPendingSynced: markAllPendingSynced,
                                 syncAllToIMA: syncAllToIMA,
                                 deleteEvent: deleteEvent,
-                                isSyncing: isSyncing
+                                isSyncing: isSyncing,
+                                showHelp: {
+                                    print("[Debug] Navigating to Help")
+                                    withAnimation(.snappy(duration: 0.22)) {
+                                        selectedSidebarItem = .help
+                                    }
+                                }
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         case .pendingSync, .allEvents:
@@ -196,15 +200,25 @@ struct MainView: View {
                             ReportsView()
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         case .settings:
-                            SettingsView()
+                            SettingsView(
+                                requestClearEvents: {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        isShowingClearEventsAlert = true
+                                    }
+                                },
+                                requestResetAll: {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        isShowingResetAllAlert = true
+                                    }
+                                }
+                            )
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         case .help:
                             HelpView()
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if isShowingQuitConfirmation {
                     QuitConfirmationOverlay(
@@ -283,6 +297,52 @@ struct MainView: View {
                 // 全局高端同步进度遮罩卡片
                 SyncProgressOverlay()
                     .zIndex(40)
+
+                if isShowingClearEventsAlert {
+                    CustomSettingsConfirmationOverlay(
+                        title: "确认清除文件记录？",
+                        message: "此操作将永久删除本地数据库中的所有文件变动记录和同步日志，但不会删除您的本地物理文件。",
+                        confirmTitle: "清除",
+                        iconName: "trash.fill",
+                        iconColor: Color.appRose,
+                        cancel: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                isShowingClearEventsAlert = false
+                            }
+                        },
+                        confirm: {
+                            NotificationCenter.default.post(name: Notification.Name("performClearAllEvents"), object: nil)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                isShowingClearEventsAlert = false
+                            }
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .zIndex(70)
+                }
+
+                if isShowingResetAllAlert {
+                    CustomSettingsConfirmationOverlay(
+                        title: "确认彻底重置应用？",
+                        message: "此操作将清空所有文件变动记录、停止监控所有文件夹、清除自定义忽略规则、恢复所有偏好设置至出厂默认，并退出您的腾讯 IMA 账号授权。本操作无法撤销。",
+                        confirmTitle: "重置",
+                        iconName: "exclamationmark.triangle.fill",
+                        iconColor: Color.appRose,
+                        cancel: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                isShowingResetAllAlert = false
+                            }
+                        },
+                        confirm: {
+                            NotificationCenter.default.post(name: Notification.Name("performResetAll"), object: nil)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                isShowingResetAllAlert = false
+                            }
+                        }
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .zIndex(70)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(IMAWindowBackground())
@@ -391,7 +451,7 @@ struct MainLayoutMetrics {
     let safeAreaInsets: EdgeInsets
 
     var railWidth: CGFloat {
-        min(max(size.width * 0.045, 64), 72)
+        78
     }
 
     var secondarySidebarWidth: CGFloat {
@@ -450,7 +510,7 @@ struct IMARailView: View {
     var body: some View {
         VStack(spacing: 18) {
             AppBrandIcon(size: 38, cornerRadius: 10)
-                .padding(.top, layout.topContentPadding)
+                .padding(.top, layout.titleBarInset + layout.topContentPadding)
 
             VStack(spacing: 18) {
                 ForEach(MainView.SidebarItem.allCases.filter { $0 != .settings && $0 != .help }) { item in
@@ -703,8 +763,7 @@ struct BatchDeleteConfirmationOverlay: View {
                             Image(systemName: "trash")
                         }
                     }
-                    .buttonStyle(PillButtonStyle(isPrimary: true))
-                    .tint(.appRose)
+                    .buttonStyle(PillButtonStyle(isPrimary: true, color: Color.appRose.opacity(0.92), hoverColor: Color.appRose))
                 }
             }
             .padding(24)
@@ -999,7 +1058,7 @@ private struct OnboardingStep {
         OnboardingStep(
             kind: .settings,
             title: "最后配置云端和偏好",
-            message: "底部区域可以进入帮助、设置、切换语言和退出。建议先到设置里填写 IMA Client ID / API Key，并按需配置忽略规则。",
+            message: "底部区域可以进入帮助、设置、切换语言和退出。建议先进行腾讯 IMA 账户扫码登录，并按需配置忽略规则。",
             symbol: "gearshape",
             pointerSymbol: "arrow.left",
             cornerRadius: 14
@@ -1047,9 +1106,8 @@ struct IMARailButton: View {
 struct FileSyncHomeView: View {
     @AppStorage("autoSync") private var autoSync = false
     @AppStorage("appLanguage") private var appLanguage: AppLanguage = .system
-    @AppStorage("imaClientId") private var clientId = ""
-    @AppStorage("imaApiKey") private var apiKey = ""
     @AppStorage("imaKnowledgeBaseId") private var knowledgeBaseId = ""
+    @AppStorage("showAppWelcomeBanner") private var showAppWelcomeBanner = true
 
     let events: [FileEvent]
     let pendingEvents: [FileEvent]
@@ -1062,6 +1120,7 @@ struct FileSyncHomeView: View {
     let syncAllToIMA: () -> Void
     let deleteEvent: (FileEvent) -> Void
     let isSyncing: Bool
+    let showHelp: () -> Void
 
     private var monitoredCount: Int {
         FileMonitorService.shared.monitoredPaths.count
@@ -1127,11 +1186,26 @@ struct FileSyncHomeView: View {
             }
             .padding(.horizontal, 48)
             .padding(.top, 48)
-            .padding(.bottom, 40) // 与主内容区拉开距离
+            .padding(.bottom, 32)
 
-            if clientId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-               apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                IMAConfigReminderBanner(action: showSettings)
+            if showAppWelcomeBanner {
+                WelcomeIntroBanner(
+                    dismiss: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                            showAppWelcomeBanner = false
+                        }
+                    },
+                    startOnboarding: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                            showAppWelcomeBanner = false
+                        }
+                        NotificationCenter.default.post(name: NSNotification.Name("ResetOnboarding"), object: nil)
+                    },
+                    showHelp: showHelp
+                )
+                .padding(.horizontal, 48)
+                .padding(.bottom, 28)
+                .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity.combined(with: .scale(scale: 0.95))))
             }
 
             // 2. Main Content Area: 左右分栏，核心展示区
@@ -1496,7 +1570,7 @@ struct IMASecondarySidebar: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.top, layout.sidebarHeaderPadding)
+            .padding(.top, layout.titleBarInset + layout.sidebarHeaderPadding)
             .padding(.bottom, 14)
             .clipped()
 
@@ -1542,14 +1616,21 @@ struct IMASecondarySidebar: View {
         }
         .frame(width: layout.secondarySidebarWidth)
         .background(
-            LinearGradient(
-                colors: [
-                    Color(light: Color(red: 250 / 255, green: 253 / 255, blue: 251 / 255), dark: Color(red: 24 / 255, green: 26 / 255, blue: 28 / 255)),
-                    Color(light: Color(red: 244 / 255, green: 251 / 255, blue: 247 / 255), dark: Color(red: 18 / 255, green: 20 / 255, blue: 22 / 255))
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            GeometryReader { geo in
+                let h = max(geo.size.height, 1)
+                let titleEnd = layout.titleBarInset / h
+                let blendEnd = min((layout.titleBarInset + 50) / h, 1.0)
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(light: Color(red: 238 / 255, green: 244 / 255, blue: 240 / 255), dark: Color(red: 24 / 255, green: 26 / 255, blue: 28 / 255)), location: 0),
+                        .init(color: Color(light: Color(red: 238 / 255, green: 244 / 255, blue: 240 / 255), dark: Color(red: 24 / 255, green: 26 / 255, blue: 28 / 255)), location: titleEnd),
+                        .init(color: Color(light: Color(red: 250 / 255, green: 253 / 255, blue: 251 / 255), dark: Color(red: 24 / 255, green: 26 / 255, blue: 28 / 255)), location: blendEnd),
+                        .init(color: Color(light: Color(red: 244 / 255, green: 251 / 255, blue: 247 / 255), dark: Color(red: 18 / 255, green: 20 / 255, blue: 22 / 255)), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
         )
         .id(scheme)
     }
@@ -1671,6 +1752,21 @@ struct EventDetailView: View {
     var body: some View {
         ZStack {
             IMAClientSurfaceBackground()
+
+            // 标题栏区域背景统一渐变：从左侧栏同色灰绿平滑过渡至透明
+            VStack(spacing: 0) {
+                LinearGradient(
+                    colors: [
+                        Color(light: Color(red: 238 / 255, green: 244 / 255, blue: 240 / 255), dark: Color(red: 24 / 255, green: 26 / 255, blue: 28 / 255)),
+                        Color(light: Color(red: 238 / 255, green: 244 / 255, blue: 240 / 255), dark: Color(red: 24 / 255, green: 26 / 255, blue: 28 / 255)).opacity(0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: layout.titleBarInset + 50)
+                Spacer()
+            }
+            .allowsHitTesting(false)
 
             if let event {
                 VStack(spacing: 0) {
@@ -1957,8 +2053,15 @@ struct EventDetailToolbar: View {
         .font(.system(size: 13, weight: .medium))
         .foregroundStyle(Color.appInk)
         .padding(.horizontal, 28)
-        .frame(height: layout.detailToolbarHeight)
-        .background(Color.white.opacity(0.82))
+        .padding(.top, layout.titleBarInset)
+        .frame(height: layout.detailToolbarHeight + layout.titleBarInset)
+        .background(
+            VStack(spacing: 0) {
+                Color.clear
+                    .frame(height: layout.titleBarInset)
+                Color.white.opacity(0.82)
+            }
+        )
     }
 }
 
@@ -2157,7 +2260,8 @@ struct IMARailLanguageButton: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(isHovered ? Color.appInk.opacity(0.08) : Color.clear)
             ),
-            arrowEdge: .trailing
+            arrowEdge: .trailing,
+            localizeOptions: false
         )
         .onHover { isHovered = $0 }
         .help("切换语言".appLocalized)
@@ -2513,6 +2617,8 @@ struct MainWindowDelegateConfigurator: NSViewRepresentable {
         DispatchQueue.main.async {
             if let window = view.window {
                 window.delegate = MainWindowDelegate.shared
+                // 彻底移除系统标题栏的半透明灰色材质叠加层
+                window.titlebarAppearsTransparent = true
             }
         }
         return view
@@ -2529,70 +2635,6 @@ final class MainWindowDelegate: NSObject, NSWindowDelegate {
     }
 }
 
-struct IMAConfigReminderBanner: View {
-    let action: () -> Void
-    @State private var isHovered = false
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Left Warning Icon
-            ZStack {
-                Circle()
-                    .fill(Color.appAmber.opacity(0.12))
-                    .frame(width: 40, height: 40)
-                
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.appAmber)
-            }
-            
-            // Text Details
-            VStack(alignment: .leading, spacing: 3) {
-                LocalizedText("云端同步配置未完成")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.appInk)
-                
-                LocalizedText("请在设置中配置 Tencent IMA 的 Client ID 和 API Key，以开启全自动云端同步备份。")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.appInk.opacity(0.65))
-            }
-            
-            Spacer()
-            
-            // Action Button
-            Button(action: action) {
-                HStack(spacing: 4) {
-                    LocalizedText("去配置")
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 10, weight: .bold))
-                }
-                .font(.system(size: 11.5, weight: .semibold))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(Color.appAmber)
-                .foregroundStyle(Color.white)
-                .clipShape(Capsule())
-                .shadow(color: Color.appAmber.opacity(0.15), radius: 3, y: 1.5)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.appAmber.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.appAmber.opacity(0.2), lineWidth: 1)
-                )
-        )
-        .scaleEffect(isHovered ? 1.003 : 1.0)
-        .animation(.snappy(duration: 0.18), value: isHovered)
-        .onHover { isHovered = $0 }
-        .padding(.horizontal, 48)
-        .padding(.bottom, 24)
-    }
-}
 
 struct SyncConfirmOverlay: View {
     let urls: [URL]
@@ -2682,5 +2724,124 @@ struct SyncConfirmOverlay: View {
             .shadow(color: Color.appInk.opacity(0.16), radius: 24, x: 0, y: 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct WelcomeIntroBanner: View {
+    let dismiss: () -> Void
+    let startOnboarding: () -> Void
+    let showHelp: () -> Void
+
+    @State private var isHoveringClose = false
+    @State private var animateIcon = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            // 左侧闪亮和循环同步图标组合，表示智能监控与自动同步
+            ZStack {
+                Circle()
+                    .fill(Color.appMint.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Color.appMint)
+                    .rotationEffect(.degrees(animateIcon ? 360 : 0))
+                
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.appAmber)
+                    .offset(x: 12, y: -12)
+            }
+            .padding(.top, 2)
+            .onAppear {
+                withAnimation(.linear(duration: 4.5).repeatForever(autoreverses: false)) {
+                    animateIcon = true
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        LocalizedText("关于 FileSyncMonitor")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color.appInk)
+                        
+                        Text("FileSyncMonitor 是一款面向 macOS 用户的轻量化文件夹自动监控与同步工具。")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.appMint)
+                    }
+                    
+                    Spacer()
+                    
+                    // 关闭按钮
+                    Button(action: dismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(isHoveringClose ? Color.appInk : Color.appMuted)
+                            .frame(width: 20, height: 20)
+                            .background(isHoveringClose ? Color.appLine.opacity(0.42) : Color.clear)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isHoveringClose = $0 }
+                    .help("隐藏此功能说明".appLocalized)
+                }
+
+                // 核心说明文本
+                Text("它能够静默监控您指定的本地文件夹，捕获任何新建、修改、删除和重命名等文件变动事件，并能够安全地自动或手动同步到腾讯 IMA 个人知识库。在这里，我们将帮助您在本地常用编辑器与云端平台之间，架起一座可靠的双向同步桥梁。")
+                    .font(.system(size: 12.5))
+                    .lineSpacing(4)
+                    .foregroundStyle(Color.appMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                // 引导按钮行
+                HStack(spacing: 12) {
+                    Button(action: startOnboarding) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hand.point.up.left.fill")
+                                .font(.system(size: 11))
+                            LocalizedText("新手使用向导")
+                        }
+                    }
+                    .buttonStyle(PillButtonStyle(isPrimary: true))
+                    
+                    Button(action: showHelp) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.plaintext.fill")
+                                .font(.system(size: 11))
+                            LocalizedText("查看帮助文档")
+                        }
+                    }
+                    .buttonStyle(QuietButtonStyle())
+                    
+                    Button(action: dismiss) {
+                        LocalizedText("不再显示")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.appMuted)
+                    .padding(.leading, 8)
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(20)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.appSurface,
+                    Color.appSelection.opacity(0.32)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.appLine.opacity(0.68), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: Color.appInk.opacity(0.035), radius: 10, x: 0, y: 5)
     }
 }

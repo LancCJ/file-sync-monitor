@@ -338,7 +338,9 @@ final class FileMonitorService {
     var pathKnowledgeBaseMapping: [String: String] {
         get {
             guard let data = UserDefaults.standard.data(forKey: mappingKey) else { return [:] }
-            return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+            let mapping = (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+            // 自动清理测试用例残留的无效 knowledge_base_id，防止在真实环境中请求 API 报 code: 51
+            return mapping.filter { $0.value != "kb_test_123" }
         }
         set {
             if let data = try? JSONEncoder().encode(newValue) {
@@ -526,19 +528,86 @@ final class FileMonitorService {
             guard !kbId.isEmpty && kbId != "default" else { continue }
             
             do {
-                // 1. 获取云端列表
-                let (items, _, _) = try await IMASyncService.shared.getKnowledgeList(knowledgeBaseId: kbId)
+                var folderItemsCache: [String?: [KnowledgeInfo]] = [:]
                 
+                func cachedFetchAllKnowledgeItems(folderId: String?) async throws -> [KnowledgeInfo] {
+                    if let cached = folderItemsCache[folderId] {
+                        return cached
+                    }
+                    let items = try await IMASyncService.shared.fetchAllKnowledgeItems(knowledgeBaseId: kbId, folderId: folderId)
+                    folderItemsCache[folderId] = items
+                    return items
+                }
+
+                struct DownloadTask {
+                    let item: KnowledgeInfo
+                    let mediaId: String
+                    let kbId: String
+                    let destinationURL: URL
+                    let eventType: String
+                }
+                var downloadTasks: [DownloadTask] = []
+
+                // 1. 获取云端列表
+                let items = try await cachedFetchAllKnowledgeItems(folderId: nil)
                 let localURL = URL(fileURLWithPath: localPath)
+                var remoteExistingPaths = Set<String>()
+
+                func localFileName(for item: KnowledgeInfo) -> String {
+                    let name = item.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard item.mediaType == 11 else { return name }
+                    let url = URL(fileURLWithPath: name)
+                    return url.pathExtension.isEmpty ? "\(name).md" : name
+                }
+
+                func collectRemoteTreeItems(_ items: [KnowledgeInfo], localDir: URL) async -> [KnowledgeInfo] {
+                    var allItems = items
+                    for item in items {
+                        let remoteName = localFileName(for: item)
+                        guard !remoteName.isEmpty else { continue }
+                        let itemURL = localDir.appendingPathComponent(remoteName)
+                        remoteExistingPaths.insert(itemURL.path)
+
+                        // 识别文件夹：优先 folderIdentifier，其次 mediaType==16
+                        let effectiveFolderId = item.folderIdentifier ?? (item.mediaType == 16 ? item.mediaId : nil)
+                        guard item.isFolder || item.mediaType == 16, let folderId = effectiveFolderId else { continue }
+                        do {
+                            let childItems = try await cachedFetchAllKnowledgeItems(folderId: folderId)
+                            let childCollected = await collectRemoteTreeItems(childItems, localDir: itemURL)
+                            allItems.append(contentsOf: childCollected)
+                        } catch {
+                            print("Sync: collectRemoteTreeItems failed for folder \(remoteName) (\(folderId)): \(error)")
+                        }
+                    }
+                    return allItems
+                }
+
+                let allRemoteItems = await collectRemoteTreeItems(items, localDir: localURL)
+                var isLocalRootDirectory: ObjCBool = false
+                if FileManager.default.fileExists(atPath: localURL.path, isDirectory: &isLocalRootDirectory) {
+                    if !isLocalRootDirectory.boolValue {
+                        let timestamp = Int(Date().timeIntervalSince1970)
+                        let backupURL = localURL.deletingLastPathComponent()
+                            .appendingPathComponent("\(localURL.lastPathComponent)_local_file_backup_\(timestamp)")
+                        try FileManager.default.moveItem(at: localURL, to: backupURL)
+                        try FileManager.default.createDirectory(at: localURL, withIntermediateDirectories: true)
+                        print("Sync: Local monitored root was a file. Backed it up and recreated directory: \(localPath)")
+                    }
+                } else {
+                    try FileManager.default.createDirectory(at: localURL, withIntermediateDirectories: true)
+                    print("Sync: Recreated missing local monitored root directory: \(localPath)")
+                }
                 
                 // --- Phase 1: Cloud-to-Local Renames ---
-                for item in items {
+                for item in allRemoteItems {
                     let mediaId = item.isFolder ? (item.folderIdentifier ?? item.mediaId) : item.mediaId
                     if let existingEvent = getEventByRemoteId(mediaId, under: localPath) {
                         let localName = URL(fileURLWithPath: existingEvent.path).lastPathComponent
-                        if localName != item.title {
+                        let remoteName = localFileName(for: item)
+                        guard !remoteName.isEmpty else { continue }
+                        if localName != remoteName {
                             let oldPath = existingEvent.path
-                            let newURL = URL(fileURLWithPath: oldPath).deletingLastPathComponent().appendingPathComponent(item.title)
+                            let newURL = URL(fileURLWithPath: oldPath).deletingLastPathComponent().appendingPathComponent(remoteName)
                             let newPath = newURL.path
                             
                             do {
@@ -560,7 +629,7 @@ final class FileMonitorService {
                 }
                 
                 // --- Phase 2: Cloud-to-Local Deletions ---
-                let remoteMediaIds = Set(items.map { $0.isFolder ? ($0.folderIdentifier ?? $0.mediaId) : $0.mediaId })
+                let remoteMediaIds = Set(allRemoteItems.map { $0.isFolder ? ($0.folderIdentifier ?? $0.mediaId) : $0.mediaId })
                 let descriptor = FetchDescriptor<FileEvent>(
                     predicate: #Predicate<FileEvent> { $0.remoteId != nil && $0.isSynced == true }
                 )
@@ -581,7 +650,9 @@ final class FileMonitorService {
                     for (filePath, ev) in latestEventByPath {
                         guard ev.type != "deleted" else { continue }
                         
-                        if let remoteId = ev.remoteId, !remoteMediaIds.contains(remoteId) {
+                        if let remoteId = ev.remoteId,
+                           !remoteMediaIds.contains(remoteId),
+                           !remoteExistingPaths.contains(filePath) {
                             print("Sync: File/Folder deleted on cloud, syncing deletion to local: \(filePath)")
                             let fileURL = URL(fileURLWithPath: filePath)
                             
@@ -603,111 +674,230 @@ final class FileMonitorService {
                 }
                 
                 // --- Phase 3: Cloud-to-Local Creations & Modifications (recursive) ---
-                func processItems(_ items: [KnowledgeInfo], localDir: URL) async throws {
+                // 使用 nonisolated 闭包（嵌套函数）避免 Swift 并发检查错误
+                func processItems(_ items: [KnowledgeInfo], localDir: URL) async {
                     for item in items {
-                        if item.isFolder {
-                            // 确保本地目录存在
-                            let folderURL = localDir.appendingPathComponent(item.title)
-                            try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                            print("Sync: Ensured local directory exists for folder: \(item.title)")
-                            
-                            // 递归拉取子文件夹内的文件
-                            let folderId = item.folderIdentifier ?? item.mediaId
-                            var childCursor = ""
-                            repeat {
-                                let (childItems, childIsEnd, nextChildCursor) = try await IMASyncService.shared.getKnowledgeList(
-                                    knowledgeBaseId: kbId,
-                                    folderId: folderId,
-                                    cursor: childCursor
-                                )
-                                try await processItems(childItems, localDir: folderURL)
-                                if childIsEnd { break }
-                                childCursor = nextChildCursor
-                            } while true
-                            continue
-                        }
-                        
-                        let fileURL = localDir.appendingPathComponent(item.title)
-                        let filePath = fileURL.path
+                        // 每个 item 独立 do-catch，单个失败不中断后续处理
+                        do {
+                            let remoteName = localFileName(for: item)
+                            guard !remoteName.isEmpty else { continue }
 
-                        if !FileManager.default.fileExists(atPath: filePath) {
-                            if hasLocalDeletionRecord(for: filePath) {
-                                deletedFilesToPull.append((fileURL, item.mediaId, kbId))
-                                print("Sync: Found locally deleted file still on cloud (pending choice): \(item.title)")
-                            } else {
-                                print("Sync: Downloading new file from cloud: \(item.title)")
-                                try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
-                                
-                                let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
-                                event.isSynced = true
-                                context.insert(event)
-                                try? context.save()
-                            }
-                        } else {
-                            let latestSynced = getLatestSyncedEvent(for: filePath)
-                            let hasUnsynced = hasUnsyncedLocalChanges(for: filePath)
-                            
-                            if let lastRemoteId = latestSynced?.remoteId {
-                                if item.mediaId == lastRemoteId {
-                                    print("Sync: File identical (mediaId matches): \(item.title)")
-                                } else {
-                                    if hasUnsynced {
-                                        print("Sync: CONFLICT detected for \(item.title). Cloud changed and local has unsynced changes.")
-                                        
-                                        let ext = fileURL.pathExtension
-                                        let baseName = fileURL.deletingPathExtension().lastPathComponent
-                                        let timestamp = Int(Date().timeIntervalSince1970)
-                                        let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
-                                        let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
-                                        
-                                        try? FileManager.default.moveItem(at: fileURL, to: backupURL)
-                                        
-                                        let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
-                                        backupEvent.isSynced = true
-                                        context.insert(backupEvent)
-                                        
-                                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
-                                        
-                                        let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
-                                        event.isSynced = true
-                                        context.insert(event)
-                                        try? context.save()
+                            // ── 文件夹处理 ──────────────────────────────────────────
+                            // 识别条件：isFolder（已有复杂逻辑）或 mediaType == 16（明确文件夹类型）
+                            let effectiveFolderId = item.folderIdentifier ?? (item.mediaType == 16 ? item.mediaId : nil)
+                            if item.isFolder || item.mediaType == 16 {
+                                let folderURL = localDir.appendingPathComponent(remoteName)
+
+                                // 若本地不存在，先尝试从备份恢复，否则新建
+                                if !FileManager.default.fileExists(atPath: folderURL.path) {
+                                    if let backupURL = findLocalBackupDirectory(for: remoteName, in: localDir) {
+                                        do {
+                                            try FileManager.default.moveItem(at: backupURL, to: folderURL)
+                                            print("Sync: Restored local folder backup \(backupURL.lastPathComponent) to \(remoteName)")
+                                        } catch {
+                                            print("Sync: Failed to restore folder backup \(backupURL.path): \(error)")
+                                            try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                                        }
                                     } else {
-                                        print("Sync: Safe pull (cloud updated, local untouched) for \(item.title)")
-                                        try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
-                                        
-                                        let event = FileEvent(path: filePath, type: "modified", isDirectory: false, remoteId: item.mediaId)
-                                        event.isSynced = true
-                                        context.insert(event)
+                                        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                                    }
+                                }
+                                print("Sync: Ensured local directory exists for folder: \(remoteName)")
+
+                                // 记录文件夹的同步状态（remoteId = folderId）
+                                if let fId = effectiveFolderId {
+                                    let folderPath = folderURL.path
+                                    let existingFolderEvent = getLatestSyncedEvent(for: folderPath)
+                                    if existingFolderEvent == nil || existingFolderEvent?.remoteId != fId {
+                                        let folderEvent = FileEvent(path: folderPath, type: "created", isDirectory: true, remoteId: fId)
+                                        folderEvent.isSynced = true
+                                        context.insert(folderEvent)
                                         try? context.save()
                                     }
                                 }
+
+                                // 递归拉取子文件夹内容
+                                let folderId = effectiveFolderId ?? item.mediaId
+                                do {
+                                    let childItems = try await cachedFetchAllKnowledgeItems(folderId: folderId)
+                                    await processItems(childItems, localDir: folderURL)
+                                } catch {
+                                    print("Sync: Failed to fetch children of folder \(remoteName) (\(folderId)): \(error)")
+                                }
+                                continue
+                            }
+
+                            // ── 文件处理 ──────────────────────────────────────────
+                            let fileURL = localDir.appendingPathComponent(remoteName)
+                            let filePath = fileURL.path
+
+                            if !FileManager.default.fileExists(atPath: filePath) {
+                                if hasLocalDeletionRecord(for: filePath) {
+                                    deletedFilesToPull.append((fileURL, item.mediaId, kbId))
+                                    print("Sync: Found locally deleted file still on cloud (pending choice): \(remoteName)")
+                                } else {
+                                    print("Sync: Queueing download for new file: \(remoteName)")
+                                    downloadTasks.append(DownloadTask(item: item, mediaId: item.mediaId, kbId: kbId, destinationURL: fileURL, eventType: "created"))
+                                }
                             } else {
-                                print("Sync: File exists locally but has no remoteId record. Treating as conflict.")
-                                let ext = fileURL.pathExtension
-                                let baseName = fileURL.deletingPathExtension().lastPathComponent
-                                let timestamp = Int(Date().timeIntervalSince1970)
-                                let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
-                                let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
-                                
-                                try? FileManager.default.moveItem(at: fileURL, to: backupURL)
-                                
-                                let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
-                                backupEvent.isSynced = true
-                                context.insert(backupEvent)
-                                
-                                try await IMASyncService.shared.downloadFile(mediaId: item.mediaId, knowledgeBaseId: kbId, to: fileURL)
-                                
-                                let event = FileEvent(path: filePath, type: "created", isDirectory: false, remoteId: item.mediaId)
+                                var isLocalDirectory: ObjCBool = false
+                                if FileManager.default.fileExists(atPath: filePath, isDirectory: &isLocalDirectory),
+                                   isLocalDirectory.boolValue {
+                                    print("Sync: Remote item \(remoteName) was decoded as a file, but local path is a directory. Skipping.")
+                                    continue
+                                }
+
+                                let latestSynced = getLatestSyncedEvent(for: filePath)
+                                let hasUnsynced = hasUnsyncedLocalChanges(for: filePath)
+
+                                if let lastRemoteId = latestSynced?.remoteId {
+                                    if item.mediaId == lastRemoteId {
+                                        print("Sync: File identical (mediaId matches): \(remoteName)")
+                                    } else {
+                                        if hasUnsynced {
+                                            print("Sync: CONFLICT detected for \(remoteName). Cloud changed and local has unsynced changes.")
+                                            let ext = fileURL.pathExtension
+                                            let baseName = fileURL.deletingPathExtension().lastPathComponent
+                                            let timestamp = Int(Date().timeIntervalSince1970)
+                                            let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
+                                            let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
+                                            try? FileManager.default.moveItem(at: fileURL, to: backupURL)
+                                            let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
+                                            backupEvent.isSynced = true
+                                            context.insert(backupEvent)
+                                            
+                                            downloadTasks.append(DownloadTask(item: item, mediaId: item.mediaId, kbId: kbId, destinationURL: fileURL, eventType: "modified"))
+                                        } else {
+                                            print("Sync: Safe pull (cloud updated, local untouched) for \(remoteName)")
+                                            downloadTasks.append(DownloadTask(item: item, mediaId: item.mediaId, kbId: kbId, destinationURL: fileURL, eventType: "modified"))
+                                        }
+                                    }
+                                } else {
+                                    print("Sync: File exists locally but has no remoteId record. Treating as conflict.")
+                                    let ext = fileURL.pathExtension
+                                    let baseName = fileURL.deletingPathExtension().lastPathComponent
+                                    let timestamp = Int(Date().timeIntervalSince1970)
+                                    let backupName = "\(baseName)_local_backup_\(timestamp)\(ext.isEmpty ? "" : ".\(ext)")"
+                                    let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent(backupName)
+                                    try? FileManager.default.moveItem(at: fileURL, to: backupURL)
+                                    let backupEvent = FileEvent(path: backupURL.path, type: "created", isDirectory: false)
+                                    backupEvent.isSynced = true
+                                    context.insert(backupEvent)
+                                    
+                                    downloadTasks.append(DownloadTask(item: item, mediaId: item.mediaId, kbId: kbId, destinationURL: fileURL, eventType: "created"))
+                                }
+                            }
+                        } catch {
+                            // 单个 item 失败，记录日志后继续处理下一个
+                            let name = item.displayName.isEmpty ? item.mediaId : item.displayName
+                            print("Sync: [SKIPPED] Failed to process item '\(name)' in '\(localDir.lastPathComponent)': \(error.localizedDescription)")
+                        }
+                    }
+                }
+
+                func findLocalBackupDirectory(for folderName: String, in parentURL: URL) -> URL? {
+                    let backupPrefix = "\(folderName)_local_backup_"
+                    guard let urls = try? FileManager.default.contentsOfDirectory(
+                        at: parentURL,
+                        includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+                        options: [.skipsHiddenFiles]
+                    ) else {
+                        return nil
+                    }
+
+                    return urls
+                        .filter { url in
+                            guard url.lastPathComponent.hasPrefix(backupPrefix),
+                                  (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+                                return false
+                            }
+                            return true
+                        }
+                        .sorted {
+                            let lhsDate = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                            let rhsDate = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                            return lhsDate > rhsDate
+                        }
+                        .first
+                }
+
+                await processItems(items, localDir: localURL)
+
+                // --- Phase 3.5: Execute Concurrent Downloads ---
+                if !downloadTasks.isEmpty {
+                    print("Sync: Processing \(downloadTasks.count) download tasks concurrently...")
+                    
+                    let maxConcurrent = 4
+                    try await withThrowingTaskGroup(of: (DownloadTask, Error?).self) { group in
+                        var index = 0
+                        
+                        // Fill initial batch
+                        while index < min(maxConcurrent, downloadTasks.count) {
+                            let task = downloadTasks[index]
+                            group.addTask {
+                                do {
+                                    if task.item.mediaType == 11 || task.item.isNote {
+                                        if let noteId = task.item.notebookExtInfo?.notebookId, !noteId.isEmpty {
+                                            print("Sync: Note fast-path via known notebookId (\(noteId)) for '\(task.destinationURL.lastPathComponent)'")
+                                            let content = try await IMASyncService.shared.getNoteContent(noteId: noteId)
+                                            try FileManager.default.createDirectory(
+                                                at: task.destinationURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true
+                                            )
+                                            try content.write(to: task.destinationURL, atomically: true, encoding: .utf8)
+                                            return (task, nil)
+                                        }
+                                    }
+                                    try await IMASyncService.shared.downloadFile(mediaId: task.mediaId, knowledgeBaseId: task.kbId, to: task.destinationURL)
+                                    return (task, nil)
+                                } catch {
+                                    return (task, error)
+                                }
+                            }
+                            index += 1
+                        }
+                        
+                        // Process results and start new tasks
+                        while let (task, error) = try await group.next() {
+                            if let error = error {
+                                print("Sync: Failed to download \(task.destinationURL.lastPathComponent): \(error.localizedDescription)")
+                            } else {
+                                // Successful download - create database record
+                                let filePath = task.destinationURL.path
+                                let event = FileEvent(path: filePath, type: task.eventType, isDirectory: false, remoteId: task.mediaId)
                                 event.isSynced = true
                                 context.insert(event)
                                 try? context.save()
+                                print("Sync: Successfully synchronized file: \(task.destinationURL.lastPathComponent)")
+                            }
+                            
+                            if index < downloadTasks.count {
+                                let nextTask = downloadTasks[index]
+                                group.addTask {
+                                    do {
+                                        if nextTask.item.mediaType == 11 || nextTask.item.isNote {
+                                            if let noteId = nextTask.item.notebookExtInfo?.notebookId, !noteId.isEmpty {
+                                                print("Sync: Note fast-path via known notebookId (\(noteId)) for '\(nextTask.destinationURL.lastPathComponent)'")
+                                                let content = try await IMASyncService.shared.getNoteContent(noteId: noteId)
+                                                try FileManager.default.createDirectory(
+                                                    at: nextTask.destinationURL.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true
+                                                )
+                                                try content.write(to: nextTask.destinationURL, atomically: true, encoding: .utf8)
+                                                return (nextTask, nil)
+                                            }
+                                        }
+                                        try await IMASyncService.shared.downloadFile(mediaId: nextTask.mediaId, knowledgeBaseId: nextTask.kbId, to: nextTask.destinationURL)
+                                        return (nextTask, nil)
+                                    } catch {
+                                        return (nextTask, error)
+                                    }
+                                }
+                                index += 1
                             }
                         }
                     }
                 }
-                
-                try await processItems(items, localDir: localURL)
 
             } catch {
                 print("Pull from remote failed for \(localPath): \(error)")
@@ -991,6 +1181,18 @@ final class FileMonitorService {
             FSEventStreamRelease(stream)
             self.stream = nil
         }
+    }
+    
+    func clearAllMonitoredDirectories() {
+        stopMonitoring()
+        for (_, url) in securityScopedURLs {
+            url.stopAccessingSecurityScopedResource()
+        }
+        securityScopedURLs.removeAll()
+        monitoredPaths = []
+        pathKnowledgeBaseMapping = [:]
+        availableKnowledgeBases = []
+        UserDefaults.standard.removeObject(forKey: bookmarksKey)
     }
     
     private func handleEvents(numEvents: Int, eventPaths: UnsafeMutableRawPointer, eventFlags: UnsafePointer<FSEventStreamEventFlags>) {
