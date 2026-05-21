@@ -111,6 +111,8 @@ jobs:
             (r"rewrite release notes generation with Python3 to fix BSD sed emoji encoding issues on macOS runner", "使用 Python3 重写发布说明生成逻辑，修复 macOS runner 上 BSD sed 处理 emoji 的编码问题"),
             (r"translate commit prefixes to Chinese in release notes CN section", "将提交前缀转换为中文发布说明分类"),
             (r"localize Chinese release notes from commit messages", "将提交信息转换为中文发布说明内容"),
+            (r"mark generated releases as latest", "自动生成的 GitHub Release 会标记为最新版本"),
+            (r"improve login refresh and sync dialog layering", "新增登录二维码手动刷新，并修复云端拉回确认弹窗被同步进度遮罩挡住的问题"),
         ]
 
         def parse_commit(line):
@@ -179,7 +181,7 @@ jobs:
       with:
         files: ${{ github.workspace }}/${{ steps.build_dmg.outputs.dmg_name }}
         draft: false
-        prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+        prerelease: false
         make_latest: true
         fail_on_unmatched_files: true
         body_path: release_notes.md
