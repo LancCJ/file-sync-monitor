@@ -113,6 +113,8 @@ jobs:
             (r"localize Chinese release notes from commit messages", "将提交信息转换为中文发布说明内容"),
             (r"mark generated releases as latest", "自动生成的 GitHub Release 会标记为最新版本"),
             (r"improve login refresh and sync dialog layering", "新增登录二维码手动刷新，并修复云端拉回确认弹窗被同步进度遮罩挡住的问题"),
+            (r"publish tag builds as latest releases", "新 tag 打包完成后会发布为普通 Release，并自动标记为最新版本"),
+            (r"translate latest release workflow note", "补充发布说明中文翻译，确保新 tag 的更新说明更清晰"),
         ]
 
         def parse_commit(line):
