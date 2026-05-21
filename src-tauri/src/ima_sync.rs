@@ -1,8 +1,5 @@
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use std::path::Path;
-use tokio::fs::File;
-use tokio_util::codec::{BytesCodec, FramedRead};
 
 use crate::credentials::{self, CachedCredentials};
 

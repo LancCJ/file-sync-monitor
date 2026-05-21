@@ -15,16 +15,14 @@ const CREDENTIALS_KEY: &str = "ima_combined_credentials";
 pub fn load_credentials() -> Option<CachedCredentials> {
     match Entry::new(SERVICE_NAME, CREDENTIALS_KEY) {
         Ok(entry) => {
-            match entry.get_secret() {
-                Ok(secret_bytes) => {
-                    if let Ok(json_str) = String::from_utf8(secret_bytes) {
-                        if let Ok(creds) = serde_json::from_str::<CachedCredentials>(&json_str) {
-                            return Some(creds);
-                        }
+            match entry.get_password() {
+                Ok(json_str) => {
+                    if let Ok(creds) = serde_json::from_str::<CachedCredentials>(&json_str) {
+                        return Some(creds);
                     }
                 }
                 Err(e) => {
-                    println!("[Credentials] Failed to load secret: {:?}", e);
+                    println!("[Credentials] Failed to load password: {:?}", e);
                 }
             }
         }
@@ -42,7 +40,7 @@ pub fn save_credentials(creds: &CachedCredentials) -> Result<(), String> {
     let json_str = serde_json::to_string(creds)
         .map_err(|e| format!("Serialization error: {:?}", e))?;
         
-    entry.set_secret(json_str.as_bytes())
+    entry.set_password(&json_str)
         .map_err(|e| format!("Keyring save error: {:?}", e))?;
         
     Ok(())
@@ -52,7 +50,7 @@ pub fn clear_credentials() -> Result<(), String> {
     let entry = Entry::new(SERVICE_NAME, CREDENTIALS_KEY)
         .map_err(|e| format!("Keyring init error: {:?}", e))?;
         
-    match entry.delete_secret() {
+    match entry.delete_password() {
         Ok(_) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()), // Already cleared
         Err(e) => Err(format!("Keyring delete error: {:?}", e)),
