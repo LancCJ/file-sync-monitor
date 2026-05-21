@@ -4,6 +4,7 @@ import WebKit
 /// 内置微信扫码登录的 WKWebView 封装
 struct IMALoginWebView: NSViewRepresentable {
     let onLoginSuccess: () -> Void
+    let reloadToken: UUID
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -49,9 +50,8 @@ struct IMALoginWebView: NSViewRepresentable {
         // 伪装成标准的 macOS Desktop Chrome User-Agent 以通过微信 OAuth 安全风控
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         
-        // 直接加载登录页，利用已持有的 Cookie 自动登录或进入扫码界面
-        let request = URLRequest(url: URL(string: "https://ima.qq.com/login/")!)
-        webView.load(request)
+        context.coordinator.lastReloadToken = reloadToken
+        context.coordinator.loadLoginPage(in: webView, bypassCache: false)
         
         return webView
     }
@@ -68,7 +68,12 @@ struct IMALoginWebView: NSViewRepresentable {
         }
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        context.coordinator.parent = self
+        guard context.coordinator.lastReloadToken != reloadToken else { return }
+        context.coordinator.lastReloadToken = reloadToken
+        context.coordinator.loadLoginPage(in: nsView, bypassCache: true)
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -77,6 +82,7 @@ struct IMALoginWebView: NSViewRepresentable {
     class Coordinator: NSObject, WKNavigationDelegate {
         var parent: IMALoginWebView
         weak var webView: WKWebView?
+        var lastReloadToken: UUID?
         private var timer: Timer?
         private var isValidating = false
 
@@ -88,6 +94,28 @@ struct IMALoginWebView: NSViewRepresentable {
 
         deinit {
             timer?.invalidate()
+        }
+
+        func loadLoginPage(in webView: WKWebView, bypassCache: Bool) {
+            isValidating = false
+            webView.stopLoading()
+
+            var components = URLComponents(string: "https://ima.qq.com/login/")!
+            if bypassCache {
+                let timestamp = String(Int(Date().timeIntervalSince1970 * 1000))
+                components.queryItems = [URLQueryItem(name: "fs_refresh", value: timestamp)]
+            }
+
+            guard let url = components.url else { return }
+            var request = URLRequest(url: url)
+            if bypassCache {
+                request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+            }
+            webView.load(request)
+
+            if timer == nil {
+                startCredentialsPolling()
+            }
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -340,6 +368,8 @@ struct IMALoginWebView: NSViewRepresentable {
 struct IMALoginView: View {
     let onLoginSuccess: () -> Void
     @State private var isAnimating = false
+    @State private var reloadToken = UUID()
+    @State private var isReloadingQRCode = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -355,6 +385,23 @@ struct IMALoginView: View {
                     .foregroundColor(.primary)
                 
                 Spacer()
+
+                Button {
+                    reloadToken = UUID()
+                    isReloadingQRCode = true
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(900))
+                        isReloadingQRCode = false
+                    }
+                } label: {
+                    Label("刷新二维码", systemImage: "arrow.clockwise")
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(QuietButtonStyle())
+                .rotationEffect(.degrees(isReloadingQRCode ? 360 : 0))
+                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: isReloadingQRCode)
+                .help("网络不稳定或二维码未显示时，点击重新加载登录二维码")
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 14)
@@ -364,7 +411,7 @@ struct IMALoginView: View {
             
             // WebView 容器 - 极简 320x320 刚好契合二维码尺寸
             ZStack {
-                IMALoginWebView(onLoginSuccess: onLoginSuccess)
+                IMALoginWebView(onLoginSuccess: onLoginSuccess, reloadToken: reloadToken)
                     .frame(width: 320, height: 320)
             }
             .padding(.vertical, 8)

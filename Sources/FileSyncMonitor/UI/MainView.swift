@@ -212,6 +212,7 @@ struct MainView: View {
                         quit: { NSApp.terminate(nil) }
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .zIndex(70)
                 }
 
                 if isShowingBatchDeleteConfirmation {
@@ -224,6 +225,7 @@ struct MainView: View {
                         }
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .zIndex(70)
                 }
 
                 if showingPullConfirmDialog {
@@ -245,6 +247,7 @@ struct MainView: View {
                         }
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .zIndex(80)
                 }
 
                 if !credsManager.isLoggedIn {
@@ -274,10 +277,12 @@ struct MainView: View {
                         print("[MainView] WeChat login success, unlocking interface.")
                     })
                     .transition(.scale.combined(with: .opacity))
+                    .zIndex(90)
                 }
                 
                 // 全局高端同步进度遮罩卡片
                 SyncProgressOverlay()
+                    .zIndex(40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(IMAWindowBackground())
@@ -2679,4 +2684,3 @@ struct SyncConfirmOverlay: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
-
