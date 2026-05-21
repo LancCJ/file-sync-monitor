@@ -180,6 +180,7 @@ jobs:
         files: ${{ github.workspace }}/${{ steps.build_dmg.outputs.dmg_name }}
         draft: false
         prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+        make_latest: true
         fail_on_unmatched_files: true
         body_path: release_notes.md
         generate_release_notes: true
