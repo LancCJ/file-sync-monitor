@@ -77,37 +77,79 @@ jobs:
             prev = ""
 
         # Fetch raw commits
-        cmd = ["git", "log", "--pretty=format:- %s (%h)"]
+        cmd = ["git", "log", "--pretty=format:%s (%h)"]
         if prev:
             cmd.insert(2, f"{prev}..HEAD")
         raw = subprocess.check_output(cmd).decode().strip()
 
-        # Prefix → Chinese label mapping
-        PREFIX_MAP = [
-            (r"^- feat!:", "- \U0001f4a5 破坏性新功能："),
-            (r"^- fix!:",  "- \U0001f4a5 破坏性修复："),
-            (r"^- feat:",  "- \u2728 新功能："),
-            (r"^- fix:",   "- \U0001f41b 问题修复："),
-            (r"^- refactor:", "- \U0001f527 代码重构："),
-            (r"^- perf:",  "- \u26a1 性能优化："),
-            (r"^- docs:",  "- \U0001f4dd 文档更新："),
-            (r"^- chore:", "- \U0001f6e0 维护更新："),
-            (r"^- style:", "- \U0001f3a8 样式调整："),
-            (r"^- test:",  "- \U0001f9ea 测试更新："),
-            (r"^- ci:",    "- \U0001f680 CI/CD 更新："),
-            (r"^- revert:","- \u23ea 回滚："),
-            (r"^- build:", "- \U0001f4e6 构建相关："),
+        TYPE_LABELS = {
+            "feat": "\u2728 新功能",
+            "fix": "\U0001f41b 问题修复",
+            "refactor": "\U0001f527 代码重构",
+            "perf": "\u26a1 性能优化",
+            "docs": "\U0001f4dd 文档更新",
+            "chore": "\U0001f6e0 维护更新",
+            "style": "\U0001f3a8 样式调整",
+            "test": "\U0001f9ea 测试更新",
+            "ci": "\U0001f680 CI/CD 更新",
+            "revert": "\u23ea 回滚",
+            "build": "\U0001f4e6 构建相关",
+        }
+
+        PHRASE_TRANSLATIONS = [
+            (r"dynamic release notes from git log \+ silent IMA token refresh", "从 Git 提交记录动态生成发布说明，并加入 IMA 静默 token 刷新"),
+            (r"support cloud-to-local deletion and rename sync in pullFromRemote", "支持将 IMA 云端的删除和重命名操作同步到本地"),
+            (r"remove same-name file strategy setting from UI and default to in-place overwrite", "移除同名文件策略设置，默认使用原地覆盖方式"),
+            (r"document no-auto-tag rule in AGENTS\.md", "在 AGENTS.md 中补充禁止自动打 tag 的规则"),
+            (r"refresh README and sanitize packet captures", "更新 README，并清理、脱敏抓包资料"),
+            (r"fix workflow yaml release notes block", "修复发布流程中发布说明文本块的 YAML 语法"),
+            (r"make push filters explicit", "明确 GitHub Actions 的 push 触发过滤条件"),
+            (r"move release ref guard to steps", "将发布 ref 判断下沉到具体步骤，避免空任务运行"),
+            (r"avoid empty release workflow runs", "避免发布工作流出现空任务运行"),
+            (r"fix tag release workflow trigger", "修复 tag 发布工作流触发逻辑"),
+            (r"skip release job on non-tag pushes to suppress false failure emails", "非 tag 推送时跳过发布任务，避免误报失败邮件"),
+            (r"rewrite release notes generation with Python3 to fix BSD sed emoji encoding issues on macOS runner", "使用 Python3 重写发布说明生成逻辑，修复 macOS runner 上 BSD sed 处理 emoji 的编码问题"),
+            (r"translate commit prefixes to Chinese in release notes CN section", "将提交前缀转换为中文发布说明分类"),
+            (r"localize Chinese release notes from commit messages", "将提交信息转换为中文发布说明内容"),
         ]
 
+        def parse_commit(line):
+            match = re.match(r"(?P<subject>.*) \((?P<hash>[0-9a-f]+)\)$", line)
+            if not match:
+                return "chore", line, ""
+
+            subject = match.group("subject").strip()
+            short_hash = match.group("hash")
+            conventional = re.match(r"(?P<type>[a-zA-Z]+)(?:\([^)]+\))?(?P<breaking>!)?:\s*(?P<body>.*)", subject)
+            if not conventional:
+                return "chore", subject, short_hash
+
+            commit_type = conventional.group("type").lower()
+            if conventional.group("breaking"):
+                commit_type = f"{commit_type}!"
+            return commit_type, conventional.group("body").strip(), short_hash
+
+        def translate_body(body):
+            for pattern, translated in PHRASE_TRANSLATIONS:
+                if re.fullmatch(pattern, body, flags=re.IGNORECASE):
+                    return translated
+            return f"更新了相关内容（原始提交：{body}）"
+
         cn_lines = []
+        en_lines = []
         for line in raw.splitlines():
-            for pattern, replacement in PREFIX_MAP:
-                if re.match(pattern, line):
-                    rest = re.sub(pattern, "", line).strip()
-                    line = replacement + rest
-                    break
-            cn_lines.append(line)
-        cn = "\n".join(cn_lines)
+            commit_type, body, short_hash = parse_commit(line)
+            base_type = commit_type.rstrip("!")
+            label = TYPE_LABELS.get(base_type, "\U0001f6e0 维护更新")
+            if commit_type.endswith("!"):
+                label = "\U0001f4a5 破坏性变更"
+
+            suffix = f"（{short_hash}）" if short_hash else ""
+            cn_lines.append(f"- {label}：{translate_body(body)}{suffix}")
+            en_lines.append(f"- {line}")
+
+        cn = "\n".join(cn_lines) if cn_lines else "- 本次发布没有新的提交记录。"
+        en = "\n".join(en_lines) if en_lines else "- No commits in this release."
 
         content = textwrap.dedent(f"""\
         ### \U0001f1e8\U0001f1f3 \u4e2d\u6587\u66f4\u65b0\u65e5\u5fd7
@@ -122,7 +164,7 @@ jobs:
 
         Thank you for using FileSyncMonitor! This release contains the following updates:
 
-        {raw}
+        {en}
 
         ---
         """)
@@ -137,7 +179,7 @@ jobs:
       with:
         files: ${{ github.workspace }}/${{ steps.build_dmg.outputs.dmg_name }}
         draft: false
-        prerelease: false
+        prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
         fail_on_unmatched_files: true
         body_path: release_notes.md
         generate_release_notes: true
