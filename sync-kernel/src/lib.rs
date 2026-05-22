@@ -827,8 +827,133 @@ fn set_window_theme(window: tauri::Window, theme: String) -> Result<(), String> 
 }
 
 
+async fn refresh_credentials_via_api(creds: &CachedCredentials) -> Result<CachedCredentials, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let url = "https://ima.qq.com/auth_login/refresh";
+    
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert("Host", reqwest::header::HeaderValue::from_static("ima.qq.com"));
+    headers.insert("Content-Type", reqwest::header::HeaderValue::from_static("application/json"));
+    headers.insert("from_browser_ima", reqwest::header::HeaderValue::from_static("1"));
+    headers.insert("LAUNCH_CHANNELID", reqwest::header::HeaderValue::from_static("900000"));
+    headers.insert("Origin", reqwest::header::HeaderValue::from_static("https://ima.qq.com"));
+    headers.insert("Referer", reqwest::header::HeaderValue::from_static("https://ima.qq.com/"));
+    headers.insert("User-Agent", reqwest::header::HeaderValue::from_static("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 IMA/143.0.7499.4456"));
+    
+    let bkn = credentials::calculate_bkn(&creds.token);
+    headers.insert("x-ima-bkn", reqwest::header::HeaderValue::from_str(&bkn.to_string()).unwrap_or(reqwest::header::HeaderValue::from_static("0")));
+    
+    let cookie_str = credentials::get_cookie_string(creds);
+    headers.insert("x-ima-cookie", reqwest::header::HeaderValue::from_str(&cookie_str).unwrap_or(reqwest::header::HeaderValue::from_static("")));
+
+    let body = serde_json::json!({
+        "refresh_token": creds.refresh_token,
+        "token_type": 14,
+        "user_id": creds.uid
+    });
+
+    println!("[IMASilentRefresh] Sending direct API refresh request to {}", url);
+    
+    let log_id = generate_log_id();
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let headers_str = headers.iter().map(|(key, val)| {
+        format!("{}: {:?}", key, val)
+    }).collect::<Vec<String>>().join("\n");
+    let req_body_str = serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
+
+    add_http_log(HttpLogEntry {
+        id: log_id.clone(),
+        timestamp,
+        method: "POST".to_string(),
+        url: url.to_string(),
+        request_headers: Some(headers_str),
+        request_body: Some(req_body_str),
+        response_code: None,
+        response_body: None,
+        error: None,
+    });
+
+    let res = client.post(url)
+        .headers(headers)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| {
+            let err = format!("Direct refresh request error: {:?}", e);
+            update_http_log_error(&log_id, &err);
+            err
+        })?;
+
+    let status = res.status();
+    let body_str = res.text().await.map_err(|e| {
+        let err = format!("Failed to read direct refresh body: {:?}", e);
+        update_http_log_error(&log_id, &err);
+        err
+    })?;
+
+    update_http_log_response(&log_id, status.as_u16(), &body_str);
+
+    if !status.is_success() {
+        return Err(format!("Direct refresh returned HTTP error: {} - {}", status, body_str));
+    }
+
+    #[derive(serde::Deserialize)]
+    struct RefreshResponse {
+        code: i32,
+        msg: String,
+        token: String,
+        user_id: String,
+    }
+
+    let parsed: RefreshResponse = serde_json::from_str(&body_str).map_err(|e| {
+        format!("Failed to parse refresh response: {:?}. Body: {}", e, body_str)
+    })?;
+
+    if parsed.code != 0 {
+        return Err(format!("Direct refresh API returned error code {}: {}", parsed.code, parsed.msg));
+    }
+
+    if parsed.token.is_empty() {
+        return Err("Direct refresh API returned empty token".to_string());
+    }
+
+    let mut updated_creds = creds.clone();
+    updated_creds.token = parsed.token;
+    if !parsed.user_id.is_empty() {
+        updated_creds.uid = parsed.user_id;
+    }
+    
+    credentials::save_credentials(&updated_creds)?;
+    println!("[IMASilentRefresh] Direct API refresh succeeded.");
+    
+    Ok(updated_creds)
+}
+
 pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<CachedCredentials, String> {
     println!("[IMASilentRefresh] Starting silent credentials refresh...");
+    
+    // 1. Try direct API refresh first if credentials exist
+    if let Some(creds) = credentials::load_credentials() {
+        if !creds.refresh_token.is_empty() {
+            match refresh_credentials_via_api(&creds).await {
+                Ok(new_creds) => {
+                    println!("[IMASilentRefresh] Direct API refresh succeeded. Bypassing WebView fallback.");
+                    return Ok(new_creds);
+                }
+                Err(e) => {
+                    println!("[IMASilentRefresh] Direct API refresh failed: {}. Falling back to WebView-based capture.", e);
+                }
+            }
+        } else {
+            println!("[IMASilentRefresh] Stored refresh_token is empty. Falling back to WebView-based capture.");
+        }
+    } else {
+        println!("[IMASilentRefresh] No stored credentials found. Falling back to WebView-based capture.");
+    }
     
     // If a silent refresh window is already open, close it
     if let Some(win) = app.get_webview_window("ima_silent_refresh") {
@@ -1005,8 +1130,8 @@ pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<
                         let refresh_token = parsed_query.get("refresh_token").cloned().unwrap_or_default();
                         let uid = parsed_query.get("uid").cloned().unwrap_or_default();
                         let guid = parsed_query.get("guid").cloned().unwrap_or_default();
-                        let avatar = parsed_query.get("avatar").cloned().unwrap_or_default();
-                        let nickname = parsed_query.get("nickname").cloned().unwrap_or_default();
+                        let _avatar = parsed_query.get("avatar").cloned().unwrap_or_default();
+                        let _nickname = parsed_query.get("nickname").cloned().unwrap_or_default();
 
                         if !token.is_empty() {
                             println!("[SilentRefresh] Captured Credentials! UID: {}", uid);
@@ -1016,11 +1141,7 @@ pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<
                             } else {
                                 println!("[SilentRefresh] Credentials saved successfully.");
                             }
-                            let _ = app_clone_for_nav.emit("login_success", serde_json::json!({
-                                "avatar": avatar,
-                                "nickname": nickname,
-                                "uid": uid,
-                            }));
+                            // Background silent refresh does not emit "login_success" to prevent showing duplicate success toasts/resetting UI.
 
                             if let Some(win) = app_clone_for_nav.get_webview_window("ima_silent_refresh") {
                                 let _ = win.close();
