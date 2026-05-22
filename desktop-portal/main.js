@@ -437,6 +437,14 @@ function switchTab(tabName) {
     loadReportsTab();
   } else if (tabName === "pending" || tabName === "all") {
     renderLargeTables();
+  } else if (tabName === "settings") {
+    // Lazy-load settings data on-demand
+    invoke("get_ima_credentials").then((creds) => {
+      if (creds) {
+        loadAvailableKnowledgeBases().catch(console.error);
+        fetchAndRenderSpaceQuota(creds).catch(console.error);
+      }
+    }).catch(console.error);
   }
 }
 
@@ -791,9 +799,6 @@ async function initializeApplication() {
       }
     });
 
-    loadAvailableKnowledgeBases().catch(err => {
-      console.warn("Initial load of knowledge bases skipped or failed:", err);
-    });
     
     // 7. Check if Onboarding Tour has been finished
     let hideTour = localStorage.getItem("tourCompleted") === "true";
@@ -848,6 +853,14 @@ function applyLoginSuccess(profile = {}) {
   localStorage.setItem("user_nickname", nickname);
   showAuthorizedUI(avatar, nickname);
   showGlobalToast("微信扫码授权成功，Tencent IMA 已连接。");
+  
+  // Trigger loading of knowledge bases and space quota immediately upon a successful scan/login
+  invoke("get_ima_credentials").then((creds) => {
+    if (creds) {
+      loadAvailableKnowledgeBases().catch(console.error);
+      fetchAndRenderSpaceQuota(creds).catch(console.error);
+    }
+  }).catch(console.error);
 }
 
 // Render monitored folder grid cards
@@ -1723,16 +1736,7 @@ async function checkAuthState() {
         console.error("IMA profile refresh failure:", err);
         showAuthorizedUI(ensureHttps(state.credentials?.avatar || cachedAvatar), fallbackName);
       }
-      try {
-        await loadAvailableKnowledgeBases();
-      } catch (err) {
-        console.error("Failed to load KBs on auth check:", err);
-      }
-      try {
-        await fetchAndRenderSpaceQuota(creds);
-      } catch (err) {
-        console.error("Failed to fetch space quota on auth check:", err);
-      }
+
     } else {
       showUnapprovedUI();
     }

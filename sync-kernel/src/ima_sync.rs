@@ -826,6 +826,81 @@ impl IMASyncClient {
             })?;
 
         println!("[IMA Client] Successfully parsed response with code: {}", parsed.code);
+
+        if parsed.code == 600001 {
+            println!("[IMA Client] Token expired (code 600001). Attempting silent refresh...");
+            if let Some(app) = crate::APP_HANDLE.get() {
+                match crate::refresh_ima_credentials_silently(app).await {
+                    Ok(new_creds) => {
+                        println!("[IMA Client] Silent refresh succeeded. Retrying request with new credentials...");
+                        
+                        let url = format!("{}/{}", self.base_url, path);
+                        let headers = self.build_headers(&new_creds);
+                        
+                        let retry_log_id = crate::generate_log_id();
+                        let retry_timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                        let retry_headers_str = headers.iter().map(|(key, val)| {
+                            format!("{}: {:?}", key, val)
+                        }).collect::<Vec<String>>().join("\n");
+                        let retry_req_body_str = serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
+
+                        crate::add_http_log(crate::HttpLogEntry {
+                            id: retry_log_id.clone(),
+                            timestamp: retry_timestamp,
+                            method: "POST".to_string(),
+                            url: url.clone(),
+                            request_headers: Some(retry_headers_str),
+                            request_body: Some(retry_req_body_str),
+                            response_code: None,
+                            response_body: None,
+                            error: None,
+                        });
+
+                        let res = self.client.post(&url)
+                            .headers(headers)
+                            .json(&body)
+                            .send()
+                            .await
+                            .map_err(|e| {
+                                let err_msg = format!("HTTP retry request error: {:?}", e);
+                                crate::update_http_log_error(&retry_log_id, &err_msg);
+                                err_msg
+                            })?;
+
+                        let status = res.status();
+                        let body_str = res.text().await.map_err(|e| {
+                            let err_msg = format!("Failed to read retry body: {:?}", e);
+                            crate::update_http_log_error(&retry_log_id, &err_msg);
+                            err_msg
+                        })?;
+
+                        crate::update_http_log_response(&retry_log_id, status.as_u16(), &body_str);
+
+                        if !status.is_success() {
+                            let err_msg = format!("IMA API retry returned HTTP error: {} - {}", status, body_str);
+                            crate::update_http_log_error(&retry_log_id, &err_msg);
+                            return Err(err_msg);
+                        }
+
+                        let parsed_retry: IMAResponse<T> = serde_json::from_str(&body_str)
+                            .map_err(|e| {
+                                let err_msg = format!("Serialization failed on retry: {:?}. Raw response: {}", e, body_str);
+                                crate::update_http_log_error(&retry_log_id, &err_msg);
+                                err_msg
+                            })?;
+
+                        println!("[IMA Client] Successfully parsed retry response with code: {}", parsed_retry.code);
+                        return Ok(parsed_retry);
+                    }
+                    Err(e) => {
+                        println!("[IMA Client] Silent refresh failed: {}. Returning original 600001 response.", e);
+                    }
+                }
+            } else {
+                println!("[IMA Client] APP_HANDLE not set. Cannot perform silent refresh.");
+            }
+        }
+
         Ok(parsed)
     }    #[allow(dead_code)]
     pub async fn validate_credentials(&self, creds: &CachedCredentials) -> bool {

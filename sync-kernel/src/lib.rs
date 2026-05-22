@@ -30,6 +30,7 @@ pub struct HttpLogEntry {
 }
 
 pub static HTTP_LOGS: std::sync::OnceLock<Mutex<Vec<HttpLogEntry>>> = std::sync::OnceLock::new();
+pub static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 static LOG_ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 pub fn generate_log_id() -> String {
@@ -826,6 +827,253 @@ fn set_window_theme(window: tauri::Window, theme: String) -> Result<(), String> 
 }
 
 
+pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<CachedCredentials, String> {
+    println!("[IMASilentRefresh] Starting silent credentials refresh...");
+    
+    // If a silent refresh window is already open, close it
+    if let Some(win) = app.get_webview_window("ima_silent_refresh") {
+        let _ = win.close();
+    }
+    
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<CachedCredentials, String>>();
+    let tx = Arc::new(Mutex::new(Some(tx)));
+    
+    let url_str = "https://ima.qq.com/login/";
+    let url = tauri::Url::parse(url_str).map_err(|e| e.to_string())?;
+    
+    let js_injection = r##"
+        (() => {
+            if (window.__fsmLoginCaptureInstalled) return;
+            window.__fsmLoginCaptureInstalled = true;
+
+            let hasSubmitted = false;
+
+            function bridge(action, params = {}) {
+                const query = new URLSearchParams(params).toString();
+                window.location.href = `https://fsmsync.localhost/${action}${query ? `?${query}` : ""}`;
+            }
+
+            function log(message) {
+                try {
+                    const iframe = document.createElement("iframe");
+                    iframe.style.display = "none";
+                    iframe.src = `https://fsmsync.localhost/log?msg=${encodeURIComponent(message)}`;
+                    (document.documentElement || document).appendChild(iframe);
+                    setTimeout(() => iframe.remove(), 3000);
+                } catch (_) {}
+            }
+
+            function requestUrl(input) {
+                if (typeof input === "string") return input;
+                if (input instanceof URL) return input.href;
+                if (input && typeof input.url === "string") return input.url;
+                return String(input || "");
+            }
+
+            function isLoginResponseUrl(url) {
+                return url.includes("/cgi-bin/auth_login/login") ||
+                    (url.includes("auth_login") && url.includes("login")) ||
+                    (url.includes("login") && url.includes("auth"));
+            }
+
+            function parsePossibleJson(value) {
+                if (typeof value !== "string") return value;
+                try {
+                    return JSON.parse(value);
+                } catch (_) {
+                    return value;
+                }
+            }
+
+            function normalizeLoginData(data) {
+                data = parsePossibleJson(data);
+                if (!data || typeof data !== "object") return null;
+
+                const candidates = [data, parsePossibleJson(data.data), data.result, data.payload]
+                    .filter(item => item && typeof item === "object");
+
+                for (const item of candidates) {
+                    const token = item.token || item.ima_token || item["IMA-TOKEN"];
+                    const refreshToken = item.refresh_token || item.refreshToken || item["IMA-REFRESH-TOKEN"] || token || "";
+                    const uid = item.user_id || item.uid || item.userId || item.user_info?.open_info?.uid || "";
+                    const guid = item.guid || item.user_info?.open_info?.guid || item.client_info?.guid || "";
+                    const avatar = item.avatar || item.avatar_url || item.user_info?.open_info?.avatar_url || item.user_info?.open_info?.avatarUrl || "";
+                    const nickname = item.nickname || item.user_info?.open_info?.nickname || "";
+                    if (token && uid) {
+                        return {
+                            token: String(token),
+                            refresh_token: String(refreshToken),
+                            uid: String(uid),
+                            guid: String(guid),
+                            avatar: String(avatar),
+                            nickname: String(nickname)
+                        };
+                    }
+                }
+
+                return null;
+            }
+
+            function submitLogin(data, source) {
+                if (hasSubmitted) return;
+                const creds = normalizeLoginData(data);
+                if (!creds || !creds.token || !creds.uid || creds.token === "guest") return;
+                hasSubmitted = true;
+                log(`Login credentials captured via ${source}; uid=${creds.uid}`);
+                bridge("login-success", creds);
+            }
+
+            const originalFetch = window.fetch;
+            window.fetch = async function(...args) {
+                const url = requestUrl(args[0]);
+                const response = await originalFetch.apply(this, args);
+                if (isLoginResponseUrl(url)) {
+                    response.clone().text()
+                        .then(text => submitLogin(text, "fetch"))
+                        .catch(error => log(`Fetch login parse error: ${error}`));
+                }
+                return response;
+            };
+
+            const originalOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
+            if (originalOpen) {
+                window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                    this.__fsmLoginUrl = requestUrl(url);
+                    return originalOpen.call(this, method, url, ...rest);
+                };
+
+                const originalSend = window.XMLHttpRequest.prototype.send;
+                window.XMLHttpRequest.prototype.send = function(...args) {
+                    this.addEventListener("loadend", function() {
+                        if (!isLoginResponseUrl(this.__fsmLoginUrl || "")) return;
+                        try {
+                            submitLogin(this.responseText || this.response, "xhr");
+                        } catch (error) {
+                            log(`XHR login parse error: ${error}`);
+                        }
+                    });
+                    return originalSend.apply(this, args);
+                };
+            }
+
+            log("Login capture hooks installed");
+        })();
+    "##;
+
+    let app_clone = app.clone();
+    let app_clone_for_nav = app.clone();
+    let tx_clone = Arc::clone(&tx);
+    let tx_clone_for_nav = Arc::clone(&tx);
+    
+    app.run_on_main_thread(move || {
+        let builder = tauri::WebviewWindowBuilder::new(&app_clone, "ima_silent_refresh", tauri::WebviewUrl::External(url))
+            .visible(false)
+            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .initialization_script(js_injection)
+            .on_navigation(move |url| {
+                let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
+
+                if !is_login_bridge {
+                    return true;
+                }
+
+                let action = url
+                    .query_pairs()
+                    .find(|(key, _)| key == "action")
+                    .map(|(_, value)| value.into_owned())
+                    .unwrap_or_else(|| url.path().trim_start_matches('/').to_string());
+                let parsed_query: std::collections::HashMap<_, _> =
+                    url.query_pairs().into_owned().collect();
+
+                match action.as_str() {
+                    "log" => {
+                        if let Some(msg) = parsed_query.get("msg") {
+                            println!("[SilentRefresh Log] {}", msg);
+                        }
+                    }
+                    "login-cancel" => {
+                        if let Some(win) = app_clone_for_nav.get_webview_window("ima_silent_refresh") {
+                            let _ = win.close();
+                        }
+                        let mut guard = tx_clone_for_nav.lock().unwrap();
+                        if let Some(sender) = guard.take() {
+                            let _ = sender.send(Err("Silent refresh canceled".to_string()));
+                        }
+                    }
+                    "login-success" => {
+                        let token = parsed_query.get("token").cloned().unwrap_or_default();
+                        let refresh_token = parsed_query.get("refresh_token").cloned().unwrap_or_default();
+                        let uid = parsed_query.get("uid").cloned().unwrap_or_default();
+                        let guid = parsed_query.get("guid").cloned().unwrap_or_default();
+                        let avatar = parsed_query.get("avatar").cloned().unwrap_or_default();
+                        let nickname = parsed_query.get("nickname").cloned().unwrap_or_default();
+
+                        if !token.is_empty() {
+                            println!("[SilentRefresh] Captured Credentials! UID: {}", uid);
+                            let creds = CachedCredentials { token, refresh_token, uid: uid.clone(), guid };
+                            if let Err(e) = credentials::save_credentials(&creds) {
+                                println!("[SilentRefresh] Failed to save credentials: {:?}", e);
+                            } else {
+                                println!("[SilentRefresh] Credentials saved successfully.");
+                            }
+                            let _ = app_clone_for_nav.emit("login_success", serde_json::json!({
+                                "avatar": avatar,
+                                "nickname": nickname,
+                                "uid": uid,
+                            }));
+
+                            if let Some(win) = app_clone_for_nav.get_webview_window("ima_silent_refresh") {
+                                let _ = win.close();
+                            }
+
+                            let mut guard = tx_clone_for_nav.lock().unwrap();
+                            if let Some(sender) = guard.take() {
+                                let _ = sender.send(Ok(creds));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                false
+            });
+            
+        if let Err(e) = builder.build() {
+            println!("[SilentRefresh] Failed to build hidden WebviewWindow: {:?}", e);
+            let mut guard = tx_clone.lock().unwrap();
+            if let Some(sender) = guard.take() {
+                let _ = sender.send(Err(e.to_string()));
+            }
+        }
+    }).map_err(|e| e.to_string())?;
+
+    // Wait up to 10 seconds for the silent login
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(10));
+    tokio::pin!(timeout);
+    
+    tokio::select! {
+        res = rx => {
+            match res {
+                Ok(Ok(creds)) => {
+                    println!("[SilentRefresh] Silent refresh succeeded!");
+                    Ok(creds)
+                }
+                Ok(Err(e)) => Err(e),
+                Err(_) => Err("Channel receiver dropped".to_string()),
+            }
+        }
+        _ = &mut timeout => {
+            println!("[SilentRefresh] Silent refresh timed out after 10s.");
+            let app_clone = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Some(win) = app_clone.get_webview_window("ima_silent_refresh") {
+                    let _ = win.close();
+                }
+            });
+            Err("Silent refresh timed out".to_string())
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[tauri::command]
 fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
@@ -1037,7 +1285,6 @@ fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
             .inner_size(350.0, 410.0)
             .resizable(false)
             .decorations(false)
-            .incognito(true)
             
             .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .initialization_script(js_injection)
@@ -1128,6 +1375,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // Save global AppHandle for silent refresh
+            let _ = APP_HANDLE.set(app.handle().clone());
+
             // Locate user data directory for SQLite database
             let app_dir = app.path().app_data_dir()
                 .unwrap_or_else(|_| PathBuf::from("./"));
