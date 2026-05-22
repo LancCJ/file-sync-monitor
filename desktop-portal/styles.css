@@ -4132,6 +4132,7 @@ body.dark-mode .empty-btn-light:hover {
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
+  box-sizing: border-box;
 }
 .reports-export-btn:hover {
   background: var(--bg-control-pressed);
@@ -4180,6 +4181,9 @@ body.dark-mode .empty-btn-light:hover {
   flex-direction: column;
   gap: 10px;
   padding-right: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
 }
 
 .log-entry-item {
@@ -4188,8 +4192,10 @@ body.dark-mode .empty-btn-light:hover {
   background: rgba(255, 255, 255, 0.02);
   transition: all var(--transition-fast);
   overflow: hidden;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .log-entry-item:hover {
@@ -4203,6 +4209,8 @@ body.dark-mode .empty-btn-light:hover {
   gap: 10px;
   cursor: pointer;
   user-select: none;
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -4275,6 +4283,7 @@ body.dark-mode .empty-btn-light:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
@@ -4284,6 +4293,7 @@ body.dark-mode .empty-btn-light:hover {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
@@ -4316,6 +4326,7 @@ body.dark-mode .empty-btn-light:hover {
   color: var(--text-primary);
   max-height: 150px;
   overflow-y: auto;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
