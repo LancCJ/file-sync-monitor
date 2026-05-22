@@ -1,0 +1,33 @@
+[[permission]]
+identifier = "allow-all-commands"
+description = "Default permissions for the frontend to access all application commands"
+commands.allow = [
+  "get_file_events",
+  "mark_event_synced",
+  "mark_all_events_synced",
+  "sync_single_event",
+  "clear_all_events",
+  "get_config_value",
+  "set_config_value",
+  "get_ima_credentials",
+  "save_ima_credentials",
+  "clear_ima_credentials",
+  "get_ima_knowledge_bases",
+  "get_ima_user_profile",
+  "open_login_window",
+  "start_file_monitor",
+  "stop_file_monitor",
+  "select_directory",
+  "exit_app",
+  "show_main_window",
+  "sync_all_directories",
+  "fetch_knowledge_bases",
+  "set_kb_binding",
+  "get_launch_at_login",
+  "set_launch_at_login",
+  "update_ignore_rules",
+  "log_js_message",
+  "get_ima_space_quota",
+  "get_http_logs",
+  "clear_http_logs"
+]

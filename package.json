@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "dev": "cd sync-kernel && tauri dev",
+    "build": "cd sync-kernel && tauri build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

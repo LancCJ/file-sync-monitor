@@ -1,0 +1,1787 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function() {
+        function showErrorOverlay(level, msg) {
+          try {
+            let container = document.getElementById('debug-error-overlay');
+            if (!container) {
+              container = document.createElement('div');
+              container.id = 'debug-error-overlay';
+              container.style.position = 'fixed';
+              container.style.top = '10px';
+              container.style.left = '10px';
+              container.style.right = '10px';
+              container.style.background = 'rgba(220, 38, 38, 0.95)';
+              container.style.color = '#ffffff';
+              container.style.padding = '15px';
+              container.style.fontFamily = 'monospace';
+              container.style.fontSize = '12px';
+              container.style.zIndex = '999999';
+              container.style.borderRadius = '6px';
+              container.style.maxHeight = '80vh';
+              container.style.overflowY = 'auto';
+              container.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.5)';
+              container.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+              document.documentElement.appendChild(container);
+            }
+            const item = document.createElement('pre');
+            item.style.margin = '5px 0';
+            item.style.whiteSpace = 'pre-wrap';
+            item.style.wordBreak = 'break-all';
+            item.style.borderBottom = '1px solid rgba(255, 255, 255, 0.2)';
+            item.style.paddingBottom = '5px';
+            item.textContent = `[${level}] ${msg}`;
+            container.appendChild(item);
+          } catch(e) {}
+        }
+
+        function log(level, msg) {
+          showErrorOverlay(level, msg);
+          try {
+            window.__TAURI__.core.invoke('log_js_message', { level, msg: String(msg) }).catch(() => {});
+          } catch(e) {}
+        }
+        window.addEventListener('error', (event) => {
+          log('ERROR', `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`);
+        });
+        window.addEventListener('unhandledrejection', (event) => {
+          log('UNHANDLED_REJECTION', event.reason?.message || event.reason);
+        });
+        const _origError = console.error;
+        console.error = function(...args) {
+          _origError.apply(console, args);
+          log('CONSOLE_ERROR', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+        };
+        const _origLog = console.log;
+        console.log = function(...args) {
+          _origLog.apply(console, args);
+          log('CONSOLE_LOG', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+        };
+      })();
+    </script>
+    <script>
+      (function() {
+        try {
+          const val = localStorage.getItem("appearance") || "system";
+          let theme = val;
+          if (val === "system") {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', theme);
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark-mode');
+          } else {
+            document.documentElement.classList.remove('dark-mode');
+          }
+        } catch(e) {}
+        try {
+          if (navigator.userAgent.includes('Macintosh')) {
+            document.documentElement.classList.add('platform-mac');
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title data-i18n="FileSyncMonitor - 智能文件同步助手">FileSyncMonitor - 智能文件同步助手</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script type="module" src="main.js" defer></script>
+  </head>
+
+  <body>
+    <div class="app-container">
+      
+      <!-- 第一栏：极窄主快捷导航栏 (exactly 78px Rail Bar) -->
+      <aside class="app-rail" data-tauri-drag-region>
+        <div class="brand-logo" id="logo-container" title="FileSyncMonitor" data-tauri-drag-region>
+          <div class="logo-panda">
+            <img src="assets/icon.png" alt="FileSyncMonitor" style="width: 38px; height: 38px; border-radius: 9px; object-fit: contain; box-shadow: 0 4px 10px rgba(0, 173, 111, 0.16);" />
+          </div>
+        </div>
+        
+        <!-- Top Nav Items (Wrapped in green-outline box for Onboarding highlight) -->
+        <nav class="rail-links rail-top-group" id="rail-top-group">
+          <button class="rail-btn active" id="btn-tab-events" data-i18n-title="首页" title="首页">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span class="rail-btn-badge hidden" id="rail-pending-badge">0</span>
+          </button>
+          <button class="rail-btn" id="btn-tab-pending" data-i18n-title="待同步" title="待同步">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+          </button>
+          <button class="rail-btn" id="btn-tab-all" data-i18n-title="全部记录" title="全部记录">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+          </button>
+          <button class="rail-btn" id="btn-tab-reports" data-i18n-title="分析报告" title="分析报告">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+          </button>
+        </nav>
+
+        <!-- Bottom Utility Buttons (SwiftUI IMARailView clone) -->
+        <div class="rail-bottom">
+          <button class="rail-btn" id="btn-tab-help" data-i18n-title="帮助关于" title="帮助关于">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H5c0-3.87 3.13-7 7-7s7 3.13 7 7c0 1.17-.45 2.23-1.17 3.07z"/></svg>
+          </button>
+          
+          <button class="rail-btn" id="btn-tab-settings" data-i18n-title="参数设置" title="参数设置">
+            <svg viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/></svg>
+          </button>
+
+          <!-- Language Selector -->
+          <button class="rail-lang-btn" id="btn-rail-lang" data-i18n-title="切换语言" title="切换语言">
+            <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor; display: block; margin-bottom: 2px;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.33-.14 2 0 .67.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56-.6 1.11-1.06 2.31-1.38 3.56zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM15.62 14H8.38c-.08-.66-.13-1.33-.13-2 0-.67.05-1.34.13-2h7.24c.08.66.13 1.33.13 2 0 .67-.05 1.34-.13 2zm.82 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zm1.68-5.56c.08-.66.14-1.33.14-2 0-.67-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z" fill="currentColor"/></svg>
+            <span data-i18n="简">简</span>
+          </button>
+
+          <!-- User Circular Avatar Profile button -->
+          <div class="rail-avatar-btn" id="btn-rail-avatar" data-i18n-title="未授权" title="未授权">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="6" cy="6" r="3.5" fill="#334155" />
+              <circle cx="18" cy="6" r="3.5" fill="#334155" />
+              <circle cx="12" cy="12" r="9" fill="#f8fafc" stroke="#334155" stroke-width="1.5" />
+              <ellipse cx="8.5" cy="11.5" rx="2" ry="2.8" transform="rotate(-15 8.5 11.5)" fill="#334155" />
+              <ellipse cx="15.5" cy="11.5" rx="2" ry="2.8" transform="rotate(15 15.5 11.5)" fill="#334155" />
+              <circle cx="8.5" cy="11" r="0.8" fill="#ffffff" />
+              <circle cx="15.5" cy="11" r="0.8" fill="#ffffff" />
+              <polygon points="12,14 10.5,12.5 13.5,12.5" fill="#334155" />
+              <path d="M10.5,15.5 C11,16.2 13,16.2 13.5,15.5" fill="none" stroke="#334155" stroke-width="1" stroke-linecap="round" />
+            </svg>
+          </div>
+
+          <!-- Exit Power Button -->
+          <button class="rail-power-btn" id="btn-rail-exit" data-i18n-title="退出程序" title="退出程序">
+            <svg viewBox="0 0 24 24">
+              <path d="M16.56 5.44l-1.45 1.45C16.84 7.94 18 9.83 18 12c0 3.31-2.69 6-6 6s-6-2.69-6-6c0-2.17 1.16-4.06 2.88-5.12L7.44 5.44C5.18 7.07 3.75 9.7 3.75 12.69 3.75 17.28 7.47 21 12.06 21 16.65 21 20.37 17.28 20.37 12.69c0-2.99-1.43-5.62-3.81-7.25zM11 3h2v10h-2V3z" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- 第二栏：待同步/已同步事件列表 (EventTreeView) -->
+      <section class="app-sidebar-second" id="sidebar-events">
+        <div class="sidebar-header">
+          <h2 data-i18n="文件变动树">文件变动树</h2>
+          <div class="search-box">
+            <input type="text" id="event-search-input" data-i18n-placeholder="搜索文件变动..." placeholder="搜索文件变动..." />
+          </div>
+          <div class="event-filter-tabs">
+            <button class="filter-tab active" id="filter-all" data-i18n="全部">全部</button>
+            <button class="filter-tab" id="filter-pending" data-i18n="待同步">待同步</button>
+          </div>
+        </div>
+        <div class="event-tree-list" id="event-list-container">
+          <!-- 动态事件渲染树 -->
+        </div>
+      </section>
+
+      <!-- 第三栏：主显示详细预览面板 (Main Console) -->
+      <main class="app-main-content">
+        
+        <!-- Tab 1: Events Main Dashboard (High-Fidelity SwiftUI Split View) -->
+        <div class="tab-pane active" id="tab-pane-events">
+          
+          <!-- Dashboard Top Header Area -->
+          <div class="content-header" data-tauri-drag-region>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+              <div>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+                  <span style="font-size: 0.72rem; font-weight: 700; color: var(--app-mint); text-transform: uppercase; letter-spacing: 0.05em;" data-i18n="欢迎使用">欢迎使用</span>
+                  <div id="home-synced-badge" class="synced-capsule-badge hidden">
+                    <svg viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/></svg>
+                    <span data-i18n="已同步">已同步</span>
+                  </div>
+                </div>
+                <h1 class="outfit-font" style="margin-top: 0; font-size: 1.45rem;" id="home-message-title" data-i18n="添加一个目录后，文件变动会自动记录并提醒你处理。">添加一个目录后，文件变动会自动记录并提醒你处理。</h1>
+              </div>
+            
+            <div class="actions-group" style="align-items: center; gap: 16px;">
+              
+              <!-- Sync Mode Switcher (SwiftUI AppToggle clone) -->
+              <div class="sync-mode-control" id="home-sync-mode-container" style="display: flex; flex-direction: column; align-items: flex-end;">
+                <div class="sync-mode-row">
+                  <span class="sync-mode-label" id="home-sync-mode-label" style="text-align: right; margin-right: 4px;" data-i18n="手动同步">手动同步</span>
+                  <div class="app-toggle" id="btn-toggle-autosync"></div>
+                </div>
+                <span class="sync-mode-desc" id="home-sync-mode-desc" style="margin-top: 2px;" data-i18n="点击按钮时上传">点击按钮时上传</span>
+              </div>
+              
+              <!-- Sync Pill Button -->
+              <button class="pill-btn primary" id="btn-sync-all">
+                <svg viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" fill="currentColor"/></svg>
+                <span id="btn-sync-all-text" data-i18n="全部同步">全部同步</span>
+              </button>
+              
+            </div>
+            </div>
+          </div>
+
+          <!-- Quick Action Buttons Below Header -->
+          <div class="home-quick-actions" style="margin-bottom: 24px; display: flex; gap: 12px;">
+            <button class="pill-btn primary" id="btn-add-dir-home">
+              <svg viewBox="0 0 24 24" style="width: 13px; height: 13px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/></svg>
+              <span data-i18n="添加目录">添加目录</span>
+            </button>
+            <button class="pill-btn" id="btn-home-sync-status" disabled style="background-color: var(--bg-control); color: var(--text-secondary); cursor: default; box-shadow: none;">
+              <span id="btn-home-sync-status-text" data-i18n="暂无可同步">暂无可同步</span>
+            </button>
+          </div>
+
+          <!-- Intro Banner Card -->
+          <div class="intro-banner-card section-card" id="intro-banner-card">
+            <button class="intro-close-btn" id="btn-close-intro" data-i18n-title="不再显示" title="不再显示">×</button>
+            <div class="intro-banner-content" style="display: flex; gap: 16px; align-items: flex-start;">
+              <div class="intro-icon-circle" style="width: 44px; height: 44px; border-radius: 50%; background-color: var(--app-mint-glow); color: var(--app-mint); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg>
+              </div>
+              <div class="intro-text-area" style="flex: 1;">
+                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;" data-i18n="关于 FileSyncMonitor">关于 FileSyncMonitor</h4>
+                <p class="intro-highlight-text" style="font-size: 0.84rem; font-weight: 600; color: var(--app-mint); line-height: 1.5; margin-bottom: 6px;" data-i18n="FileSyncMonitor 是一款面向 macOS 用户的轻量化文件夹自动监控与同步工具。">FileSyncMonitor 是一款面向 macOS 用户的轻量化文件夹自动监控与同步工具。</p>
+                <p class="intro-desc-text" style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 14px;" data-i18n="它能够静默监控您指定的本地文件夹，捕获任何新建、修改、删除和重命名等文件变动事件，并能够安全地自动或手动同步到腾讯 IMA 个人知识库。在这里，我们将帮助您在本地常用编辑器与云端平台之间，架起一座可靠的双向同步桥梁。">它能够静默监控您指定的本地文件夹，捕获任何新建、修改、删除和重命名等文件变动事件，并能够安全地自动或手动同步到腾讯 IMA 个人知识库。在这里，我们将帮助您在本地常用编辑器与云端平台之间，架起一座可靠的双向同步桥梁。</p>
+                <div class="intro-actions-row" style="display: flex; gap: 10px; align-items: center;">
+                  <button class="pill-btn primary" id="btn-start-tour">
+                    <svg viewBox="0 0 24 24" style="width: 13px; height: 13px; fill: currentColor;"><path d="M10.02 6L8.61 7.41 13.19 12l-4.58 4.59L10.02 18l6-6z"/></svg>
+                    <span data-i18n="新手使用引导">新手使用引导</span>
+                  </button>
+                  <button class="pill-btn" id="btn-view-docs">
+                    <svg viewBox="0 0 24 24" style="width: 13px; height: 13px; fill: currentColor;"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                    <span data-i18n="查看帮助文档">查看帮助文档</span>
+                  </button>
+                  <button class="text-btn" id="btn-hide-intro-permanently" style="font-size: 0.8rem; color: var(--text-secondary); margin-left: 8px;" data-i18n="不再显示">不再显示</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Split View Layout -->
+          <div class="home-grid-layout">
+            
+            <!-- Left Column: Recent Events & Fast navigation -->
+            <div class="home-left-col">
+              
+              <!-- Recent Events Card Panel -->
+              <div class="section-card home-recent-events-card">
+                <div class="section-title-row">
+                  <div>
+                    <h3 data-i18n="最近记录">最近记录</h3>
+                    <p class="subtitle" style="margin-top: 2px;" id="home-recent-subtitle" data-i18n="最近捕获到的文件变动">最近捕获到的文件变动</p>
+                  </div>
+                </div>
+                
+                <div class="home-recent-list" id="home-recent-events-container">
+                  <!-- Dynamically populated in main.js -->
+                  <div class="list-empty">
+                    <svg viewBox="0 0 24 24" width="36" height="36" fill="var(--text-muted)">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                    </svg>
+                    <p data-i18n="开始监控后，这里会显示最新文件变动。">开始监控后，这里会显示最新文件变动。</p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Fast Navigation row of quiet buttons -->
+              <div class="home-fast-nav-buttons">
+                <button class="quiet-btn" id="btn-quick-pending">
+                  <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" fill="currentColor"/></svg>
+                  <span data-i18n="处理待同步">处理待同步</span>
+                </button>
+                <button class="quiet-btn" id="btn-quick-all">
+                  <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="currentColor"/></svg>
+                  <span data-i18n="查看全部记录">查看全部记录</span>
+                </button>
+                <button class="quiet-btn" id="btn-quick-reports">
+                  <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" fill="currentColor"/></svg>
+                  <span data-i18n="查看报告">查看报告</span>
+                </button>
+              </div>
+              
+            </div>
+            
+            <!-- Right Column: Metric stack & status summary -->
+            <div class="home-right-col">
+              
+              <!-- Metrics Cards Stack -->
+              <div class="home-metrics-stack">
+                
+                <!-- Pending Count Card -->
+                <div class="home-metric-card" id="home-card-pending" style="cursor: pointer;">
+                  <div class="home-metric-badge amber" id="home-badge-pending">
+                    <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" fill="currentColor"/></svg>
+                  </div>
+                  <div class="home-metric-details">
+                    <span class="home-metric-val" id="home-stat-pending">0</span>
+                    <span class="home-metric-label" data-i18n="待同步">待同步</span>
+                  </div>
+                </div>
+                
+                <!-- Total Count Card -->
+                <div class="home-metric-card" id="home-card-total" style="cursor: pointer;">
+                  <div class="home-metric-badge" id="home-badge-total">
+                    <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="currentColor"/></svg>
+                  </div>
+                  <div class="home-metric-details">
+                    <span class="home-metric-val" id="home-stat-total">0</span>
+                    <span class="home-metric-label" data-i18n="全部记录">全部记录</span>
+                  </div>
+                </div>
+                
+                <!-- Monitored Folders Card -->
+                <div class="home-metric-card" id="home-card-monitored" style="cursor: pointer;">
+                  <div class="home-metric-badge mint">
+                    <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 12H4V8h16v10z" fill="currentColor"/></svg>
+                  </div>
+                  <div class="home-metric-details">
+                    <span class="home-metric-val" id="home-stat-monitored">0</span>
+                    <span class="home-metric-label" data-i18n="监控目录">监控目录</span>
+                  </div>
+                </div>
+                
+              </div>
+              
+              <!-- Status Summary Card -->
+              <div class="section-card home-status-summary-card">
+                <div class="section-title-row" style="margin-bottom: 12px;">
+                  <h3 data-i18n="状态摘要">状态摘要</h3>
+                </div>
+                <div class="home-status-list">
+                  <div class="home-status-row">
+                    <span class="home-status-label" data-i18n="同步队列">同步队列</span>
+                    <span class="home-status-val" id="home-status-queue" data-i18n="空">空</span>
+                  </div>
+                  <div class="home-status-row">
+                    <span class="home-status-label" data-i18n="当前模式">当前模式</span>
+                    <span class="home-status-val" id="home-status-mode" data-i18n="手动同步">手动同步</span>
+                  </div>
+                  <div class="home-status-row">
+                    <span class="home-status-label" data-i18n="监控路径">监控路径</span>
+                    <span class="home-status-val" id="home-status-paths" data-i18n="0个">0个</span>
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+            
+          </div>
+
+          <!-- Sync Progress Summary Overlay -->
+          <div class="sync-summary-banner hidden" id="sync-progress-banner">
+            <div class="sync-banner-info">
+              <div class="spinner"></div>
+              <div>
+                <h4 id="sync-banner-title" data-i18n="正在同步至云端...">正在同步至云端...</h4>
+                <p id="sync-banner-status" data-i18n="准备上传 5 个文件变动...">准备上传 5 个文件变动...</p>
+              </div>
+            </div>
+            <div class="sync-banner-progress-bar">
+              <div class="sync-progress-fill" style="width: 35%" id="sync-banner-progress-fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Pending Sync View (待同步) -->
+        <div class="tab-pane" id="tab-pane-pending">
+          
+          <!-- Middle Panel: Pending Sidebar (360px) -->
+          <div class="pending-sidebar">
+            <div class="pending-sidebar-header" data-tauri-drag-region>
+              <!-- Title & View Toggle Segmented Control -->
+              <div class="pending-title-row">
+                <div class="title-with-badge">
+                  <span class="pending-title outfit-font" data-i18n="待同步">待同步</span>
+                  <span class="pending-badge-pill" id="pending-count-badge">0</span>
+                </div>
+                
+                <div class="segmented-control" id="pending-view-toggle">
+                  <button class="segment-btn active" data-view="list" data-i18n-title="列表视图" title="列表视图">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+                  </button>
+                  <button class="segment-btn" data-view="tree" data-i18n-title="树形视图" title="树形视图">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M22 11V3h-7v3H9V3H2v8h7V8h2v10h2v3h7v-8h-7v3h-2V8h2v3h7zM4 5h3v4H4V5zm12 12h3v4h-3v-4zm0-12h3v4h-3V5z"/></svg>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Search Box -->
+              <div class="pending-search-wrapper">
+                <svg viewBox="0 0 24 24" class="search-icon" width="13" height="13"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="currentColor"/></svg>
+                <input type="text" id="pending-search-input" data-i18n-placeholder="搜索文件或路径" placeholder="搜索文件或路径" />
+              </div>
+              
+              <!-- Category Filter segmented list (All, Created, Modified, Deleted, Renamed) -->
+              <div class="pending-filter-segmented" id="pending-filter-segmented">
+                <button class="filter-seg-btn active" data-filter="all" data-i18n="全部">全部</button>
+                <button class="filter-seg-btn" data-filter="created" data-i18n="新增">新增</button>
+                <button class="filter-seg-btn" data-filter="modified" data-i18n="修改">修改</button>
+                <button class="filter-seg-btn" data-filter="deleted" data-i18n="删除">删除</button>
+                <button class="filter-seg-btn" data-filter="renamed" data-i18n="重命名">重命名</button>
+              </div>
+              
+              <!-- Three Large Control Buttons Stack -->
+              <div class="pending-control-buttons">
+                <!-- 1. 全部同步至 IMA -->
+                <button class="pill-btn primary-solid" id="btn-sync-all-pending-push" data-i18n-title="将本地修改增量上传至腾讯 IMA 知识库" title="将本地修改增量上传至腾讯 IMA 知识库">
+                  <svg viewBox="0 0 24 24" width="13" height="13" style="margin-right: 6px;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" fill="currentColor"/></svg>
+                  <span data-i18n="全部同步至 IMA">全部同步至 IMA</span>
+                </button>
+                
+                <!-- 2. 从云端拉取更新 -->
+                <button class="pill-btn secondary-flat" id="btn-sync-all-pending-pull" data-i18n-title="从腾讯 IMA 知识库拉取云端变动到本地" title="从腾讯 IMA 知识库拉取云端变动到本地">
+                  <svg viewBox="0 0 24 24" width="13" height="13" style="margin-right: 6px;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z" fill="currentColor"/></svg>
+                  <span data-i18n="从云端拉取更新">从云端拉取更新</span>
+                </button>
+                
+                <!-- 3. 全部标记完成 -->
+                <button class="pill-btn secondary-flat quiet" id="btn-mark-all-synced" data-i18n-title="仅在本地数据库标记为已同步，不上传/下载云端" title="仅在本地数据库标记为已同步，不上传/下载云端">
+                  <svg viewBox="0 0 24 24" width="13" height="13" style="margin-right: 6px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/></svg>
+                  <span data-i18n="全部标记完成">全部标记完成</span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="pending-sidebar-divider"></div>
+            
+            <!-- Scrollable events queue container -->
+            <div class="pending-sidebar-scrollable">
+              <!-- 1. List View Container -->
+              <div id="pending-list-view-container" style="display: flex; flex-direction: column; width: 100%;">
+                <div class="events-list-body" id="pending-events-table-body">
+                  <!-- Populated dynamically via renderPendingTable in main.js -->
+                </div>
+              </div>
+              
+              <!-- 2. Tree View Container (Hidden by default) -->
+              <div id="pending-tree-view-container" class="hidden" style="display: flex; flex-direction: column; width: 100%; gap: 4px; padding: 12px 6px;">
+                <!-- Populated dynamically via renderPendingTree in main.js -->
+              </div>
+            </div>
+          </div>
+          
+          <!-- Right Panel: Workspace main workspace (flex: 1) -->
+          <div class="pending-main-content">
+            
+            <!-- Default Gorgeous Empty State -->
+            <div id="pending-empty-state" class="pending-empty-state">
+              <div class="panda-logo-area">
+                <img src="assets/icon.png" alt="FileSync Logo" class="panda-logo-3d" />
+              </div>
+              <h1 class="logo-title outfit-font">FileSync</h1>
+              <p class="logo-subtitle">monitor</p>
+              
+              <h2 class="status-heading" id="pending-empty-status-heading" data-i18n="所有文件都已同步">所有文件都已同步</h2>
+              <p class="status-subheading" id="pending-empty-status-subheading" data-i18n="新的文件变动会自动出现在左侧列表。">新的文件变动会自动出现在左侧列表。</p>
+              
+              <div class="empty-actions-row">
+                <button class="empty-btn-dark" id="btn-add-dir-pending-empty">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="margin-right: 6px;"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                  <span data-i18n="添加目录">添加目录</span>
+                </button>
+                <button class="empty-btn-light" id="btn-view-all-pending-empty">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="margin-right: 6px;"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                  <span data-i18n="查看全部记录">查看全部记录</span>
+                </button>
+              </div>
+            </div>
+            
+            <!-- Detail Panel (Shows glassmorphism card when list item is selected) -->
+            <div class="pending-detail-panel glass-panel hidden" id="pending-detail-panel" style="width: 100%; height: 100%; display: flex; flex-direction: column; overflow-y: auto; padding: 32px; box-sizing: border-box; justify-content: center; align-items: center;">
+              <!-- Populated dynamically via updatePendingDetailPanel in main.js -->
+            </div>
+            
+          </div>
+        </div>
+
+        <!-- Tab 3: All Records View (全部记录) -->
+        <div class="tab-pane" id="tab-pane-all">
+          <div class="content-header" data-tauri-drag-region>
+            <div>
+              <span style="font-size: 0.72rem; font-weight: 700; color: var(--app-mint); text-transform: uppercase; letter-spacing: 0.05em;" data-i18n="历史归档">历史归档</span>
+              <h1 class="outfit-font" style="margin-top: 4px; font-size: 1.45rem;" data-i18n="全部历史记录">全部历史记录</h1>
+              <p class="subtitle" data-i18n="查看并管理本季所有已同步与待同步的文件变动归档">查看并管理本季所有已同步与待同步的文件变动归档</p>
+            </div>
+          </div>
+
+          <!-- Filters Row -->
+          <div class="section-card pane-filter-row" style="display: flex; gap: 16px; align-items: center; margin-bottom: 20px; padding: 12px 16px;">
+            <div class="search-box" style="flex: 1;">
+              <input type="text" id="all-search-input" data-i18n-placeholder="按文件名或路径搜索所有记录..." placeholder="按文件名或路径搜索所有记录..." style="width: 100%; padding: 8px 12px; border-radius: 7px; border: 1px solid var(--border-color); background-color: var(--bg-control); color: var(--text-primary); font-size: 0.82rem;" />
+            </div>
+            <div class="event-filter-tabs" style="flex-shrink: 0; width: 220px; display: flex; gap: 2px; background-color: var(--bg-control); padding: 2px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <button class="filter-tab active" id="all-filter-btn-all" style="flex: 1; padding: 5px 8px; border-radius: 6px; border: none; background-color: transparent; color: var(--text-secondary); font-size: 0.76rem; font-weight: 600; cursor: pointer; text-align: center;" data-i18n="全部">全部</button>
+              <button class="filter-tab" id="all-filter-btn-synced" style="flex: 1; padding: 5px 8px; border-radius: 6px; border: none; background-color: transparent; color: var(--text-secondary); font-size: 0.76rem; font-weight: 600; cursor: pointer; text-align: center;" data-i18n="已同步">已同步</button>
+              <button class="filter-tab" id="all-filter-btn-pending" style="flex: 1; padding: 5px 8px; border-radius: 6px; border: none; background-color: transparent; color: var(--text-secondary); font-size: 0.76rem; font-weight: 600; cursor: pointer; text-align: center;" data-i18n="未同步">未同步</button>
+            </div>
+          </div>
+
+          <!-- All Events Grid/List Card -->
+          <div class="section-card" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 350px; padding: 0; margin-bottom: 0;">
+            <div class="events-table-header" style="display: grid; grid-template-columns: 80px 100px 1fr 140px 120px; padding: 12px 20px; font-size: 0.76rem; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); background-color: rgba(0,0,0,0.015);">
+              <div data-i18n="状态">状态</div>
+              <div data-i18n="操作类型">操作类型</div>
+              <div data-i18n="文件名与路径">文件名与路径</div>
+              <div data-i18n="捕获时间">捕获时间</div>
+              <div style="text-align: right;" data-i18n="操作">操作</div>
+            </div>
+            <div class="events-table-body" id="all-events-table-body" style="flex: 1; overflow-y: auto;">
+              <!-- Populated via main.js -->
+              <div class="list-empty">
+                <svg viewBox="0 0 24 24" width="36" height="36" fill="var(--text-muted)">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                </svg>
+                <p data-i18n="开始监控后，这里会显示所有文件历史记录。">开始监控后，这里会显示所有文件历史记录。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Reports View -->
+        <div class="tab-pane" id="tab-pane-reports">
+          <div class="reports-header-container" data-tauri-drag-region>
+            <div class="reports-header-left">
+              <h1 data-i18n="报告">报告</h1>
+              <p class="subtitle" data-i18n="低频查看统计和导出记录。日常处理请回到待同步。">低频查看统计和导出记录。日常处理请回到待同步。</p>
+            </div>
+            
+            <!-- Time range filter segmented control -->
+            <div class="app-segmented-control" id="reports-time-filter">
+              <div class="app-segment">
+                <input type="radio" name="reports-time" id="reports-time-today" value="today">
+                <label for="reports-time-today" data-i18n="今天">今天</label>
+              </div>
+              <div class="app-segment">
+                <input type="radio" name="reports-time" id="reports-time-7days" value="7days" checked>
+                <label for="reports-time-7days" data-i18n="近7天">近7天</label>
+              </div>
+              <div class="app-segment">
+                <input type="radio" name="reports-time" id="reports-time-30days" value="30days">
+                <label for="reports-time-30days" data-i18n="近30天">近30天</label>
+              </div>
+              <div class="app-segment">
+                <input type="radio" name="reports-time" id="reports-time-all" value="all">
+                <label for="reports-time-all" data-i18n="全部">全部</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Metric row -->
+          <div class="reports-metrics-row">
+            <!-- Metric 1: 记录 -->
+            <div class="reports-metric-card">
+              <div class="metric-icon-box doc-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                  <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="metric-details">
+                <div class="metric-value" id="reports-stat-total">0</div>
+                <div class="metric-label" data-i18n="记录">记录</div>
+              </div>
+            </div>
+
+            <!-- Metric 2: 待同步 -->
+            <div class="reports-metric-card">
+              <div class="metric-icon-box clock-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                  <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="metric-details">
+                <div class="metric-value" id="reports-stat-pending">0</div>
+                <div class="metric-label" data-i18n="待同步">待同步</div>
+              </div>
+            </div>
+
+            <!-- Metric 3: 已完成 -->
+            <div class="reports-metric-card">
+              <div class="metric-icon-box check-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="metric-details">
+                <div class="metric-value" id="reports-stat-completed">0</div>
+                <div class="metric-label" data-i18n="已完成">已完成</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Content Dashboard Grid -->
+          <div class="reports-dashboard-grid">
+            <!-- Left Column: 最近记录 -->
+            <div class="reports-dashboard-card main-card">
+              <div class="card-header">
+                <h3 data-i18n="最近记录">最近记录</h3>
+                <p class="card-subtitle" data-i18n="当前范围内最新的文件变动。">当前范围内最新的文件变动。</p>
+              </div>
+              
+              <!-- List container -->
+              <div class="reports-recent-list-container" id="reports-recent-list"></div>
+              
+              <!-- Empty State outside list container -->
+              <div class="reports-empty-state" id="reports-empty-state" style="display: none;">
+                <div class="empty-icon-box">
+                  <svg viewBox="0 0 24 24" width="48" height="48">
+                    <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z" fill="currentColor"/>
+                  </svg>
+                </div>
+                <div class="empty-title" data-i18n="暂无记录">暂无记录</div>
+                <div class="empty-subtitle" data-i18n="这个时间范围还没有文件变动。">这个时间范围还没有文件变动。</div>
+              </div>
+            </div>
+
+            <!-- Right Column: Distribution and Actions -->
+            <div class="reports-dashboard-sidebar">
+              <!-- 类型分布 -->
+              <div class="reports-dashboard-card sub-card">
+                <div class="card-header">
+                  <h3 data-i18n="类型分布">类型分布</h3>
+                  <p class="card-subtitle" data-i18n="按文件变动类型统计。">按文件变动类型统计。</p>
+                </div>
+                <div class="type-distribution-list">
+                  <div class="distribution-item">
+                    <div class="item-label-group">
+                      <span class="type-badge created-badge">
+                        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/></svg>
+                      </span>
+                      <span data-i18n="新增">新增</span>
+                    </div>
+                    <span class="type-count" id="reports-type-created">0</span>
+                  </div>
+                  <div class="distribution-item">
+                    <div class="item-label-group">
+                      <span class="type-badge modified-badge">
+                        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="currentColor"/></svg>
+                      </span>
+                      <span data-i18n="修改">修改</span>
+                    </div>
+                    <span class="type-count" id="reports-type-modified">0</span>
+                  </div>
+                  <div class="distribution-item">
+                    <div class="item-label-group">
+                      <span class="type-badge deleted-badge">
+                        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z" fill="currentColor"/></svg>
+                      </span>
+                      <span data-i18n="删除">删除</span>
+                    </div>
+                    <span class="type-count" id="reports-type-deleted">0</span>
+                  </div>
+                  <div class="distribution-item">
+                    <div class="item-label-group">
+                      <span class="type-badge renamed-badge">
+                        <svg viewBox="0 0 24 24"><path d="M12.89 3L14.85 4.96L11.11 8.7H17V10.3H11.11L14.85 14.04L12.89 16L5.89 9L12.89 3Z" fill="currentColor"/></svg>
+                      </span>
+                      <span data-i18n="重命名">重命名</span>
+                    </div>
+                    <span class="type-count" id="reports-type-renamed">0</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 导出 -->
+              <div class="reports-dashboard-card sub-card">
+                <div class="card-header">
+                  <h3 data-i18n="导出">导出</h3>
+                  <p class="card-subtitle" data-i18n="导出当前时间范围内的记录。">导出当前时间范围内的记录。</p>
+                </div>
+                <div class="export-actions">
+                  <button class="reports-export-btn" id="reports-export-csv">
+                    <svg viewBox="0 0 24 24" width="16" height="16">
+                      <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="currentColor"/>
+                    </svg>
+                    <span data-i18n="导出 CSV">导出 CSV</span>
+                  </button>
+                  <button class="reports-export-btn" id="reports-export-json">
+                    <svg viewBox="0 0 24 24" width="16" height="16">
+                      <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" fill="currentColor"/>
+                    </svg>
+                    <span data-i18n="导出 JSON">导出 JSON</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+                <!-- Tab 3: Settings View -->
+        <div class="tab-pane" id="tab-pane-settings">
+          <div class="content-header" data-tauri-drag-region>
+            <div>
+              <h1 data-i18n="设置">设置</h1>
+              <p class="subtitle" data-i18n="管理同步偏好选项与云端账号绑定">管理同步偏好选项与云端账号绑定</p>
+            </div>
+          </div>
+
+          <div class="settings-container">
+            <!-- Group 1: 界面 (Interface) -->
+            <div class="settings-group">
+              <span class="settings-group-title" data-i18n="界面">界面</span>
+              <div class="settings-group-card">
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="语言">语言</span>
+                    <span class="settings-row-subtitle" data-i18n="手动指定界面语言或跟随系统">手动指定界面语言或跟随系统</span>
+                  </div>
+                  <select class="app-dropdown" id="setting-language">
+                    <option value="system" data-i18n="跟随系统">跟随系统</option>
+                    <option value="zh-Hans" data-i18n="简体中文">简体中文</option>
+                    <option value="en" data-i18n="English">English</option>
+                  </select>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="外观模式">外观模式</span>
+                    <span class="settings-row-subtitle" data-i18n="切换浅色、深色或跟随系统设置">切换浅色、深色或跟随系统设置</span>
+                  </div>
+                  <div class="app-segmented-control" id="setting-appearance">
+                    <div class="app-segment">
+                      <input type="radio" name="appearance" id="appearance-system" value="system" checked>
+                      <label for="appearance-system" data-i18n="跟随系统">跟随系统</label>
+                    </div>
+                    <div class="app-segment">
+                      <input type="radio" name="appearance" id="appearance-light" value="light">
+                      <label for="appearance-light" data-i18n="浅色">浅色</label>
+                    </div>
+                    <div class="app-segment">
+                      <input type="radio" name="appearance" id="appearance-dark" value="dark">
+                      <label for="appearance-dark" data-i18n="深色">深色</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 2: 监控目录 (Monitored Directories) -->
+            <div class="settings-group">
+              <span class="settings-group-title" data-i18n="监控目录">监控目录</span>
+              <div class="settings-group-card" id="settings-dirs-container">
+                <!-- Empty state initially -->
+                <div class="settings-row" id="settings-dirs-empty">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="监控文件夹">监控文件夹</span>
+                    <span class="settings-row-subtitle" data-i18n="尚未添加目录">尚未添加目录</span>
+                  </div>
+                  <button class="pill-btn primary" id="btn-settings-add-dir" style="padding: 6px 14px; min-width: 0; min-height: 0; height: auto;">
+                    <span data-i18n="添加">添加</span>
+                  </button>
+                </div>
+                <!-- Monitored paths will be appended here dynamically via JS, along with '添加更多目录' row -->
+              </div>
+            </div>
+
+            <!-- Group 3: 忽略规则 (Ignore Rules) -->
+            <div class="settings-group">
+              <span class="settings-group-title" data-i18n="忽略规则">忽略规则</span>
+              <div class="settings-group-card">
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="启用默认忽略规则">启用默认忽略规则</span>
+                    <span class="settings-row-subtitle" data-i18n="过滤 .DS_Store、Office 临时文件、系统目录和常见构建缓存">过滤 .DS_Store、Office 临时文件、系统目录和常见构建缓存</span>
+                  </div>
+                  <input type="checkbox" class="app-toggle" id="setting-default-ignore" checked>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="忽略文件名">忽略文件名</span>
+                    <span class="settings-row-subtitle" data-i18n="用逗号、分号或换行分隔，例如 .DS_Store, debug.log">用逗号、分号或换行分隔，例如 .DS_Store, debug.log</span>
+                  </div>
+                  <div class="app-text-input-wrapper">
+                    <input type="text" class="app-text-input" id="setting-ignore-filenames" placeholder=".DS_Store, debug.log">
+                  </div>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="忽略后缀">忽略后缀</span>
+                    <span class="settings-row-subtitle" data-i18n="用逗号、分号或换行分隔，例如 .log, .tmp">用逗号、分号或换行分隔，例如 .log, .tmp</span>
+                  </div>
+                  <div class="app-text-input-wrapper">
+                    <input type="text" class="app-text-input" id="setting-ignore-exts" placeholder=".log, .tmp">
+                  </div>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="忽略目录名">忽略目录名</span>
+                    <span class="settings-row-subtitle" data-i18n="用逗号、分号或换行分隔，例如 node_modules, DerivedData">用逗号、分号或换行分隔，例如 node_modules, DerivedData</span>
+                  </div>
+                  <div class="app-text-input-wrapper">
+                    <input type="text" class="app-text-input" id="setting-ignore-dirs" placeholder="node_modules, DerivedData">
+                  </div>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="恢复默认">恢复默认</span>
+                    <span class="settings-row-subtitle" data-i18n="清空自定义规则，并重新启用默认忽略规则">清空自定义规则，并重新启用默认忽略规则</span>
+                  </div>
+                  <button class="quiet-btn" id="btn-reset-ignore" data-i18n="恢复">恢复</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 4: 同步 (Sync) -->
+            <div class="settings-group">
+              <span class="settings-group-title" data-i18n="同步">同步</span>
+              <div class="settings-group-card" id="imaSyncSection">
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="同步模式">同步模式</span>
+                    <span class="settings-row-subtitle" id="sync-mode-desc" data-i18n="手动同步：点击同步按钮时上传">手动同步：点击同步按钮时上传</span>
+                  </div>
+                  <input type="checkbox" class="app-toggle" id="setting-auto-sync">
+                </div>
+
+                <!-- Unauth Account Row -->
+                <div class="settings-row" id="setting-account-unauth">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="腾讯 IMA 账户">腾讯 IMA 账户</span>
+                    <span class="settings-row-subtitle" data-i18n="未登录，请点击右侧按钮扫码授权">未登录，请点击右侧按钮扫码授权</span>
+                  </div>
+                  <button class="pill-btn primary" id="btn-login-ima" style="margin-left: 12px; height: 28px; padding: 0 16px;" data-i18n="微信扫码登录">微信扫码登录</button>
+                </div>
+
+                <!-- Auth Account Row -->
+                <div class="settings-row hidden" id="setting-account-auth">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="腾讯 IMA 账户">腾讯 IMA 账户</span>
+                    <span class="settings-row-subtitle" data-i18n="已通过微信扫码安全授权">已通过微信扫码安全授权</span>
+                  </div>
+                  <div style="display: flex; gap: 12px; align-items: center;">
+                    <div style="position: relative; width: 36px; height: 36px; flex-shrink: 0;">
+                      <img id="account-avatar" src="" alt="Avatar" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" />
+                      <div style="position: absolute; bottom: -2px; right: -2px; width: 14px; height: 14px; background: #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
+                        <svg viewBox="0 0 24 24" style="width: 10px; height: 10px; fill: #28a745;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                      </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                      <span style="font-size: 13px; font-weight: 600;" id="setting-account-name" data-i18n="微信用户">微信用户</span>
+                    </div>
+                    <button class="quiet-btn" style="margin-left: 12px;" id="btn-reauth-ima-setting" data-i18n="重新授权">重新授权</button>
+                    <button class="quiet-btn red" style="margin-left: 12px;" id="btn-logout-ima-setting" data-i18n="退出登录">退出登录</button>
+                  </div>
+                </div>
+
+                <!-- Cloud Quota (Hidden by default) -->
+                <div class="settings-row hidden" id="setting-cloud-quota">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="云端存储空间">云端存储空间</span>
+                    <span class="settings-row-subtitle" data-i18n="使用情况实时同步">使用情况实时同步</span>
+                  </div>
+                  <div class="quota-progress-container">
+                    <div class="quota-progress-bar">
+                      <div class="quota-progress-fill" id="quota-fill" style="width: 0%;"></div>
+                    </div>
+                    <div class="quota-progress-text" id="quota-text">0 MB / 0 MB</div>
+                  </div>
+                </div>
+
+                <!-- Connection Status -->
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="连接状态">连接状态</span>
+                    <span class="settings-row-subtitle" id="setting-conn-desc" data-i18n="未登录，请先在主页扫码">未登录，请先在主页扫码</span>
+                  </div>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <div class="status-pill disconnected" id="setting-conn-pill">
+                      <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                      <span id="setting-conn-pill-text" data-i18n="未连接">未连接</span>
+                    </div>
+                    <button class="quiet-btn" id="btn-show-logs" data-i18n-title="查看请求日志" title="查看请求日志">
+                      <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor;"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+                    </button>
+                    <button class="quiet-btn" id="btn-refresh-status" disabled data-i18n="刷新状态">刷新状态</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 5: 通知与导出 (Notifications & Export) -->
+            <div class="settings-group">
+              <span class="settings-group-title" data-i18n="通知与导出">通知与导出</span>
+              <div class="settings-group-card">
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="开机自动运行">开机自动运行</span>
+                    <span class="settings-row-subtitle" data-i18n="登录系统后自动启动 FileSyncMonitor 并继续监控目录">登录系统后自动启动 FileSyncMonitor 并继续监控目录</span>
+                  </div>
+                  <input type="checkbox" class="app-toggle" id="setting-launch-at-login">
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="允许消息通知">允许消息通知</span>
+                    <span class="settings-row-subtitle" data-i18n="新文件变动时发送系统通知">新文件变动时发送系统通知</span>
+                  </div>
+                  <input type="checkbox" class="app-toggle" id="setting-notifications" checked>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="默认导出格式">默认导出格式</span>
+                    <span class="settings-row-subtitle" data-i18n="报告与记录导出的默认格式">报告与记录导出的默认格式</span>
+                  </div>
+                  <div class="app-segmented-control" id="setting-export-format">
+                    <div class="app-segment">
+                      <input type="radio" name="exportFormat" id="export-csv" value="csv" checked>
+                      <label for="export-csv">CSV</label>
+                    </div>
+                    <div class="app-segment">
+                      <input type="radio" name="exportFormat" id="export-json" value="json">
+                      <label for="export-json">JSON</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="已同步记录保留">已同步记录保留</span>
+                    <span class="settings-row-subtitle" data-i18n="未同步记录不会自动清理">未同步记录不会自动清理</span>
+                  </div>
+                  <select class="app-dropdown" id="setting-retention">
+                    <option value="30" data-i18n="30 天">30 天</option>
+                    <option value="90" data-i18n="90 天">90 天</option>
+                    <option value="365" selected data-i18n="365 天">365 天</option>
+                    <option value="0" data-i18n="永久">永久</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 6: 数据清理 (Data Cleanup) -->
+            <div class="settings-group">
+              <span class="settings-group-title" data-i18n="数据清理">数据清理</span>
+              <div class="settings-group-card">
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="清除文件记录">清除文件记录</span>
+                    <span class="settings-row-subtitle" data-i18n="清除本地数据库中所有的文件变动与同步记录">清除本地数据库中所有的文件变动与同步记录</span>
+                  </div>
+                  <button class="quiet-btn red" id="btn-trigger-clear-new" data-i18n="清除">清除</button>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="彻底重置应用">彻底重置应用</span>
+                    <span class="settings-row-subtitle" data-i18n="清除记录、监控目录、忽略规则、登录授权，并将偏好设置恢复为默认值">清除记录、监控目录、忽略规则、登录授权，并将偏好设置恢复为默认值</span>
+                  </div>
+                  <button class="quiet-btn red" id="btn-trigger-reset-new" data-i18n="重置">重置</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 7: 关于与开发 (About & Development) -->
+            <div class="settings-group">
+              <span class="settings-group-title" data-i18n="关于与开发">关于与开发</span>
+              <div class="settings-group-card">
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="关于 FileSyncMonitor">关于 FileSyncMonitor</span>
+                    <span class="settings-row-subtitle" data-i18n="版本 v1.2.0 • 跨平台重构版">版本 v1.2.0 • 跨平台重构版</span>
+                  </div>
+                  <span style="font-size: 12px; font-weight: 700; color: var(--text-muted);">FileSyncMonitor</span>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="开发者">开发者</span>
+                    <span class="settings-row-subtitle" data-i18n="作者: LancCJ (GitHub)">作者: LancCJ (GitHub)</span>
+                  </div>
+                  <a href="https://github.com/LancCJ" target="_blank" style="text-decoration: none; display: flex; align-items: center; gap: 4px; color: var(--app-mint);">
+                    <svg viewBox="0 0 24 24" style="width: 11px; height: 11px; fill: currentColor;"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                    <span style="font-size: 13px; font-weight: 700;">@LancCJ</span>
+                  </a>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-row-text">
+                    <span class="settings-row-title" data-i18n="请求与同步日志">请求与同步日志</span>
+                    <span class="settings-row-subtitle" data-i18n="查看最近的 HTTP 请求与响应报文，便于排查连接与同步问题">查看最近的 HTTP 请求与响应报文，便于排查连接与同步问题</span>
+                  </div>
+                  <button class="pill-btn primary" id="btn-show-logs-dedicated" style="padding: 6px 14px; min-width: 0; min-height: 0; height: auto;" data-i18n="查看日志">查看日志</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Tab 5: Help and FAQ View (帮助关于) -->
+        <div class="tab-pane" id="tab-pane-help">
+          <!-- HelpHero Section (Title on Left, Panda Card on Right) -->
+          <div class="help-hero-section" data-tauri-drag-region>
+            <div class="help-hero-text">
+              <h1 class="outfit-font" data-i18n="帮助与关于">帮助与关于</h1>
+              <p class="subtitle" data-i18n="按功能场景查看 FileSyncMonitor 的监控、同步、导出与设置能力。">按功能场景查看 FileSyncMonitor 的监控、同步、导出与设置能力。</p>
+            </div>
+            
+            <!-- Panda Version Card (Right-aligned floating ZStack) -->
+            <div class="panda-version-card">
+              <div class="panda-avatar-wrapper">
+                <img src="assets/icon.png" alt="FileSyncMonitor" />
+              </div>
+              <div class="panda-info-details">
+                <h4>FileSyncMonitor</h4>
+                <p data-i18n="清新、轻量、面向日常同步工作流。">清新、轻量、面向日常同步工作流。</p>
+                <div class="panda-badge-row">
+                  <span class="panda-version-badge">v1.2.0</span>
+                  <a href="https://github.com/LancCJ" target="_blank" class="panda-dev-link">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="currentColor"/></svg>
+                    <span>@LancCJ</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Segmented Tab bar (Restored SwiftUI TabBar) -->
+          <div class="help-segmented-control">
+            <button class="help-segment-btn active" data-help-tab="faq">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm0-4h-2V7h2v6z" fill="currentColor"/></svg>
+              <span data-i18n="常见问题">常见问题</span>
+            </button>
+            <button class="help-segment-btn" data-help-tab="syncLogic">
+              <svg viewBox="0 0 24 24"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z" fill="currentColor"/></svg>
+              <span data-i18n="同步逻辑">同步逻辑</span>
+            </button>
+            <button class="help-segment-btn" data-help-tab="features">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="currentColor"/></svg>
+              <span data-i18n="功能指南">功能指南</span>
+            </button>
+            <button class="help-segment-btn" data-help-tab="about">
+              <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/></svg>
+              <span data-i18n="关于与支持">关于与支持</span>
+            </button>
+          </div>
+          
+          <!-- Subpanes Container -->
+          <div class="help-subpanes-container">
+            
+            <!-- Subpane 1: FAQ Accordions (active by default) -->
+            <div class="help-subpane active" id="help-subpane-faq">
+              <div class="section-card faq-card">
+                <div class="section-title-row" style="margin-bottom: 20px;">
+                  <div style="display: flex; gap: 12px; align-items: center;">
+                    <div class="faq-hero-badge">
+                      <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H5c0-3.87 3.13-7 7-7s7 3.13 7 7c0 1.17-.45 2.23-1.17 3.07z"/></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="常见问题与解答 (FAQ)">常见问题与解答 (FAQ)</h3>
+                      <p class="subtitle" style="margin-top: 2px;" data-i18n="解决首次配置、微信登录失效、删除同步限制与本地文件安全等常见疑惑。">解决首次配置、微信登录失效、删除同步限制与本地文件安全等常见疑惑。</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="faq-accordions-list">
+                  <!-- FAQ Item 1 (Mint) -->
+                  <div class="faq-accordion-item expanded" data-faq-index="0">
+                    <button class="faq-accordion-header">
+                      <div class="faq-badge-circle mint">
+                        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
+                      </div>
+                      <span class="faq-question-text" data-i18n="首次使用如何快速开始监控和同步？">首次使用如何快速开始监控和同步？</span>
+                      <svg viewBox="0 0 24 24" class="faq-chevron"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>
+                    </button>
+                    <div class="faq-accordion-content">
+                      <p>首次打开应用，主界面会显示微信登录二维码。请使用微信扫码授权登录以绑定您的腾讯 IMA 账号。登录成功后，前往「设置 -> 监控目录」点击添加您想监控的文件夹，并为该文件夹绑定对应的云端知识库，即可开始监控和同步文件。</p>
+                    </div>
+                  </div>
+                  
+                  <!-- FAQ Item 2 (Amber) -->
+                  <div class="faq-accordion-item" data-faq-index="1">
+                    <button class="faq-accordion-header">
+                      <div class="faq-badge-circle amber">
+                        <svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" fill="currentColor"/></svg>
+                      </div>
+                      <span class="faq-question-text" data-i18n="微信扫码登录的安全与授权失效如何处理？">微信扫码登录的安全与授权失效如何处理？</span>
+                      <svg viewBox="0 0 24 24" class="faq-chevron"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>
+                    </button>
+                    <div class="faq-accordion-content">
+                      <p data-i18n="本应用通过内嵌的腾讯官方安全页面进行登录，所有登录凭据（Token/Cookie）均在本地沙盒内安全加密存储，不会泄露。如果因为长时间未运行或腾讯侧策略调整导致授权失效，应用会在同步时提示“授权已过期”，此时只需在主界面重新扫码登录即可恢复。">本应用通过内嵌的腾讯官方安全页面进行登录，所有登录凭据（Token/Cookie）均在本地沙盒内安全加密存储，不会泄露。如果因为长时间未运行或腾讯侧策略调整导致授权失效，应用会在同步时提示“授权已过期”，此时只需在主界面重新扫码登录即可恢复。</p>
+                    </div>
+                  </div>
+                  
+                  <!-- FAQ Item 3 (Rose) -->
+                  <div class="faq-accordion-item" data-faq-index="2">
+                    <button class="faq-accordion-header">
+                      <div class="faq-badge-circle rose">
+                        <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" fill="currentColor"/></svg>
+                      </div>
+                      <span class="faq-question-text" data-i18n="为什么有时候修改了文件，待同步队列中没有立刻出现记录？">为什么有时候修改了文件，待同步队列中没有立刻出现记录？</span>
+                      <svg viewBox="0 0 24 24" class="faq-chevron"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>
+                    </button>
+                    <div class="faq-accordion-content">
+                      <p data-i18n="为了防止编辑器保存临时状态时产生大量高频碎片记录，应用引入了 2 秒的防抖延迟机制（Debounce）。当您对文件进行连续编辑或保存时，应用会等待文件写入稳定后统一生成一条记录。另外，被忽略规则过滤的文件也不会进入队列。">为了防止编辑器保存临时状态时产生大量高频碎片记录，应用引入了 2 秒的防抖延迟机制（Debounce）。当您对文件进行连续编辑或保存时，应用会等待文件写入稳定后统一生成一条记录。另外，被忽略规则过滤的文件也不会进入队列。</p>
+                    </div>
+                  </div>
+                  
+                  <!-- FAQ Item 4 (Violet) -->
+                  <div class="faq-accordion-item" data-faq-index="3">
+                    <button class="faq-accordion-header">
+                      <div class="faq-badge-circle violet">
+                        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" fill="currentColor"/></svg>
+                      </div>
+                      <span class="faq-question-text" data-i18n="在设置中执行“清除记录”或“重置应用”会删除本地的物理文件吗？">在设置中执行“清除记录”或“重置应用”会删除本地的物理文件吗？</span>
+                      <svg viewBox="0 0 24 24" class="faq-chevron"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>
+                    </button>
+                    <div class="faq-accordion-content">
+                      <p data-i18n="绝对不会。无论是在设置中点击「清除文件记录」还是「彻底重置应用」，都只属于应用自身数据的管理操作（清空本地 SQLite 数据库中的事件历史、断开文件夹监控或清除偏好设置），绝对不会以任何形式修改或删除您电脑磁盘上的任何物理文件，请放心操作。">绝对不会。无论是在设置中点击「清除文件记录」还是「彻底重置应用」，都只属于应用自身数据的管理操作（清空本地 SQLite 数据库中的事件历史、断开文件夹监控或清除偏好设置），绝对不会以任何形式修改或删除您电脑磁盘上的任何物理文件，请放心操作。</p>
+                    </div>
+                  </div>
+                  
+                  <!-- FAQ Item 5 (Accent/Grey) -->
+                  <div class="faq-accordion-item" data-faq-index="4">
+                    <button class="faq-accordion-header">
+                      <div class="faq-badge-circle accent">
+                        <svg viewBox="0 0 24 24"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" fill="currentColor"/></svg>
+                      </div>
+                      <span class="faq-question-text" data-i18n="忽略规则支持哪些过滤方式？怎么写？">忽略规则支持哪些过滤方式？怎么写？</span>
+                      <svg viewBox="0 0 24 24" class="faq-chevron"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>
+                    </button>
+                    <div class="faq-accordion-content">
+                      <p data-i18n="忽略规则用于在事件产生前进行过滤，避免日志杂乱。您可以在「设置 -> 忽略规则」中通过以下三种方式过滤：">忽略规则用于在事件产生前进行过滤，避免日志杂乱。您可以在「设置 -> 忽略规则」中通过以下三种方式过滤：<br/>
+                      1. <strong data-i18n="【全名过滤】">【全名过滤】</strong>：输入完整文件名（如 config.json），完全匹配的文件会被过滤。<br/>
+                      2. <strong data-i18n="【后缀过滤】">【后缀过滤】</strong>：输入以点开头的扩展名（如 .tmp 或 .log），匹配该类型的所有临时文件。<br/>
+                      3. <strong data-i18n="【目录过滤】">【目录过滤】</strong>：输入文件夹名称（如 node_modules 或 build），匹配该目录下的所有变动均被屏蔽。</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Subpane 2: Sync Logic Table (hidden by default) -->
+            <div class="help-subpane hidden" id="help-subpane-syncLogic">
+              <div class="section-card synclogic-card" style="padding: 22px;">
+                <div class="section-title-row" style="margin-bottom: 20px;">
+                  <div style="display: flex; gap: 12px; align-items: center;">
+                    <div class="faq-hero-badge">
+                      <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="本地操作同步逻辑">本地操作同步逻辑</h3>
+                      <p class="subtitle" style="margin-top: 2px;" data-i18n="理解每种文件操作会如何进入待同步列表、自动同步和历史记录。">理解每种文件操作会如何进入待同步列表、自动同步和历史记录。</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Sync Logic Grid Table -->
+                <div class="synclogic-table">
+                  <div class="synclogic-header">
+                    <div data-i18n="本地操作">本地操作</div>
+                    <div data-i18n="记录类型">记录类型</div>
+                    <div data-i18n="同步处理">同步处理</div>
+                    <div data-i18n="用户需要知道">用户需要知道</div>
+                  </div>
+                  
+                  <div class="synclogic-body">
+                    <!-- Row 1: 新增文件 -->
+                    <div class="synclogic-row">
+                      <div class="op-cell">
+                        <div class="op-icon mint"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/></svg></div>
+                        <span data-i18n="新增文件">新增文件</span>
+                      </div>
+                      <div class="type-cell font-mono mint">created</div>
+                      <div class="proc-cell" data-i18n="生成一条待同步记录；手动模式等待点击同步，自动模式在文件稳定 30 秒后上传。">生成一条待同步记录；手动模式等待点击同步，自动模式在文件稳定 30 秒后上传。</div>
+                      <div class="note-cell" data-i18n="如果新建后又立即删除，应用会抵消这次短暂变动，不再产生待同步事项。">如果新建后又立即删除，应用会抵消这次短暂变动，不再产生待同步事项。</div>
+                    </div>
+                    
+                    <!-- Row 2: 修改文件 -->
+                    <div class="synclogic-row">
+                      <div class="op-cell">
+                        <div class="op-icon blue"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="currentColor"/></svg></div>
+                        <span data-i18n="修改文件">修改文件</span>
+                      </div>
+                      <div class="type-cell font-mono blue">modified</div>
+                      <div class="proc-cell" data-i18n="同一路径已有未同步记录时只更新时间，避免反复保存产生多条记录。">同一路径已有未同步记录时只更新时间，避免反复保存产生多条记录。</div>
+                      <div class="note-cell" data-i18n="自动同步会在最后一次修改后重新等待 30 秒。">自动同步会在最后一次修改后重新等待 30 秒。</div>
+                    </div>
+                    
+                    <!-- Row 3: 删除文件 -->
+                    <div class="synclogic-row">
+                      <div class="op-cell">
+                        <div class="op-icon rose"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z" fill="currentColor"/></svg></div>
+                        <span data-i18n="删除文件">删除文件</span>
+                      </div>
+                      <div class="type-cell font-mono rose">deleted</div>
+                      <div class="proc-cell" data-i18n="删除会生成删除记录；同步时仅在本地标记完成。">删除会生成删除记录；同步时仅在本地标记完成。</div>
+                      <div class="note-cell" data-i18n="当前 IMA 未开放云端删除接口，云端已有文档需要用户按需手动清理。">当前 IMA 未开放云端删除接口，云端已有文档需要用户按需手动清理。</div>
+                    </div>
+                    
+                    <!-- Row 4: 重命名文件 -->
+                    <div class="synclogic-row">
+                      <div class="op-cell">
+                        <div class="op-icon violet"><svg viewBox="0 0 24 24"><path d="M12.89 3L14.85 4.96L11.11 8.7H17V10.3H11.11L14.85 14.04L12.89 16L5.89 9L12.89 3Z" fill="currentColor"/></svg></div>
+                        <span data-i18n="重命名文件">重命名文件</span>
+                      </div>
+                      <div class="type-cell font-mono violet">renamed</div>
+                      <div class="proc-cell" data-i18n="已存在文件重命名会生成重命名记录，并在详情里保留原路径。">已存在文件重命名会生成重命名记录，并在详情里保留原路径。</div>
+                      <div class="note-cell" data-i18n="如果是刚新建的文件又重命名，应用会合并为最终路径的一条新增记录。">如果是刚新建的文件又重命名，应用会合并为最终路径的一条新增记录。</div>
+                    </div>
+                    
+                    <!-- Row 5: 快速新建后删除 -->
+                    <div class="synclogic-row">
+                      <div class="op-cell">
+                        <div class="op-icon grey"><svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg></div>
+                        <span data-i18n="快速新建后删除">快速新建后删除</span>
+                      </div>
+                      <div class="type-cell font-mono grey">none</div>
+                      <div class="proc-cell" data-i18n="未同步前创建又删除会被视为一次无效临时变动。">未同步前创建又删除会被视为一次无效临时变动。</div>
+                      <div class="note-cell" data-i18n="适合过滤编辑器临时文件和误操作，不会增加角标或通知。">适合过滤编辑器临时文件和误操作，不会增加角标或通知。</div>
+                    </div>
+                    
+                    <!-- Row 6: 手动同步 -->
+                    <div class="synclogic-row">
+                      <div class="op-cell">
+                        <div class="op-icon dark"><svg viewBox="0 0 24 24"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74c1.21-.38 2-.6 2-.6V7.5a4.5 4.5 0 0 0-9 0v3.14s.79.22 2 .6z" fill="currentColor"/></svg></div>
+                        <span data-i18n="手动同步">手动同步</span>
+                      </div>
+                      <div class="type-cell font-mono dark">manual</div>
+                      <div class="proc-cell" data-i18n="点击单条“同步到 IMA”或首页“全部同步”后才上传。">点击单条“同步到 IMA”或首页“全部同步”后才上传。</div>
+                      <div class="note-cell" data-i18n="这是默认模式，适合确认后再同步。">这是默认模式，适合确认后再同步。</div>
+                    </div>
+                    
+                    <!-- Row 7: 自动同步 -->
+                    <div class="synclogic-row">
+                      <div class="op-cell">
+                        <div class="op-icon amber"><svg viewBox="0 0 24 24"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-15h-2v6h6v-2h-4V7z" fill="currentColor"/></svg></div>
+                        <span data-i18n="自动同步">自动同步</span>
+                      </div>
+                      <div class="type-cell font-mono amber">auto</div>
+                      <div class="proc-cell" data-i18n="开启后，文件变动稳定 30 秒再上传到绑定知识库。">开启后，文件变动稳定 30 秒再上传到绑定知识库。</div>
+                      <div class="note-cell" data-i18n="频繁保存会重置等待时间，避免上传半成品。">频繁保存会重置等待时间，避免上传半成品。</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="synclogic-footer-tip" style="margin-top: 18px; display: flex; gap: 8px; align-items: flex-start; font-size: 0.76rem; color: var(--text-secondary);">
+                  <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: var(--app-mint); flex-shrink: 0; margin-top: 1px;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                  <span data-i18n="忽略规则会先于记录入库执行；被忽略的文件不会产生记录、通知、角标或同步任务。">忽略规则会先于记录入库执行；被忽略的文件不会产生记录、通知、角标或同步任务。</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Subpane 3: Feature Guide Cards (hidden by default) -->
+            <div class="help-subpane hidden" id="help-subpane-features">
+                                          <div class="features-categories-wrapper">
+                
+                <!-- Category 1: 监控与过滤 -->
+                <div class="features-category-section">
+                  <div class="features-cat-header" style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px;">
+                    <div class="features-cat-badge mint">
+                      <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" fill="currentColor"/></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="监控与过滤">监控与过滤</h3>
+                      <p class="subtitle" style="font-size: 0.76rem;" data-i18n="从选择目录到过滤噪声文件，保证记录列表干净可用。">从选择目录到过滤噪声文件，保证记录列表干净可用。</p>
+                    </div>
+                  </div>
+                  
+                  <div class="features-grid">
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge mint">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="添加监控目录">添加监控目录</h4>
+                        <p data-i18n="在首页或设置中添加文件夹，应用会保存授权并在下次启动后继续监控。">在首页或设置中添加文件夹，应用会保存授权并在下次启动后继续监控。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge mint">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polygon points="12 17 8 12 9.5 10.5 12 13 18 7 19.5 8.5 12 17"></polygon></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="实时捕获变动">实时捕获变动</h4>
+                        <p data-i18n="通过 macOS FSEvents 捕获新增、修改、删除和重命名，变动会自动进入记录列表。">通过 macOS FSEvents 捕获新增、修改、删除和重命名，变动会自动进入记录列表。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge mint">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="默认忽略规则">默认忽略规则</h4>
+                        <p data-i18n="默认过滤 .DS_Store、临时文件、系统目录、构建产物和常见缓存目录。">默认过滤 .DS_Store、临时文件、系统目录、构建产物和常见缓存目录。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge mint">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="自定义忽略项">自定义忽略项</h4>
+                        <p data-i18n="可在设置中维护忽略文件名、后缀和目录名，让监控范围更贴合你的项目。">可在设置中维护忽略文件名、后缀和目录名，让监控范围更贴合你的项目。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Category 2: 记录处理 -->
+                <div class="features-category-section" style="margin-top: 34px;">
+                  <div class="features-cat-header" style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px;">
+                    <div class="features-cat-badge amber">
+                      <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="记录处理">记录处理</h3>
+                      <p class="subtitle" style="font-size: 0.76rem;" data-i18n="围绕待同步和全部记录进行查看、筛选、确认与清理。">围绕待同步和全部记录进行查看、筛选、确认与清理。</p>
+                    </div>
+                  </div>
+                  
+                  <div class="features-grid">
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge amber">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="待同步队列">待同步队列</h4>
+                        <p data-i18n="左侧第二个入口集中展示未处理变动，可搜索路径、按类型筛选并批量处理。">左侧第二个入口集中展示未处理变动，可搜索路径、按类型筛选并批量处理。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge amber">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="全部记录视图">全部记录视图</h4>
+                        <p data-i18n="保留所有已同步和未同步记录，适合回溯历史、查找文件变动轨迹。">保留所有已同步和未同步记录，适合回溯历史、查找文件变动轨迹。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge amber">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="列表与树状模式">列表与树状模式</h4>
+                        <p data-i18n="二级侧栏支持列表和树状视图切换，既能快速扫列表，也能按目录结构定位。">二级侧栏支持列表和树状视图切换，既能快速扫列表，也能按目录结构定位。</p>
+                      </div>
+                    </div>
+
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge amber">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M9 21H3v-6"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="详情与快捷操作">详情与快捷操作</h4>
+                        <p data-i18n="选中记录后可查看路径、时间、状态，并执行同步、标记完成、Finder 显示或删除记录。">选中记录后可查看路径、时间、状态，并执行同步、标记完成、Finder 显示或删除记录。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge amber">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="批量删除记录">批量删除记录</h4>
+                        <p data-i18n="在待同步或全部记录页可清理当前筛选结果，只删除应用内记录，不影响真实文件。">在待同步或全部记录页可清理当前筛选结果，只删除应用内记录，不影响真实文件。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Category 3: IMA 云端同步 -->
+                <div class="features-category-section" style="margin-top: 34px;">
+                  <div class="features-cat-header" style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px;">
+                    <div class="features-cat-badge violet" style="background-color: rgba(138, 43, 226, 0.1); color: #8A2BE2;">
+                      <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path><path d="M12 12v6"></path><path d="M8 14l4-4 4 4"></path></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="IMA 云端同步">IMA 云端同步</h3>
+                      <p class="subtitle" style="font-size: 0.76rem;" data-i18n="支持手动上传、自动上传、知识库绑定和云端拉取。">支持手动上传、自动上传、知识库绑定和云端拉取。</p>
+                    </div>
+                  </div>
+                  
+                  <div class="features-grid">
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge violet" style="background-color: rgba(138, 43, 226, 0.05); color: #8A2BE2; border: 1px solid rgba(138, 43, 226, 0.2);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="手动同步">手动同步</h4>
+                        <p data-i18n="默认采用手动模式，点击单条“同步到 IMA”或首页“全部同步”后再上传。">默认采用手动模式，点击单条“同步到 IMA”或首页“全部同步”后再上传。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge violet" style="background-color: rgba(138, 43, 226, 0.05); color: #8A2BE2; border: 1px solid rgba(138, 43, 226, 0.2);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="自动同步">自动同步</h4>
+                        <p data-i18n="开启后，文件稳定 30 秒会自动上传，减少频繁保存造成的重复同步。">开启后，文件稳定 30 秒会自动上传，减少频繁保存造成的重复同步。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge violet" style="background-color: rgba(138, 43, 226, 0.05); color: #8A2BE2; border: 1px solid rgba(138, 43, 226, 0.2);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="目录绑定知识库">目录绑定知识库</h4>
+                        <p data-i18n="每个监控目录都可以绑定不同 IMA 知识库；不绑定时默认导入为新笔记。">每个监控目录都可以绑定不同 IMA 知识库；不绑定时默认导入为新笔记。</p>
+                      </div>
+                    </div>
+
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge violet" style="background-color: rgba(138, 43, 226, 0.05); color: #8A2BE2; border: 1px solid rgba(138, 43, 226, 0.2);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="8 12 12 16 16 12"></polyline><line x1="12" y1="8" x2="12" y2="16"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="从云端拉取更新">从云端拉取更新</h4>
+                        <p data-i18n="待同步页可从 IMA 拉取云端新增内容，并下载到对应本地目录。">待同步页可从 IMA 拉取云端新增内容，并下载到对应本地目录。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge violet" style="background-color: rgba(138, 43, 226, 0.05); color: #8A2BE2; border: 1px solid rgba(138, 43, 226, 0.2);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="删除事件同步提示">删除事件同步提示</h4>
+                        <p data-i18n="由于 IMA 未开放云端删除 API，本地删除会在应用内标记已同步，云端文档需手动清理。">由于 IMA 未开放云端删除 API，本地删除会在应用内标记已同步，云端文档需手动清理。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge violet" style="background-color: rgba(138, 43, 226, 0.05); color: #8A2BE2; border: 1px solid rgba(138, 43, 226, 0.2);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="请求日志排查">请求日志排查</h4>
+                        <p data-i18n="连接测试和同步请求会记录在 IMA 请求日志中，方便排查凭据、接口和网络问题。">连接测试和同步请求会记录在 IMA 请求日志中，方便排查凭据、接口和网络问题。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Category 4: 腾讯 IMA 账户登录 -->
+                <div class="features-category-section" style="margin-top: 34px;">
+                  <div class="features-cat-header" style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px;">
+                    <div class="features-cat-badge mint">
+                      <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="腾讯 IMA 账户登录">腾讯 IMA 账户登录</h3>
+                      <p class="subtitle" style="font-size: 0.76rem;" data-i18n="使用微信扫码授权登录，快速绑定知识库并开启云端同步。">使用微信扫码授权登录，快速绑定知识库并开启云端同步。</p>
+                    </div>
+                  </div>
+                  
+                  <div class="features-grid">
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge mint">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect><rect x="14" y="14" width="3" height="3"></rect></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="微信扫码授权">微信扫码授权</h4>
+                        <p data-i18n="首次打开应用或在未登录状态下，主界面会显示微信登录二维码，扫码即可安全登录。">首次打开应用或在未登录状态下，主界面会显示微信登录二维码，扫码即可安全登录。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge mint">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="管理绑定设备">管理绑定设备</h4>
+                        <p data-i18n="在“设置 > 同步”中可查看当前账号已登录的其他多端设备，并可随时安全退出登录。">在“设置 > 同步”中可查看当前账号已登录的其他多端设备，并可随时安全退出登录。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge mint">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="查看存储容量">查看存储容量</h4>
+                        <p data-i18n="登录后，在“设置 > 同步”中可直观查看云端个人空间的使用情况和总配额。">登录后，在“设置 > 同步”中可直观查看云端个人空间的使用情况和总配额。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge mint">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="同步至知识库">同步至知识库</h4>
+                        <p data-i18n="登录成功后即可拉取云端知识库列表，在“设置 > 监控目录”中可以为不同监控目录绑定具体知识库。">登录成功后即可拉取云端知识库列表，在“设置 > 监控目录”中可以为不同监控目录绑定具体知识库。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Category 5: 报告、通知与菜单栏 -->
+                <div class="features-category-section" style="margin-top: 34px;">
+                  <div class="features-cat-header" style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px;">
+                    <div class="features-cat-badge" style="background-color: var(--app-accent-glow); color: var(--app-accent);">
+                      <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="报告、通知与菜单栏">报告、通知与菜单栏</h3>
+                      <p class="subtitle" style="font-size: 0.76rem;" data-i18n="把同步状态从主窗口延伸到菜单栏、通知和导出文件。">把同步状态从主窗口延伸到菜单栏、通知和导出文件。</p>
+                    </div>
+                  </div>
+                  
+                  <div class="features-grid">
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge" style="background-color: var(--bg-panel); color: var(--app-accent); border: 1px solid var(--border-color);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="统计报告">统计报告</h4>
+                        <p data-i18n="报告页按今天、近 7 天、近 30 天或全部范围统计记录、待同步和已完成数量。">报告页按今天、近 7 天、近 30 天或全部范围统计记录、待同步和已完成数量。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge" style="background-color: var(--bg-panel); color: var(--app-accent); border: 1px solid var(--border-color);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="CSV / JSON 导出">CSV / JSON 导出</h4>
+                        <p data-i18n="可导出当前记录或报告范围，便于留档、分析或给其他工具继续处理。">可导出当前记录或报告范围，便于留档、分析或给其他工具继续处理。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge" style="background-color: var(--bg-panel); color: var(--app-accent); border: 1px solid var(--border-color);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="系统通知提醒">系统通知提醒</h4>
+                        <p data-i18n="新文件变动出现时可发送 macOS 通知，避免待同步事项被遗忘。">新文件变动出现时可发送 macOS 通知，避免待同步事项被遗忘。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge" style="background-color: var(--bg-panel); color: var(--app-accent); border: 1px solid var(--border-color);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" ry="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="菜单栏状态">菜单栏状态</h4>
+                        <p data-i18n="菜单栏图标会显示待同步数量，可快速打开窗口、标记完成或退出应用。">菜单栏图标会显示待同步数量，可快速打开窗口、标记完成或退出应用。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Category 6: 设置与体验 -->
+                <div class="features-category-section" style="margin-top: 34px;">
+                  <div class="features-cat-header" style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px;">
+                    <div class="features-cat-badge" style="background-color: var(--app-rose-glow); color: var(--app-rose);">
+                      <svg viewBox="0 0 24 24" style="width: 20px; height: 20px;" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="设置与体验">设置与体验</h3>
+                      <p class="subtitle" style="font-size: 0.76rem;" data-i18n="让界面语言、外观以及开机自启等偏好设置保持可控。">让界面语言、外观以及开机自启等偏好设置保持可控。</p>
+                    </div>
+                  </div>
+                  
+                  <div class="features-grid">
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge" style="background-color: var(--bg-panel); color: var(--app-rose); border: 1px solid var(--border-color);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="多语言界面">多语言界面</h4>
+                        <p data-i18n="支持跟随系统、English和简体中文，切换后主界面和菜单栏同步刷新。">支持跟随系统、English和简体中文，切换后主界面和菜单栏同步刷新。</p>
+                      </div>
+                    </div>
+
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge" style="background-color: var(--bg-panel); color: var(--app-rose); border: 1px solid var(--border-color);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 2v20a10 10 0 0 0 0-20z"></path></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="浅色与深色模式">浅色与深色模式</h4>
+                        <p data-i18n="可跟随系统，也可手动选择浅色或深色，整体保持清新简约风格。">可跟随系统，也可手动选择浅色或深色，整体保持清新简约风格。</p>
+                      </div>
+                    </div>
+                    
+                    <div class="feature-point-card">
+                      <div class="feature-illus-badge" style="background-color: var(--bg-panel); color: var(--app-rose); border: 1px solid var(--border-color);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+                      </div>
+                      <div class="feature-point-details">
+                        <h4 data-i18n="开机自动运行">开机自动运行</h4>
+                        <p data-i18n="可在“设置 > 通知与导出”中开启开机自动运行，使本应用在后台静默为您守护文件。">可在“设置 > 通知与导出”中开启开机自动运行，使本应用在后台静默为您守护文件。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+            <!-- Subpane 4: About & Donation (hidden by default) -->
+            <div class="help-subpane hidden" id="help-subpane-about">
+              <!-- Donation Card -->
+              <div class="section-card donation-card">
+                <div class="section-title-row" style="margin-bottom: 20px;">
+                  <div style="display: flex; gap: 12px; align-items: center;">
+                    <div class="faq-hero-badge rose">
+                      <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="支持开源项目">支持开源项目</h3>
+                      <p class="subtitle" style="margin-top: 2px;" data-i18n="FileSyncMonitor 将以开源方式提供。如果它帮你节省了时间，欢迎扫码捐赠支持后续维护。">FileSyncMonitor 将以开源方式提供。如果它帮你节省了时间，欢迎扫码捐赠支持后续维护。</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="donation-body-layout" style="display: flex; gap: 28px; margin-top: 16px;">
+                  <!-- WeChat Scan -->
+                  <div class="donation-qr-box">
+                    <div class="qr-code-wrapper" style="border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; background: white;">
+                      <img src="assets/donation-wechat.jpg" alt="WeChat Donation" style="width: 130px; height: 130px; object-fit: cover;" />
+                    </div>
+                    <span style="font-size: 0.8rem; font-weight: 600; margin-top: 8px;" data-i18n="微信捐赠">微信捐赠</span>
+                  </div>
+                  
+                  <!-- Alipay Scan -->
+                  <div class="donation-qr-box">
+                    <div class="qr-code-wrapper" style="border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; background: white;">
+                      <img src="assets/donation-alipay.jpg" alt="Alipay Donation" style="width: 130px; height: 130px; object-fit: cover;" />
+                    </div>
+                    <span style="font-size: 0.8rem; font-weight: 600; margin-top: 8px;" data-i18n="支付宝捐赠">支付宝捐赠</span>
+                  </div>
+                  
+                  <!-- Donation text details -->
+                  <div class="donation-desc-text-wrapper" style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                    <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary);" data-i18n="捐赠说明">捐赠说明</h4>
+                    <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;" data-i18n="捐赠完全自愿，不影响任何功能使用。感谢每一份支持，它会用于持续适配 macOS/Windows、维护 IMA 同步能力和完善文档。">捐赠完全自愿，不影响任何功能使用。感谢每一份支持，它会用于持续适配 macOS/Windows、维护 IMA 同步能力和完善文档。</p>
+                    <p class="disclaimer-text" style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.5; padding: 10px; border-left: 2px solid var(--app-rose); background-color: var(--app-rose-glow); border-radius: 4px; margin-top: 4px;">
+                      <strong data-i18n="【免责声明】">【免责声明】</strong>：本项目为非盈利开源项目。上述捐赠行为完全基于您的自愿，所得款项仅用于补贴开发者维护项目所产生的时间、网络与服务器等基本支出，捐赠并非此软件的牟利手段，且不代表任何商业化销售或服务承诺。我们不对本软件的同步效率、腾讯云端稳定性或任何由同步冲突导致的数据异常承诺任何商业保障 or 赔偿。请知悉！
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- About Card -->
+              <div class="section-card about-card" style="padding: 22px; display: flex; gap: 24px; align-items: center;">
+                <div class="brand-logo" style="margin: 0; width: 78px; height: 78px; flex-shrink: 0;">
+                  <img src="assets/icon.png" alt="FileSyncMonitor" style="width: 78px; height: 78px; border-radius: 18px; box-shadow: 0 8px 18px rgba(0,0,0,0.08);" />
+                </div>
+                <div class="about-details" style="flex: 1;">
+                  <h3 style="font-size: 1.5rem; font-weight: 800; color: var(--text-primary);">FileSyncMonitor</h3>
+                  <div class="about-version-row" style="display: flex; gap: 10px; align-items: center; margin: 8px 0 10px 0;">
+                    <span style="background-color: var(--app-mint-glow); color: var(--app-mint); padding: 3px 10px; border-radius: 20px; font-size: 0.76rem; font-weight: 700;">Version 1.2.0 Open Source</span>
+                    <span style="font-size: 0.72rem; font-family: monospace; color: var(--text-muted);">Build 2026.0521</span>
+                  </div>
+                  <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 8px;" data-i18n="本工具用于监控本地文件变动，并辅助同步到 IMA 云端。">本工具用于监控本地文件变动，并辅助同步到 IMA 云端。</p>
+                  <div class="about-links-row" style="display: flex; gap: 12px; align-items: center; font-size: 0.76rem; color: var(--text-secondary);">
+                    <span>© 2026 Antigravity · <a href="https://github.com/LancCJ" target="_blank" style="color: var(--app-mint); font-weight: 700; text-decoration: none;">LancCJ</a></span>
+                    <span>·</span>
+                    <button class="text-btn" id="btn-reopen-tour" style="font-size: 0.76rem; display: flex; gap: 4px; align-items: center; text-decoration: none;">
+                      <svg viewBox="0 0 24 24" style="width: 12px; height: 12px; fill: currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                      <span data-i18n="重新开启新手指引">重新开启新手指引</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+
+      </main>
+
+      <!-- CUSTOM GLASSMORPHISM CONFIRMATION OVERLAYS -->
+      
+      <!-- Overlay 1: Clear History Confirm -->
+      <div class="custom-modal-overlay hidden" id="overlay-clear-events">
+        <div class="custom-confirm-card">
+          <div class="modal-icon-circle rose-bg">
+            <svg viewBox="0 0 24 24" class="modal-icon"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/></svg>
+          </div>
+          <h3 data-i18n="确认清除文件记录？">确认清除文件记录？</h3>
+          <p data-i18n="此操作将永久删除本地数据库中的所有文件变动记录和同步日志，但不会删除您的本地物理文件。">此操作将永久删除本地数据库中的所有文件变动记录和同步日志，但不会删除您的本地物理文件。</p>
+          <div class="modal-actions">
+            <button class="flat-btn" id="btn-cancel-clear" data-i18n="取消">取消</button>
+            <button class="pill-btn danger-action-btn" id="btn-confirm-clear" data-i18n="清除">清除</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overlay 2: Reset App Confirm -->
+      <div class="custom-modal-overlay hidden" id="overlay-reset-all">
+        <div class="custom-confirm-card">
+          <div class="modal-icon-circle rose-bg">
+            <svg viewBox="0 0 24 24" class="modal-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-8h-2V7h2v2z" fill="currentColor"/></svg>
+          </div>
+          <h3 data-i18n="确认彻底重置应用？">确认彻底重置应用？</h3>
+          <p data-i18n="此操作将清空所有文件变动记录、停止监控所有文件夹、清除自定义忽略规则、恢复所有偏好设置至出厂默认，并退出您的腾讯 IMA 账号授权。本操作无法撤销。">此操作将清空所有文件变动记录、停止监控所有文件夹、清除自定义忽略规则、恢复所有偏好设置至出厂默认，并退出您的腾讯 IMA 账号授权。本操作无法撤销。</p>
+          <div class="modal-actions">
+            <button class="flat-btn" id="btn-cancel-reset" data-i18n="取消">取消</button>
+            <button class="pill-btn danger-action-btn" id="btn-confirm-reset" data-i18n="重置">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overlay 3: HTTP Logs -->
+      <div class="custom-modal-overlay hidden" id="overlay-http-logs">
+        <div class="custom-log-card">
+          <div class="log-modal-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: var(--text-primary);"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z" fill="currentColor"/></svg>
+              <h3 data-i18n="IMA 请求日志" style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">IMA 请求日志</h3>
+            </div>
+            <button class="pill-btn danger-action-btn" id="btn-clear-logs" style="height: 24px; padding: 0 10px; font-size: 11px;" data-i18n="清空">清空</button>
+          </div>
+          <div class="log-modal-body" id="http-logs-list">
+            <!-- Dynamic Log Items will go here -->
+          </div>
+          <div class="modal-actions" style="margin-top: 16px; justify-content: flex-end; padding-top: 12px; border-top: 1px solid var(--border-color);">
+            <button class="flat-btn" id="btn-close-logs" data-i18n="关闭">关闭</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ONBOARDING TOUR OVERLAY -->
+    <div class="tour-overlay hidden" id="global-tour-overlay">
+      <!-- The cutout spotlight highlight block -->
+      <div class="tour-spotlight" id="tour-spotlight"></div>
+      
+      <!-- The green pointer badge with arrow -->
+      <div class="tour-pointer" id="tour-pointer">
+        <svg viewBox="0 0 24 24" id="tour-pointer-arrow"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" fill="currentColor"/></svg>
+      </div>
+      
+      <!-- The glassmorphic floating step guide card -->
+      <div class="tour-card" id="tour-card">
+        <div class="tour-card-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <div class="tour-card-icon-circle" id="tour-card-icon-circle" style="width: 32px; height: 32px; border-radius: 7px; background-color: var(--app-mint-glow); color: var(--app-mint); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <!-- Dynamically set SVG icon in main.js -->
+            <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+          </div>
+          <div style="flex: 1;">
+            <div class="tour-card-step-badge" id="tour-step-badge" style="font-size: 0.65rem; font-weight: 700; color: var(--app-mint); text-transform: uppercase; letter-spacing: 0.05em;" data-i18n="引导进度_format">引导进度_format</div>
+            <h4 class="tour-card-title" id="tour-card-title" style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin: 0; margin-top: 1px;" data-i18n="先认识左侧导航">先认识左侧导航</h4>
+          </div>
+        </div>
+        
+        <p class="tour-card-text" id="tour-card-text" style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; margin: 0;" data-i18n="左侧图标栏是主要入口：首页、待同步、全部记录、报告、帮助和设置都在这里切换。">
+          左侧图标栏是主要入口：首页、待同步、全部记录、报告、帮助和设置都在这里切换。
+        </p>
+        
+        <div class="tour-card-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+          <!-- Stepper indicators -->
+          <div class="tour-steppers" id="tour-steppers" style="display: flex; gap: 5px;">
+            <span class="stepper-dot active" style="width: 18px; height: 6px; border-radius: 3px; background-color: var(--app-mint); transition: all 0.2s;"></span>
+            <span class="stepper-dot" style="width: 6px; height: 6px; border-radius: 3px; background-color: var(--border-color); transition: all 0.2s;"></span>
+            <span class="stepper-dot" style="width: 6px; height: 6px; border-radius: 3px; background-color: var(--border-color); transition: all 0.2s;"></span>
+            <span class="stepper-dot" style="width: 6px; height: 6px; border-radius: 3px; background-color: var(--border-color); transition: all 0.2s;"></span>
+            <span class="stepper-dot" style="width: 6px; height: 6px; border-radius: 3px; background-color: var(--border-color); transition: all 0.2s;"></span>
+          </div>
+          
+          <!-- Navigation Actions -->
+          <div class="tour-actions" style="display: flex; gap: 8px; align-items: center;">
+            <button class="flat-btn" id="btn-tour-skip" style="padding: 5px 10px; font-size: 0.76rem;" data-i18n="跳过">跳过</button>
+            <button class="pill-btn" id="btn-tour-prev" style="padding: 5px 10px; font-size: 0.76rem; box-shadow: none;" data-i18n="上一步">上一步</button>
+            <button class="pill-btn primary" id="btn-tour-next" style="padding: 5px 12px; font-size: 0.76rem; background-color: var(--text-primary); color: #ffffff; border: none; box-shadow: none;">
+              <span id="btn-tour-next-text" data-i18n="下一步">下一步</span>
+              <svg viewBox="0 0 24 24" style="width: 10px; height: 10px; fill: currentColor; margin-left: 2px;"><path d="M12 4l-1.41 1.41L15.17 9H4v2h11.17l-4.58 4.59L12 18l8-8z" fill="currentColor"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
