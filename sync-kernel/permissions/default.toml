@@ -29,5 +29,6 @@ commands.allow = [
   "log_js_message",
   "get_ima_space_quota",
   "get_http_logs",
-  "clear_http_logs"
+  "clear_http_logs",
+  "set_window_theme"
 ]

@@ -2775,6 +2775,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 document.documentElement.classList.remove('dark-mode');
                 document.body.classList.remove('dark-mode');
             }
+
+            // Inform Tauri backend of the window theme change so native traffic lights / decoration styles match
+            invoke("set_window_theme", { theme }).catch((e) => console.error("Failed to set window theme:", e));
         };
 
         // Apply immediately during initialization

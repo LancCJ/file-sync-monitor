@@ -815,6 +815,16 @@ fn log_js_message(level: String, msg: String) {
     println!("[JS {}] {}", level, msg);
 }
 
+#[tauri::command]
+fn set_window_theme(window: tauri::Window, theme: String) -> Result<(), String> {
+    let tauri_theme = match theme.as_str() {
+        "dark" => Some(tauri::Theme::Dark),
+        "light" => Some(tauri::Theme::Light),
+        _ => None,
+    };
+    window.set_theme(tauri_theme).map_err(|e| e.to_string())
+}
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[tauri::command]
@@ -1185,7 +1195,8 @@ pub fn run() {
             update_ignore_rules,
             log_js_message,
             get_http_logs,
-            clear_http_logs
+            clear_http_logs,
+            set_window_theme
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
