@@ -4196,6 +4196,7 @@ body.dark-mode .empty-btn-light:hover {
   max-width: 100%;
   box-sizing: border-box;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .log-entry-item:hover {
