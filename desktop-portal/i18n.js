@@ -390,5 +390,6 @@ export const I18N_DICT = {
   "请求体": "Request Body",
   "响应体": "Response Body",
   "错误详情": "Error Detail",
-  "复制此段内容": "Copy this section"
+  "复制此段内容": "Copy this section",
+  "复制此请求与响应的完整日志": "Copy the full log of this request & response"
 };

@@ -3597,6 +3597,9 @@ async function loadAndRenderHttpLogs() {
           <div class="status-pill ${statusClass}"></div>
           <div class="log-entry-title">${entry.method} ${entry.url}</div>
           <div class="log-entry-time">${shortTime}</div>
+          <button class="log-entry-copy-btn" title="${t("复制此请求与响应的完整日志")}">
+            <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor;"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          </button>
           <svg class="log-entry-chevron" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
         </div>
         <div class="log-entry-content hidden">
@@ -3607,7 +3610,30 @@ async function loadAndRenderHttpLogs() {
       // Expand / Collapse interaction
       let header = item.querySelector(".log-entry-header");
       let content = item.querySelector(".log-entry-content");
-      header.addEventListener("click", () => {
+      let copyBtn = item.querySelector(".log-entry-copy-btn");
+      
+      copyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        let fullText = `【IMA 请求日志】\n` +
+          `${t("时间")}: ${entry.timestamp}\n` +
+          `${t("方法")}: ${entry.method}\n` +
+          `${t("全路径")}: ${entry.url}\n`;
+        if (entry.request_headers) fullText += `\n[${t("请求头")}]\n${entry.request_headers}\n`;
+        if (entry.request_body) fullText += `\n[${t("请求体")}]\n${entry.request_body}\n`;
+        if (entry.response_code) fullText += `\n[HTTP 状态]: ${entry.response_code}\n`;
+        if (entry.response_body) fullText += `\n[${t("响应体")}]\n${entry.response_body}\n`;
+        if (entry.error) fullText += `\n[${t("错误详情")}]\n${entry.error}\n`;
+        
+        navigator.clipboard.writeText(fullText).then(() => {
+          showGlobalToast(t("复制成功"));
+        }).catch(() => {
+          showGlobalToast(t("复制失败"), true);
+        });
+      });
+      
+      header.addEventListener("click", (e) => {
+        if (e.target.closest(".log-entry-copy-btn")) return;
+        
         let isExpanded = item.classList.toggle("expanded");
         if (isExpanded) {
           content.classList.remove("hidden");

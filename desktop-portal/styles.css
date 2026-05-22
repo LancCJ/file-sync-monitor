@@ -4175,6 +4175,7 @@ body.dark-mode .empty-btn-light:hover {
 .log-modal-body {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4187,6 +4188,8 @@ body.dark-mode .empty-btn-light:hover {
   background: rgba(255, 255, 255, 0.02);
   transition: all var(--transition-fast);
   overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .log-entry-item:hover {
@@ -4200,6 +4203,7 @@ body.dark-mode .empty-btn-light:hover {
   gap: 10px;
   cursor: pointer;
   user-select: none;
+  min-width: 0;
 }
 
 .log-entry-header .status-pill {
@@ -4223,12 +4227,33 @@ body.dark-mode .empty-btn-light:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-primary);
+  min-width: 0;
 }
 
 .log-entry-time {
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.log-entry-copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.log-entry-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--app-mint);
 }
 
 .log-entry-chevron {
@@ -4236,6 +4261,7 @@ body.dark-mode .empty-btn-light:hover {
   height: 14px;
   fill: var(--text-secondary);
   transition: transform var(--transition-normal);
+  flex-shrink: 0;
 }
 
 .log-entry-item.expanded .log-entry-chevron {
@@ -4249,12 +4275,17 @@ body.dark-mode .empty-btn-light:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .log-section-container {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .log-section-header {
@@ -4285,6 +4316,8 @@ body.dark-mode .empty-btn-light:hover {
   color: var(--text-primary);
   max-height: 150px;
   overflow-y: auto;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .log-copy-btn {
