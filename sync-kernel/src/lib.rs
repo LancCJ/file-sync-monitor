@@ -21,8 +21,6 @@ use monitor::{DirectoryMonitor, IgnoreRules};
 const WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 #[cfg(not(target_os = "macos"))]
 const WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-#[cfg(target_os = "windows")]
-const WEBVIEW2_LOGIN_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI --disable-site-isolation-trials --disable-web-security=false";
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HttpLogEntry {
@@ -1663,7 +1661,7 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
 
     if let Some(win) = app.get_webview_window("ima_login") {
-        win.set_focus().unwrap();
+        win.set_focus().map_err(|e| e.to_string())?;
         return Ok(());
     }
 
@@ -1837,6 +1835,7 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
 
     let app_clone = app.clone();
     let app_clone2 = app.clone();
+    let (build_result_tx, build_result_rx) = std::sync::mpsc::channel::<Result<(), String>>();
 
     app.run_on_main_thread(move || {
         let app_for_nav = app_clone2.clone();
@@ -1848,8 +1847,6 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
             .devtools(true)
             .user_agent(WEBVIEW_USER_AGENT)
             .initialization_script(js_injection);
-        #[cfg(target_os = "windows")]
-        let builder = builder.additional_browser_args(WEBVIEW2_LOGIN_ARGS);
         let builder = builder.on_navigation(move |url| {
             let scheme = url.scheme();
             if scheme != "http" && scheme != "https" {
@@ -1935,13 +1932,29 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
 
         // Make it modal relative to main window
 
-        if let Ok(_win) = builder.center().build() {
-            // Successfully created and centered on primary screen
-        } else if let Some(win) = app_clone2.get_webview_window("ima_login") {
-            let _ = win.set_focus();
-        }
+        let build_result = match builder.center().build() {
+            Ok(win) => {
+                let _ = win.set_focus();
+                Ok(())
+            }
+            Err(err) => {
+                if let Some(win) = app_clone2.get_webview_window("ima_login") {
+                    let _ = win.set_focus();
+                    Ok(())
+                } else {
+                    let message = format!("Failed to create IMA login window: {}", err);
+                    println!("[IMALogin] {}", message);
+                    Err(message)
+                }
+            }
+        };
+        let _ = build_result_tx.send(build_result);
     })
     .map_err(|e| e.to_string())?;
+
+    build_result_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| format!("Timed out waiting for IMA login window: {}", e))??;
 
     Ok(())
 }
