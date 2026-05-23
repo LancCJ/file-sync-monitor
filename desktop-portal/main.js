@@ -3258,6 +3258,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const appSystem = document.getElementById("appearance-system");
         const appLight = document.getElementById("appearance-light");
         const appDark = document.getElementById("appearance-dark");
+        const systemThemeQuery = window.matchMedia
+            ? window.matchMedia('(prefers-color-scheme: dark)')
+            : null;
         let curApp = localStorage.getItem("appearance") || "system";
         if (curApp === "light" && appLight) appLight.checked = true;
         else if (curApp === "dark" && appDark) appDark.checked = true;
@@ -3267,7 +3270,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             localStorage.setItem("appearance", val);
             let theme = val;
             if (val === "system") {
-                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                theme = systemThemeQuery && systemThemeQuery.matches ? 'dark' : 'light';
             }
             
             // Set data-theme on html (documentElement) and body
@@ -3283,8 +3286,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 document.body.classList.remove('dark-mode');
             }
 
-            // Inform Tauri backend of the window theme change so native traffic lights / decoration styles match
-            invoke("set_window_theme", { theme }).catch((e) => console.error("Failed to set window theme:", e));
+            // Keep CSS resolved to light/dark, but let the native Tauri window truly follow the OS.
+            const nativeTheme = val === "system" ? "system" : theme;
+            invoke("set_window_theme", { theme: nativeTheme }).catch((e) => console.error("Failed to set window theme:", e));
         };
 
         // Apply immediately during initialization
@@ -3294,13 +3298,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (appLight) appLight.addEventListener("change", () => updateAppearance("light"));
         if (appDark) appDark.addEventListener("change", () => updateAppearance("dark"));
 
-        // Listen for system theme changes to dynamically update when "Follow System" is selected
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-            const current = localStorage.getItem("appearance") || "system";
-            if (current === "system") {
-                updateAppearance("system");
+        // Listen for system theme changes to dynamically update when "Follow System" is selected.
+        if (systemThemeQuery) {
+            const handleSystemThemeChange = () => {
+                const current = localStorage.getItem("appearance") || "system";
+                if (current === "system") {
+                    updateAppearance("system");
+                }
+            };
+            if (systemThemeQuery.addEventListener) {
+                systemThemeQuery.addEventListener('change', handleSystemThemeChange);
+            } else if (systemThemeQuery.addListener) {
+                systemThemeQuery.addListener(handleSystemThemeChange);
             }
-        });
+        }
 
         // --- 2. Sync Group ---
         const autoSyncToggle = document.getElementById("setting-auto-sync");
