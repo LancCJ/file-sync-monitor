@@ -1155,6 +1155,10 @@ fn log_js_message(level: String, msg: String) {
     println!("[JS {}] {}", level, msg);
 }
 
+fn app_window_icon() -> Option<tauri::image::Image<'static>> {
+    tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png")).ok()
+}
+
 #[tauri::command]
 fn set_window_theme(window: tauri::Window, theme: String) -> Result<(), String> {
     let tauri_theme = match theme.as_str() {
@@ -1847,6 +1851,19 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
             .devtools(true)
             .user_agent(WEBVIEW_USER_AGENT)
             .initialization_script(js_injection);
+        let builder = if let Some(icon) = app_window_icon() {
+            match builder.icon(icon) {
+                Ok(builder) => builder,
+                Err(err) => {
+                    let message = format!("Failed to set IMA login window icon: {}", err);
+                    println!("[IMALogin] {}", message);
+                    let _ = build_result_tx.send(Err(message));
+                    return;
+                }
+            }
+        } else {
+            builder
+        };
         let builder = builder.on_navigation(move |url| {
             let scheme = url.scheme();
             if scheme != "http" && scheme != "https" {
@@ -1992,6 +2009,12 @@ pub fn run() {
 
             // Scaffold dynamic System Tray
             tray::setup_system_tray(app.handle())?;
+
+            if let Some(win) = app.get_webview_window("main") {
+                if let Some(icon) = app_window_icon() {
+                    let _ = win.set_icon(icon);
+                }
+            }
 
             // Automatically show and focus the main window in development mode
             #[cfg(debug_assertions)]
