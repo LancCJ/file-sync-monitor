@@ -21,6 +21,8 @@ use monitor::{DirectoryMonitor, IgnoreRules};
 const WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 #[cfg(not(target_os = "macos"))]
 const WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+#[cfg(target_os = "windows")]
+const WEBVIEW2_LOGIN_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI --disable-site-isolation-trials --disable-web-security=false";
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HttpLogEntry {
@@ -857,13 +859,20 @@ async fn clear_all_events(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn get_config_value(state: State<'_, AppState>, key: String) -> Result<Option<String>, String> {
+async fn get_config_value(
+    state: State<'_, AppState>,
+    key: String,
+) -> Result<Option<String>, String> {
     let conn = state.db_conn.lock().unwrap();
     db::get_config(&conn, &key).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn set_config_value(state: State<'_, AppState>, key: String, value: String) -> Result<(), String> {
+async fn set_config_value(
+    state: State<'_, AppState>,
+    key: String,
+    value: String,
+) -> Result<(), String> {
     let conn = state.db_conn.lock().unwrap();
     db::save_config(&conn, &key, &value).map_err(|e| e.to_string())
 }
@@ -1511,91 +1520,114 @@ pub async fn refresh_ima_credentials_silently(
     let tx_clone_for_nav = Arc::clone(&tx);
 
     app.run_on_main_thread(move || {
-        let builder = tauri::WebviewWindowBuilder::new(&app_clone, "ima_silent_refresh", tauri::WebviewUrl::External(url))
-            .visible(false)
-            .devtools(true)
-            .user_agent(WEBVIEW_USER_AGENT)
-            .initialization_script(js_injection)
-            .on_navigation(move |url| {
-                let scheme = url.scheme();
-                if scheme != "http" && scheme != "https" {
-                    use tauri_plugin_opener::OpenerExt;
-                    let url_str = url.to_string();
-                    println!("[SilentRefresh Navigation] Custom scheme intercepted: {}. Opening via OS...", url_str);
-                    let _ = app_for_silent_nav.opener().open_path(&url_str, None::<&str>);
-                    return false;
-                }
+        let builder = tauri::WebviewWindowBuilder::new(
+            &app_clone,
+            "ima_silent_refresh",
+            tauri::WebviewUrl::External(url),
+        )
+        .visible(false)
+        .devtools(true)
+        .user_agent(WEBVIEW_USER_AGENT)
+        .initialization_script(js_injection)
+        .on_navigation(move |url| {
+            let scheme = url.scheme();
+            if scheme != "http" && scheme != "https" {
+                use tauri_plugin_opener::OpenerExt;
+                let url_str = url.to_string();
+                println!(
+                    "[SilentRefresh Navigation] Custom scheme intercepted: {}. Opening via OS...",
+                    url_str
+                );
+                let _ = app_for_silent_nav
+                    .opener()
+                    .open_path(&url_str, None::<&str>);
+                return false;
+            }
 
-                let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
+            let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
 
-                if !is_login_bridge {
-                    return true;
-                }
+            if !is_login_bridge {
+                return true;
+            }
 
-                let action = url
-                    .query_pairs()
-                    .find(|(key, _)| key == "action")
-                    .map(|(_, value)| value.into_owned())
-                    .unwrap_or_else(|| url.path().trim_start_matches('/').to_string());
-                let parsed_query: std::collections::HashMap<_, _> =
-                    url.query_pairs().into_owned().collect();
+            let action = url
+                .query_pairs()
+                .find(|(key, _)| key == "action")
+                .map(|(_, value)| value.into_owned())
+                .unwrap_or_else(|| url.path().trim_start_matches('/').to_string());
+            let parsed_query: std::collections::HashMap<_, _> =
+                url.query_pairs().into_owned().collect();
 
-                match action.as_str() {
-                    "log" => {
-                        if let Some(msg) = parsed_query.get("msg") {
-                            println!("[SilentRefresh Log] {}", msg);
-                        }
+            match action.as_str() {
+                "log" => {
+                    if let Some(msg) = parsed_query.get("msg") {
+                        println!("[SilentRefresh Log] {}", msg);
                     }
-                    "login-cancel" => {
-                        if let Some(win) = app_clone_for_nav.get_webview_window("ima_silent_refresh") {
+                }
+                "login-cancel" => {
+                    if let Some(win) = app_clone_for_nav.get_webview_window("ima_silent_refresh") {
+                        let _ = win.close();
+                    }
+                    let mut guard = tx_clone_for_nav.lock().unwrap();
+                    if let Some(sender) = guard.take() {
+                        let _ = sender.send(Err("Silent refresh canceled".to_string()));
+                    }
+                }
+                "login-success" => {
+                    let token = parsed_query.get("token").cloned().unwrap_or_default();
+                    let refresh_token = parsed_query
+                        .get("refresh_token")
+                        .cloned()
+                        .unwrap_or_default();
+                    let uid = parsed_query.get("uid").cloned().unwrap_or_default();
+                    let guid = parsed_query.get("guid").cloned().unwrap_or_default();
+                    let _avatar = parsed_query.get("avatar").cloned().unwrap_or_default();
+                    let _nickname = parsed_query.get("nickname").cloned().unwrap_or_default();
+
+                    if !token.is_empty() {
+                        println!("[SilentRefresh] Captured Credentials! UID: {}", uid);
+                        let creds = CachedCredentials {
+                            token,
+                            refresh_token,
+                            uid: uid.clone(),
+                            guid,
+                        };
+                        if let Err(e) = credentials::save_credentials(&creds) {
+                            println!("[SilentRefresh] Failed to save credentials: {:?}", e);
+                        } else {
+                            println!("[SilentRefresh] Credentials saved successfully.");
+                        }
+                        // Background silent refresh does not emit "login_success" to prevent showing duplicate success toasts/resetting UI.
+
+                        if let Some(win) =
+                            app_clone_for_nav.get_webview_window("ima_silent_refresh")
+                        {
                             let _ = win.close();
                         }
+
                         let mut guard = tx_clone_for_nav.lock().unwrap();
                         if let Some(sender) = guard.take() {
-                            let _ = sender.send(Err("Silent refresh canceled".to_string()));
+                            let _ = sender.send(Ok(creds));
                         }
                     }
-                    "login-success" => {
-                        let token = parsed_query.get("token").cloned().unwrap_or_default();
-                        let refresh_token = parsed_query.get("refresh_token").cloned().unwrap_or_default();
-                        let uid = parsed_query.get("uid").cloned().unwrap_or_default();
-                        let guid = parsed_query.get("guid").cloned().unwrap_or_default();
-                        let _avatar = parsed_query.get("avatar").cloned().unwrap_or_default();
-                        let _nickname = parsed_query.get("nickname").cloned().unwrap_or_default();
-
-                        if !token.is_empty() {
-                            println!("[SilentRefresh] Captured Credentials! UID: {}", uid);
-                            let creds = CachedCredentials { token, refresh_token, uid: uid.clone(), guid };
-                            if let Err(e) = credentials::save_credentials(&creds) {
-                                println!("[SilentRefresh] Failed to save credentials: {:?}", e);
-                            } else {
-                                println!("[SilentRefresh] Credentials saved successfully.");
-                            }
-                            // Background silent refresh does not emit "login_success" to prevent showing duplicate success toasts/resetting UI.
-
-                            if let Some(win) = app_clone_for_nav.get_webview_window("ima_silent_refresh") {
-                                let _ = win.close();
-                            }
-
-                            let mut guard = tx_clone_for_nav.lock().unwrap();
-                            if let Some(sender) = guard.take() {
-                                let _ = sender.send(Ok(creds));
-                            }
-                        }
-                    }
-                    _ => {}
                 }
-                false
-            });
+                _ => {}
+            }
+            false
+        });
 
         if let Err(e) = builder.build() {
-            println!("[SilentRefresh] Failed to build hidden WebviewWindow: {:?}", e);
+            println!(
+                "[SilentRefresh] Failed to build hidden WebviewWindow: {:?}",
+                e
+            );
             let mut guard = tx_clone.lock().unwrap();
             if let Some(sender) = guard.take() {
                 let _ = sender.send(Err(e.to_string()));
             }
         }
-    }).map_err(|e| e.to_string())?;
+    })
+    .map_err(|e| e.to_string())?;
 
     // Wait up to 10 seconds for the silent login
     let timeout = tokio::time::sleep(std::time::Duration::from_secs(10));
@@ -1635,8 +1667,11 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let url_str = "https://ima.qq.com/login/";
-    let url = tauri::Url::parse(url_str).map_err(|e| e.to_string())?;
+    let login_url = {
+        let url = tauri::Url::parse("https://ima.qq.com/login#/weixin-login")
+            .map_err(|e| e.to_string())?;
+        tauri::WebviewUrl::External(url)
+    };
 
     let js_injection = r##"
         (() => {
@@ -1805,92 +1840,108 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
 
     app.run_on_main_thread(move || {
         let app_for_nav = app_clone2.clone();
-        let builder = tauri::WebviewWindowBuilder::new(&app_clone2, "ima_login", tauri::WebviewUrl::External(url))
+        let builder = tauri::WebviewWindowBuilder::new(&app_clone2, "ima_login", login_url)
             .title("微信扫码登录")
             .inner_size(380.0, 540.0)
             .resizable(false)
             .decorations(true)
             .devtools(true)
             .user_agent(WEBVIEW_USER_AGENT)
-            .initialization_script(js_injection)
-            .on_navigation(move |url| {
-                let scheme = url.scheme();
-                if scheme != "http" && scheme != "https" {
-                    use tauri_plugin_opener::OpenerExt;
-                    let url_str = url.to_string();
-                    println!("[WebView Navigation] Custom scheme intercepted: {}. Opening via OS...", url_str);
-                    let _ = app_for_nav.opener().open_path(&url_str, None::<&str>);
-                    return false;
-                }
+            .initialization_script(js_injection);
+        #[cfg(target_os = "windows")]
+        let builder = builder.additional_browser_args(WEBVIEW2_LOGIN_ARGS);
+        let builder = builder.on_navigation(move |url| {
+            let scheme = url.scheme();
+            if scheme != "http" && scheme != "https" {
+                use tauri_plugin_opener::OpenerExt;
+                let url_str = url.to_string();
+                println!(
+                    "[WebView Navigation] Custom scheme intercepted: {}. Opening via OS...",
+                    url_str
+                );
+                let _ = app_for_nav.opener().open_path(&url_str, None::<&str>);
+                return false;
+            }
 
-                let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
+            let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
 
-                if !is_login_bridge {
-                    return true;
-                }
+            if !is_login_bridge {
+                return true;
+            }
 
-                let action = url
-                    .query_pairs()
-                    .find(|(key, _)| key == "action")
-                    .map(|(_, value)| value.into_owned())
-                    .unwrap_or_else(|| url.path().trim_start_matches('/').to_string());
-                let parsed_query: std::collections::HashMap<_, _> =
-                    url.query_pairs().into_owned().collect();
+            let action = url
+                .query_pairs()
+                .find(|(key, _)| key == "action")
+                .map(|(_, value)| value.into_owned())
+                .unwrap_or_else(|| url.path().trim_start_matches('/').to_string());
+            let parsed_query: std::collections::HashMap<_, _> =
+                url.query_pairs().into_owned().collect();
 
-                match action.as_str() {
-                    "log" => {
-                        if let Some(msg) = parsed_query.get("msg") {
-                            println!("[WebView Log] {}", msg);
-                        }
-                        false
+            match action.as_str() {
+                "log" => {
+                    if let Some(msg) = parsed_query.get("msg") {
+                        println!("[WebView Log] {}", msg);
                     }
-                    "login-cancel" => {
-                        if let Some(win) = app_clone.get_webview_window("ima_login") {
-                            let _ = win.close();
-                        }
-                        false
+                    false
+                }
+                "login-cancel" => {
+                    if let Some(win) = app_clone.get_webview_window("ima_login") {
+                        let _ = win.close();
                     }
-                    "login-success" => {
-                        let token = parsed_query.get("token").cloned().unwrap_or_default();
-                        let refresh_token = parsed_query.get("refresh_token").cloned().unwrap_or_default();
-                        let uid = parsed_query.get("uid").cloned().unwrap_or_default();
-                        let guid = parsed_query.get("guid").cloned().unwrap_or_default();
-                        let avatar = parsed_query.get("avatar").cloned().unwrap_or_default();
-                        let nickname = parsed_query.get("nickname").cloned().unwrap_or_default();
+                    false
+                }
+                "login-success" => {
+                    let token = parsed_query.get("token").cloned().unwrap_or_default();
+                    let refresh_token = parsed_query
+                        .get("refresh_token")
+                        .cloned()
+                        .unwrap_or_default();
+                    let uid = parsed_query.get("uid").cloned().unwrap_or_default();
+                    let guid = parsed_query.get("guid").cloned().unwrap_or_default();
+                    let avatar = parsed_query.get("avatar").cloned().unwrap_or_default();
+                    let nickname = parsed_query.get("nickname").cloned().unwrap_or_default();
 
-                        if !token.is_empty() {
-                            println!("[IMALogin] Captured Credentials! UID: {}", uid);
-                            let creds = CachedCredentials { token, refresh_token, uid: uid.clone(), guid };
-                            if let Err(e) = credentials::save_credentials(&creds) {
-                                println!("[IMALogin] Failed to save credentials to Keyring: {:?}", e);
-                            } else {
-                                println!("[IMALogin] Credentials saved successfully.");
-                            }
-                            let _ = app_clone.emit("login_success", serde_json::json!({
+                    if !token.is_empty() {
+                        println!("[IMALogin] Captured Credentials! UID: {}", uid);
+                        let creds = CachedCredentials {
+                            token,
+                            refresh_token,
+                            uid: uid.clone(),
+                            guid,
+                        };
+                        if let Err(e) = credentials::save_credentials(&creds) {
+                            println!("[IMALogin] Failed to save credentials to Keyring: {:?}", e);
+                        } else {
+                            println!("[IMALogin] Credentials saved successfully.");
+                        }
+                        let _ = app_clone.emit(
+                            "login_success",
+                            serde_json::json!({
                                 "avatar": avatar,
                                 "nickname": nickname,
                                 "uid": uid,
-                            }));
+                            }),
+                        );
 
-                            if let Some(win) = app_clone.get_webview_window("ima_login") {
-                                let _ = win.close();
-                            }
+                        if let Some(win) = app_clone.get_webview_window("ima_login") {
+                            let _ = win.close();
                         }
-                        false
                     }
-                    _ => false,
+                    false
                 }
-            });
+                _ => false,
+            }
+        });
 
         // Make it modal relative to main window
-
 
         if let Ok(_win) = builder.center().build() {
             // Successfully created and centered on primary screen
         } else if let Some(win) = app_clone2.get_webview_window("ima_login") {
             let _ = win.set_focus();
         }
-    }).map_err(|e| e.to_string())?;
+    })
+    .map_err(|e| e.to_string())?;
 
     Ok(())
 }
