@@ -233,6 +233,9 @@ export const I18N_DICT = {
   "没有待同步的文件变动。": "No pending file changes.",
   "全部记录视图": "All Records View",
   "暂无可同步": "Nothing to sync",
+  "未添加监控": "No Monitored Folders",
+  "已同步至最新": "Synced to Latest",
+  "待同步 ({pending})": "Pending ({pending})",
   "0个": "0个",
   "CSV / JSON 导出": "CSV/JSON Export",
   "FileSyncMonitor 将以开源方式提供。如果它帮你节省了时间，欢迎扫码捐赠支持后续维护。": "FileSyncMonitor will be available as open source. If it saves you time, you are welcome to scan the code to donate to support future maintenance.",
@@ -391,5 +394,7 @@ export const I18N_DICT = {
   "响应体": "Response Body",
   "错误详情": "Error Detail",
   "复制此段内容": "Copy this section",
-  "复制此请求与响应的完整日志": "Copy the full log of this request & response"
+  "复制此请求与响应的完整日志": "Copy the full log of this request & response",
+  "已同步至最新": "Synced to Latest",
+  "未添加监控": "No Monitored Folders"
 };

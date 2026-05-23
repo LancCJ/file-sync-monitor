@@ -98,7 +98,7 @@ function switchLanguage(newLang) {
   if (typeof renderPendingTree === "function") renderPendingTree();
   if (typeof updateHomeStats === "function") updateHomeStats();
   if (typeof updatePendingDetailPanel === "function") updatePendingDetailPanel();
-  if (typeof loadReportsTab === "function") loadReportsTab();
+  
 
   const toastMsg = newLang === "en" ? "Interface switched to English" : "界面已切换为中文";
   showGlobalToast(toastMsg);
@@ -232,7 +232,10 @@ window.addEventListener("DOMContentLoaded", () => {
   setupFAQAccordionListeners();
   setupOnboardingTourListeners();
   setupLargeTablesListeners();
-  setupReportsListeners();
+  const btnCsv = document.getElementById("reports-export-csv");
+  const btnJson = document.getElementById("reports-export-json");
+  if (btnCsv) btnCsv.addEventListener("click", () => triggerExport("csv"));
+  if (btnJson) btnJson.addEventListener("click", () => triggerExport("json"));
   
   // Window resize updates Onboarding spotlight target dynamically
   window.addEventListener("resize", () => {
@@ -265,7 +268,7 @@ function cacheDOMElements() {
     events: document.getElementById("btn-tab-events"),
     pending: document.getElementById("btn-tab-pending"),
     all: document.getElementById("btn-tab-all"),
-    reports: document.getElementById("btn-tab-reports"),
+    
     settings: document.getElementById("btn-tab-settings"),
     help: document.getElementById("btn-tab-help")
   };
@@ -274,7 +277,7 @@ function cacheDOMElements() {
     events: document.getElementById("tab-pane-events"),
     pending: document.getElementById("tab-pane-pending"),
     all: document.getElementById("tab-pane-all"),
-    reports: document.getElementById("tab-pane-reports"),
+    
     settings: document.getElementById("tab-pane-settings"),
     help: document.getElementById("tab-pane-help")
   };
@@ -294,7 +297,7 @@ function cacheDOMElements() {
   dom.filterAllBtn = document.getElementById("filter-all");
   dom.filterPendingBtn = document.getElementById("filter-pending");
   
-  dom.syncBtn = document.getElementById("btn-sync-all");
+  dom.syncBtn = document.getElementById("home-sync-status-badge");
   dom.addDirBtn = document.getElementById("btn-settings-add-dir");
   dom.addDirHomeBtn = document.getElementById("btn-add-dir-home");
   dom.saveSettingsBtn = document.getElementById("btn-save-settings");
@@ -346,7 +349,11 @@ function cacheDOMElements() {
   dom.homeStatPending = document.getElementById("home-stat-pending");
   dom.homeStatTotal = document.getElementById("home-stat-total");
   dom.homeStatMonitored = document.getElementById("home-stat-monitored");
+  dom.homeCardPending = document.getElementById("home-card-pending");
+  dom.homeCardTotal = document.getElementById("home-card-total");
+  dom.homeCardMonitored = document.getElementById("home-card-monitored");
   dom.homeRecentEventsContainer = document.getElementById("home-recent-events-container");
+  dom.homeWelcomeText = document.getElementById("home-welcome-text");
   dom.homeMessageTitle = document.getElementById("home-message-title");
   dom.btnToggleAutoSync = document.getElementById("btn-toggle-autosync");
   dom.btnRailAvatar = document.getElementById("btn-rail-avatar");
@@ -355,11 +362,8 @@ function cacheDOMElements() {
   dom.homeStatusQueue = document.getElementById("home-status-queue");
   dom.homeStatusMode = document.getElementById("home-status-mode");
   dom.homeStatusPaths = document.getElementById("home-status-paths");
-  
-  // Quick navigation buttons
-  dom.btnQuickPending = document.getElementById("btn-quick-pending");
-  dom.btnQuickAll = document.getElementById("btn-quick-all");
-  dom.btnQuickReports = document.getElementById("btn-quick-reports");
+  dom.homeSyncStatusBadge = document.getElementById("home-sync-status-badge");
+  dom.homeSyncStatusText = document.getElementById("home-sync-status-text");
   
   // Welcome card banner elements
   dom.introBannerCard = document.getElementById("intro-banner-card");
@@ -433,9 +437,7 @@ function switchTab(tabName) {
   }
   
   // Reload corresponding tab data
-  if (tabName === "reports") {
-    loadReportsTab();
-  } else if (tabName === "pending" || tabName === "all") {
+   else if (tabName === "pending" || tabName === "all") {
     renderLargeTables();
   } else if (tabName === "settings") {
     // Lazy-load settings data on-demand
@@ -481,6 +483,25 @@ function setupActionListeners() {
   // Directory manipulation
   if (dom.addDirBtn) dom.addDirBtn.addEventListener("click", addFolder);
   if (dom.addDirHomeBtn) dom.addDirHomeBtn.addEventListener("click", addFolder);
+  
+  // Home metric cards navigation
+  if (dom.homeCardPending) {
+    dom.homeCardPending.addEventListener("click", () => {
+      switchTab("events");
+      if (dom.filterPendingBtn) dom.filterPendingBtn.click();
+    });
+  }
+  if (dom.homeCardTotal) {
+    dom.homeCardTotal.addEventListener("click", () => {
+      switchTab("events");
+      if (dom.filterAllBtn) dom.filterAllBtn.click();
+    });
+  }
+  if (dom.homeCardMonitored) {
+    dom.homeCardMonitored.addEventListener("click", () => {
+      switchTab("settings");
+    });
+  }
   
   // Settings page action save
   if (dom.saveSettingsBtn) dom.saveSettingsBtn.addEventListener("click", saveIgnoreSettings);
@@ -641,22 +662,7 @@ function setupActionListeners() {
     });
   }
 
-  // Quick navigation buttons
-  if (dom.btnQuickPending) {
-    dom.btnQuickPending.addEventListener("click", () => {
-      switchTab("pending");
-    });
-  }
-  if (dom.btnQuickAll) {
-    dom.btnQuickAll.addEventListener("click", () => {
-      switchTab("all");
-    });
-  }
-  if (dom.btnQuickReports) {
-    dom.btnQuickReports.addEventListener("click", () => {
-      switchTab("reports");
-    });
-  }
+  // Quick navigation buttons removed
 
   // Language switcher
   const btnLang = document.getElementById("btn-rail-lang");
@@ -829,9 +835,7 @@ async function fetchEvents() {
     renderHomeRecentEvents();
     renderLargeTables();
     updateHomeStats();
-    if (state.activeTab === "reports") {
-      loadReportsTab();
-    }
+    
   } catch (e) {
     console.error("Error fetching events:", e);
   }
@@ -1463,166 +1467,21 @@ async function saveIgnoreSettings() {
   }
 }
 
-// Load statistics for analysis page
-function loadReportsTab() {
-  const now = Date.now();
-  const range = state.reportsTimeRange || "7days";
-  let filtered = state.fileEvents || [];
-  
-  if (range === "today") {
-    const startOfToday = new Date().setHours(0, 0, 0, 0);
-    filtered = filtered.filter(e => (e.timestamp * 1000) >= startOfToday);
-  } else if (range === "7days") {
-    const startOf7DaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-    filtered = filtered.filter(e => (e.timestamp * 1000) >= startOf7DaysAgo);
-  } else if (range === "30days") {
-    const startOf30DaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-    filtered = filtered.filter(e => (e.timestamp * 1000) >= startOf30DaysAgo);
-  }
-  
-  // Update Metrics
-  const total = filtered.length;
-  const pending = filtered.filter(e => !e.is_synced).length;
-  const completed = total - pending;
-  
-  const statTotal = document.getElementById("reports-stat-total");
-  const statPending = document.getElementById("reports-stat-pending");
-  const statCompleted = document.getElementById("reports-stat-completed");
-  
-  if (statTotal) statTotal.textContent = total;
-  if (statPending) statPending.textContent = pending;
-  if (statCompleted) statCompleted.textContent = completed;
-  
-  // Update Type Distribution counts
-  let createdCount = 0, modifiedCount = 0, deletedCount = 0, renamedCount = 0;
-  filtered.forEach(e => {
-    if (e.event_type === "created") createdCount++;
-    else if (e.event_type === "modified") modifiedCount++;
-    else if (e.event_type === "deleted") deletedCount++;
-    else if (e.event_type === "renamed") renamedCount++;
-  });
-  
-  const typeCreated = document.getElementById("reports-type-created");
-  const typeModified = document.getElementById("reports-type-modified");
-  const typeDeleted = document.getElementById("reports-type-deleted");
-  const typeRenamed = document.getElementById("reports-type-renamed");
-  
-  if (typeCreated) typeCreated.textContent = createdCount;
-  if (typeModified) typeModified.textContent = modifiedCount;
-  if (typeDeleted) typeDeleted.textContent = deletedCount;
-  if (typeRenamed) typeRenamed.textContent = renamedCount;
-  
-  // Render list
-  const list = document.getElementById("reports-recent-list");
-  const emptyState = document.getElementById("reports-empty-state");
-  
-  if (list) {
-    list.innerHTML = "";
-    if (total === 0) {
-      if (emptyState) {
-        emptyState.style.display = "flex";
-      }
-      list.style.display = "none";
-    } else {
-      if (emptyState) {
-        emptyState.style.display = "none";
-      }
-      list.style.display = "flex";
-      
-      // Sort newest first
-      const sorted = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
-      const subset = sorted.slice(0, 50); // top 50 recent items
-      
-      subset.forEach(item => {
-        let cleanPath = item.path.replace(/\\/g, "/");
-        let name = cleanPath.split("/").pop() || item.path;
-        let timeStr = formatCompactDate(new Date(item.timestamp * 1000));
-        
-        let evIcon = "";
-        let evClass = "created";
-        
-        switch(item.event_type) {
-          case "created":
-            evIcon = `<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/></svg>`;
-            evClass = "created";
-            break;
-          case "modified":
-            evIcon = `<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" fill="currentColor"/></svg>`;
-            evClass = "modified";
-            break;
-          case "deleted":
-            evIcon = `<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z" fill="currentColor"/></svg>`;
-            evClass = "deleted";
-            break;
-          case "renamed":
-            evIcon = `<svg viewBox="0 0 24 24"><path d="M12.89 3L14.85 4.96L11.11 8.7H17V10.3H11.11L14.85 14.04L12.89 16L5.89 9L12.89 3Z" fill="currentColor"/></svg>`;
-            evClass = "renamed";
-            break;
-          default:
-            evIcon = `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="currentColor"/></svg>`;
-            evClass = "modified";
-        }
-        
-        const row = document.createElement("div");
-        row.className = "reports-recent-item";
-        row.innerHTML = `
-          <div class="item-left-group">
-            <span class="type-badge ${evClass}-badge">${evIcon}</span>
-            <div class="item-text">
-              <span class="item-name">${name}</span>
-              <span class="item-path" title="${item.path}">${item.path}</span>
-            </div>
-          </div>
-          <div class="item-right-group">
-            <span class="sync-status-pill ${item.is_synced ? 'synced' : 'pending'}">${item.is_synced ? t('已同步') : t('待同步')}</span>
-            <span class="item-time">${timeStr}</span>
-          </div>
-        `;
-        list.appendChild(row);
-      });
-    }
-  }
-}
-
-// Compact date formatting helper
-function formatCompactDate(date) {
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  if (isToday) {
-    return `${hours}:${minutes}`;
-  } else {
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${month}-${day} ${hours}:${minutes}`;
-  }
-}
-
-// Export files as CSV or JSON in pure browser format
+// Export files as CSV or JSON based on current All Records filter
 function triggerExport(format) {
-  const now = Date.now();
-  const range = state.reportsTimeRange || "7days";
-  let filtered = state.fileEvents || [];
+  let filtered = (state.fileEvents || []).filter(e => e.is_synced);
   
-  if (range === "today") {
-    const startOfToday = new Date().setHours(0, 0, 0, 0);
-    filtered = filtered.filter(e => (e.timestamp * 1000) >= startOfToday);
-  } else if (range === "7days") {
-    const startOf7DaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-    filtered = filtered.filter(e => (e.timestamp * 1000) >= startOf7DaysAgo);
-  } else if (range === "30days") {
-    const startOf30DaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-    filtered = filtered.filter(e => (e.timestamp * 1000) >= startOf30DaysAgo);
+  if (state.allSearchQuery) {
+    filtered = filtered.filter(e => e.path.toLowerCase().includes(state.allSearchQuery));
   }
   
   if (filtered.length === 0) {
-    showGlobalToast(t("当前范围无事件记录，无法导出！"), true);
+    showGlobalToast(t("当前无事件记录，无法导出！"), true);
     return;
   }
   
   if (format === "csv") {
-    let csv = "ID,Path,OldPath,Type,Timestamp,Synced\n";
+    let csv = "ID,Path,OldPath,Type,Timestamp,Synced\\n";
     filtered.forEach(e => {
       let id = e.id || "";
       let path = e.path ? `"${e.path.replace(/"/g, '""')}"` : "";
@@ -1630,7 +1489,8 @@ function triggerExport(format) {
       let type = e.event_type || "";
       let time = new Date(e.timestamp * 1000).toLocaleString();
       let synced = e.is_synced ? "TRUE" : "FALSE";
-      csv += `${id},${path},${oldPath},${type},${time},${synced}\n`;
+      csv += `${id},${path},${oldPath},${type},${time},${synced}
+`;
     });
     
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1658,27 +1518,6 @@ function triggerExport(format) {
   }
 }
 
-// Hook up the segmented control filter and action buttons
-function setupReportsListeners() {
-  state.reportsTimeRange = "7days";
-  
-  const filterRadios = document.querySelectorAll('input[name="reports-time"]');
-  filterRadios.forEach(radio => {
-    radio.addEventListener("change", (e) => {
-      state.reportsTimeRange = e.target.value;
-      loadReportsTab();
-    });
-  });
-  
-  const btnCsv = document.getElementById("reports-export-csv");
-  const btnJson = document.getElementById("reports-export-json");
-  if (btnCsv) {
-    btnCsv.addEventListener("click", () => triggerExport("csv"));
-  }
-  if (btnJson) {
-    btnJson.addEventListener("click", () => triggerExport("json"));
-  }
-}
 
 // Verify authorization state
 async function checkAuthState() {
@@ -1829,6 +1668,10 @@ function showAuthorizedUI(avatar, nickname) {
   
   if (dom.accountAvatar) dom.accountAvatar.src = avatar || defaultAvatar;
   if (dom.accountNickname) dom.accountNickname.textContent = nickname || t("微信用户");
+  if (dom.homeWelcomeText) {
+    dom.homeWelcomeText.textContent = `${nickname || t("微信用户")} ${t("欢迎使用")}`;
+    dom.homeWelcomeText.removeAttribute("data-i18n");
+  }
   updateRailAvatar();
 
   // Settings UI logic
@@ -1859,6 +1702,10 @@ function showUnapprovedUI() {
   state.credentials = null;
   if (dom.accountAuth) dom.accountAuth.classList.add("hidden");
   if (dom.accountUnauth) dom.accountUnauth.classList.remove("hidden");
+  if (dom.homeWelcomeText) {
+    dom.homeWelcomeText.textContent = t("请登录");
+    dom.homeWelcomeText.removeAttribute("data-i18n");
+  }
   updateRailAvatar();
 
   // Settings UI logic
@@ -1997,17 +1844,23 @@ function updateAutoSyncUI() {
   const label = document.getElementById("home-sync-mode-label");
   const desc = document.getElementById("home-sync-mode-desc");
   const modeVal = document.getElementById("home-status-mode");
+  const capsule = document.getElementById("home-sync-mode-capsule");
+  const icon = document.getElementById("home-sync-mode-icon");
   
   if (state.autoSync) {
     if (toggle) toggle.classList.add("active");
     if (label) label.textContent = t("自动同步");
     if (desc) desc.textContent = t("检测到变更时自动同步");
     if (modeVal) modeVal.textContent = t("自动同步");
+    if (capsule) capsule.classList.add("active");
+    if (icon) icon.style.fill = "var(--app-mint)";
   } else {
     if (toggle) toggle.classList.remove("active");
     if (label) label.textContent = t("手动同步");
     if (desc) desc.textContent = t("点击按钮时上传");
     if (modeVal) modeVal.textContent = t("手动同步");
+    if (capsule) capsule.classList.remove("active");
+    if (icon) icon.style.fill = "var(--text-secondary)";
   }
 }
 
@@ -2042,18 +1895,33 @@ function updateHomeStats() {
     dom.homeStatusPaths.textContent = t("{monitored} 个").replace("{monitored}", monitored);
   }
   
-  // Update Welcome Banner message dynamically based on status
-  let homeSyncedBadge = document.getElementById("home-synced-badge");
-  if (dom.homeMessageTitle) {
+  // Update sync status badge dynamically
+  if (dom.homeSyncStatusBadge && dom.homeSyncStatusText) {
+    dom.homeSyncStatusBadge.classList.remove("idle", "synced", "pending");
+    
     if (monitored === 0) {
-      dom.homeMessageTitle.textContent = t("添加一个目录后，文件变动会自动记录并提醒你处理。");
-      if (homeSyncedBadge) homeSyncedBadge.classList.add("hidden");
+      dom.homeSyncStatusBadge.classList.add("idle");
+      dom.homeSyncStatusText.textContent = t("未添加监控");
+      dom.homeSyncStatusText.setAttribute("data-i18n", "未添加监控");
+      if (dom.homeMessageTitle) {
+        dom.homeMessageTitle.textContent = t("添加一个目录后，文件变动会自动记录并提醒你处理。");
+        dom.homeMessageTitle.setAttribute("data-i18n", "添加一个目录后，文件变动会自动记录并提醒你处理。");
+      }
     } else if (pending > 0) {
-      dom.homeMessageTitle.textContent = t("捕获到 {pending} 个新的文件变动，点击右上角进行云端同步。").replace("{pending}", pending);
-      if (homeSyncedBadge) homeSyncedBadge.classList.add("hidden");
+      dom.homeSyncStatusBadge.classList.add("pending");
+      dom.homeSyncStatusText.textContent = t("{pending} 个文件待同步").replace("{pending}", pending);
+      dom.homeSyncStatusText.setAttribute("data-i18n", "{pending} 个文件待同步");
+      if (dom.homeMessageTitle) {
+        dom.homeMessageTitle.textContent = t("捕获到 {pending} 个新的文件变动，点击进行云端同步。").replace("{pending}", pending);
+      }
     } else {
-      dom.homeMessageTitle.textContent = t("所有文件均已同步至云端，运行中。");
-      if (homeSyncedBadge) homeSyncedBadge.classList.remove("hidden");
+      dom.homeSyncStatusBadge.classList.add("synced");
+      dom.homeSyncStatusText.textContent = t("已同步至最新");
+      dom.homeSyncStatusText.setAttribute("data-i18n", "已同步至最新");
+      if (dom.homeMessageTitle) {
+        dom.homeMessageTitle.textContent = t("所有文件均已同步至云端，运行中。");
+        dom.homeMessageTitle.setAttribute("data-i18n", "所有文件均已同步至云端，运行中。");
+      }
     }
   }
 }
@@ -2631,20 +2499,50 @@ function renderPendingTable() {
 function renderAllTable() {
   if (!dom.allEventsTableBody) return;
   
-  let allEvents = state.fileEvents;
+  // Filter purely completed synced historical events
+  let allEvents = state.fileEvents.filter(e => e.is_synced);
   
   // Search filtering
   if (state.allSearchQuery) {
     allEvents = allEvents.filter(e => e.path.toLowerCase().includes(state.allSearchQuery));
   }
   
-  // Segment tab filtering
-  if (state.allFilterType === "synced") {
-    allEvents = allEvents.filter(e => e.is_synced);
-  } else if (state.allFilterType === "pending") {
-    allEvents = allEvents.filter(e => !e.is_synced);
-  }
+
+  // Update Header Stats
+  const statTotal = document.getElementById("all-stat-total");
+  const typeCreated = document.getElementById("all-type-created");
+  const typeModified = document.getElementById("all-type-modified");
+  const typeDeleted = document.getElementById("all-type-deleted");
+  const typeRenamed = document.getElementById("all-type-renamed");
   
+  if (statTotal) {
+    const totalCount = allEvents.length;
+    statTotal.textContent = totalCount;
+    
+    const createdCount = allEvents.filter(e => e.event_type === "created").length;
+    const modifiedCount = allEvents.filter(e => e.event_type === "modified").length;
+    const deletedCount = allEvents.filter(e => e.event_type === "deleted").length;
+    const renamedCount = allEvents.filter(e => e.event_type === "renamed").length;
+    
+    typeCreated.textContent = createdCount;
+    typeModified.textContent = modifiedCount;
+    typeDeleted.textContent = deletedCount;
+    typeRenamed.textContent = renamedCount;
+
+    // Find the most active event type dynamically
+    let maxCount = 0;
+    let mostActiveLabel = "-";
+    if (createdCount > maxCount) { maxCount = createdCount; mostActiveLabel = t("新增"); }
+    if (modifiedCount > maxCount) { maxCount = modifiedCount; mostActiveLabel = t("修改"); }
+    if (deletedCount > maxCount) { maxCount = deletedCount; mostActiveLabel = t("删除"); }
+    if (renamedCount > maxCount) { maxCount = renamedCount; mostActiveLabel = t("重命名"); }
+    
+    const mostActiveEl = document.getElementById("all-history-most-active");
+    if (mostActiveEl) {
+      mostActiveEl.textContent = maxCount > 0 ? `${mostActiveLabel} (${maxCount})` : "-";
+    }
+  }
+
   if (allEvents.length === 0) {
     dom.allEventsTableBody.innerHTML = `
       <div class="list-empty" style="padding: 40px 0;">
