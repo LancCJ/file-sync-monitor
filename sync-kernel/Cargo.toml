@@ -1,6 +1,6 @@
 [package]
 name = "file-sync-monitor"
-version = "1.2.0"
+version = "2.0.0"
 description = "FileSyncMonitor Desktop Application"
 authors = ["chenjian"]
 edition = "2021"
