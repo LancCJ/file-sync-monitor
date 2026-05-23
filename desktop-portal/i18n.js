@@ -386,7 +386,7 @@ export const I18N_DICT = {
   "清新、轻量、面向日常同步工作流。": "Fresh, lightweight, and oriented to daily synchronized workflows.",
   "清空自定义规则，并重新启用默认忽略规则": "Empty custom rule and re-enable default ignore rule",
   "点击按钮时上传": "Upload when button is clicked",
-  "版本 v1.2.0 • 跨平台重构版": "Version v1.2.0 • Cross-platform refactoring",
+  "版本 v2.0.0 • 跨平台重构版": "Version v2.0.0 • Cross-platform refactoring",
   "状态": "Status",
   "理解每种文件操作会如何进入待同步列表、自动同步和历史记录。": "Understand how each file action goes into the pending sync list, auto sync, and history.",
   "生成一条待同步记录；手动模式等待点击同步，自动模式在文件稳定 2 秒后上传。": "Generate a record to be synchronized; wait for the manual mode to click Synchronize, and upload the automatic mode after the file is stable for 2 seconds.",
