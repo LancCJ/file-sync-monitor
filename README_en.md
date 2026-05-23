@@ -10,27 +10,31 @@ It monitors configured directories for create, modify, delete, and rename events
 
 ### Dashboard And Sync
 
+| Initialization | WeChat Login |
+| --- | --- |
+| ![Initialization](docs/screenshot/初始化界面.png) | ![WeChat Login](docs/screenshot/微信扫码.png) |
+
 | Home | Pending Sync |
 | --- | --- |
-| ![Home](docs/screenshot/首页.png) | ![Pending Sync](docs/screenshot/待同步.png) |
+| ![Home](docs/screenshot/首页.png) | ![Pending Sync](docs/screenshot/待同步界面.png) |
 
 ### Records And Reports
 
-| All Records | Reports |
+| All Records | Dark Mode |
 | --- | --- |
-| ![All Records](docs/screenshot/全部记录.png) | ![Reports](docs/screenshot/报告.png) |
+| ![All Records](docs/screenshot/同步历史界面.png) | ![Dark Mode](docs/screenshot/深色风格.png) |
 
 ### Settings And Sync Rules
 
-| Settings | Rules And Cloud |
+| Settings | Directory Binding |
 | --- | --- |
-| ![Settings](docs/screenshot/设置.png) | ![Rules And Cloud](docs/screenshot/设置2.png) |
+| ![Settings](docs/screenshot/设置界面.png) | ![Directory Binding](docs/screenshot/配置监听目录.png) |
 
 ### Onboarding And Help
 
-| Help & About | Onboarding 1 | Onboarding 2 |
+| Help & About | Onboarding Guide | Feature Guide |
 | --- | --- | --- |
-| ![Help & About](docs/screenshot/帮助与关于.png) | ![Onboarding 1](docs/screenshot/引导1.png) | ![Onboarding 2](docs/screenshot/引导2.png) |
+| ![Help & About](docs/screenshot/帮助与关于.png) | ![Onboarding Guide](docs/screenshot/新手指引.png) | ![Feature Guide](docs/screenshot/功能指南.png) |
 
 ## Features
 
