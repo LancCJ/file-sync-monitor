@@ -89,6 +89,7 @@ function switchLanguage(newLang) {
   }
 
   applyTranslations();
+  document.querySelectorAll("select.app-dropdown[data-enhanced-dropdown='true']").forEach(refreshCustomDropdown);
 
   if (typeof renderMonitoredDirectories === "function") renderMonitoredDirectories();
   if (typeof renderEvents === "function") renderEvents();
@@ -107,6 +108,7 @@ function switchLanguage(newLang) {
 // Application State Cache
 let state = {
   monitoredPaths: [],
+  disabledMonitoredPaths: [],
   fileEvents: [],
   filterType: "all", // "all" | "pending" (Old sidebar state, kept for compatibility)
   searchQuery: "",
@@ -131,11 +133,16 @@ let state = {
   pendingViewMode: "list", // "list" | "tree"
   pendingFilterType: "all", // "all" | "created" | "modified" | "deleted" | "renamed"
   selectedPendingEventId: null,
-  selectedPendingNode: null
+  selectedPendingNode: null,
+  isMarkingAllPending: false,
+  syncButtonHtmls: null
 };
 
 // Default gender-neutral SVG avatar data URI (Cute Panda Theme)
 const defaultAvatar = "data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='6' cy='6' r='3.5' fill='%23334155'/%3E%3Ccircle cx='18' cy='6' r='3.5' fill='%23334155'/%3E%3Ccircle cx='12' cy='12' r='9' fill='%23f8fafc' stroke='%23334155' stroke-width='1.5'/%3E%3Cellipse cx='8.5' cy='11.5' rx='2' ry='2.8' transform='rotate(-15 8.5 11.5)' fill='%23334155'/%3E%3Cellipse cx='15.5' cy='11.5' rx='2' ry='2.8' transform='rotate(15 15.5 11.5)' fill='%23334155'/%3E%3Ccircle cx='8.5' cy='11' r='0.8' fill='%23ffffff'/%3E%3Ccircle cx='15.5' cy='11' r='0.8' fill='%23ffffff'/%3E%3Cpolygon points='12,14 10.5,12.5 13.5,12.5' fill='%23334155'/%3E%3Cpath d='M10.5,15.5 C11,16.2 13,16.2 13.5,15.5' fill='none' stroke='%23334155' stroke-width='1' stroke-linecap='round'/%3E%3C/svg%3E";
+const defaultIgnoredFileNames = ".DS_Store, Icon, .localized, Thumbs.db, desktop.ini";
+const defaultIgnoredExtensions = "tmp, log, asd, part";
+const defaultIgnoredDirectoryNames = ".git, node_modules, dist";
 
 function ensureHttps(url) {
   if (url && typeof url === "string") {
@@ -165,6 +172,9 @@ function isDefaultAvatar(url) {
 
 // DOM References
 let dom = {};
+let themedPageScrollbar = null;
+let logModalScrollbar = null;
+let dropdownCloseHandlerInstalled = false;
 
 // Onboarding steps config
 const tourSteps = [
@@ -185,7 +195,7 @@ const tourSteps = [
   {
     targetId: "home-sync-mode-container",
     title: "选择手动或自动同步",
-    text: "默认是手动同步。开启自动同步后，文件稳定 30 秒会自动上传到 IMA，适合持续写作或频繁保存的目录。",
+    text: "默认是手动同步。开启自动同步后，文件稳定 2 秒会自动上传到 IMA，适合持续写作或频繁保存的目录。",
     direction: "right",
     icon: `<svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor;"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6z"/></svg>`
   },
@@ -225,6 +235,9 @@ window.addEventListener("DOMContentLoaded", () => {
   setupTabListeners();
   setupFilterListeners();
   setupActionListeners();
+  setupThemedPageScrollbar();
+  setupLogModalScrollbar();
+  enhanceAppDropdowns();
   
   // Premium SwiftUI Features listeners setup
   setupWelcomeBannerListeners();
@@ -242,6 +255,8 @@ window.addEventListener("DOMContentLoaded", () => {
     if (state.tourActive) {
       updateTourPosition();
     }
+    updateThemedPageScrollbar();
+    document.querySelectorAll(".app-select-shell.open").forEach(positionCustomDropdown);
   });
 
   // Initial Bootup Sequence
@@ -303,6 +318,7 @@ function cacheDOMElements() {
   dom.saveSettingsBtn = document.getElementById("btn-save-settings");
   
   // Input fields
+  dom.ignoreFiles = document.getElementById("setting-ignore-filenames");
   dom.ignoreExts = document.getElementById("setting-ignore-exts");
   dom.ignoreDirs = document.getElementById("setting-ignore-dirs");
   
@@ -343,6 +359,7 @@ function cacheDOMElements() {
   dom.syncBanner = document.getElementById("sync-progress-banner");
   dom.syncBannerTitle = document.getElementById("sync-banner-title");
   dom.syncBannerStatus = document.getElementById("sync-banner-status");
+  dom.syncBannerCount = document.getElementById("sync-banner-count");
   dom.syncBannerFill = document.getElementById("sync-banner-progress-fill");
 
   // Home elements
@@ -411,6 +428,384 @@ function setupTabListeners() {
   });
 }
 
+function setupThemedPageScrollbar() {
+  const host = document.querySelector(".app-main-content");
+  if (!host || themedPageScrollbar) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "page-scrollbar-overlay";
+  overlay.innerHTML = `<div class="page-scrollbar-thumb"></div>`;
+  host.appendChild(overlay);
+
+  themedPageScrollbar = {
+    host,
+    overlay,
+    thumb: overlay.querySelector(".page-scrollbar-thumb"),
+    panes: [
+      document.getElementById("tab-pane-help"),
+      document.getElementById("tab-pane-settings")
+    ].filter(Boolean)
+  };
+
+  themedPageScrollbar.panes.forEach((pane) => {
+    pane.addEventListener("scroll", updateThemedPageScrollbar, { passive: true });
+
+    if (window.ResizeObserver) {
+      const resizeObserver = new ResizeObserver(updateThemedPageScrollbar);
+      resizeObserver.observe(pane);
+    }
+
+    if (window.MutationObserver) {
+      const mutationObserver = new MutationObserver(() => {
+        requestAnimationFrame(updateThemedPageScrollbar);
+      });
+      mutationObserver.observe(pane, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        attributeFilter: ["class", "style"]
+      });
+    }
+  });
+
+  requestAnimationFrame(updateThemedPageScrollbar);
+}
+
+function getActiveThemedScrollPane() {
+  if (!themedPageScrollbar) return null;
+  return themedPageScrollbar.panes.find((pane) => pane.classList.contains("active")) || null;
+}
+
+function updateThemedPageScrollbar() {
+  if (!themedPageScrollbar) return;
+
+  const pane = getActiveThemedScrollPane();
+  const { host, overlay, thumb } = themedPageScrollbar;
+  if (!pane || pane.scrollHeight <= pane.clientHeight + 1) {
+    overlay.classList.remove("visible");
+    return;
+  }
+
+  const hostRect = host.getBoundingClientRect();
+  const paneRect = pane.getBoundingClientRect();
+  const topOffset = Math.max(8, paneRect.top - hostRect.top + 8);
+  const bottomOffset = Math.max(8, hostRect.bottom - paneRect.bottom + 8);
+
+  overlay.style.top = `${topOffset}px`;
+  overlay.style.bottom = `${bottomOffset}px`;
+  overlay.classList.add("visible");
+
+  const trackHeight = overlay.clientHeight;
+  const thumbHeight = Math.max(44, (pane.clientHeight / pane.scrollHeight) * trackHeight);
+  const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+  const maxScroll = Math.max(1, pane.scrollHeight - pane.clientHeight);
+  const thumbTop = (pane.scrollTop / maxScroll) * maxThumbTop;
+
+  thumb.style.height = `${thumbHeight}px`;
+  thumb.style.transform = `translateY(${thumbTop}px)`;
+}
+
+function enhanceAppDropdowns(root = document) {
+  root.querySelectorAll("select.app-dropdown").forEach((select) => {
+    if (select.dataset.enhancedDropdown === "true") {
+      refreshCustomDropdown(select);
+      return;
+    }
+
+    const shell = document.createElement("div");
+    shell.className = "app-select-shell";
+    shell.style.width = select.style.width || "";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "app-select-button";
+    button.innerHTML = `
+      <span class="app-select-value"></span>
+      <svg class="app-select-chevron" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 10l5 5 5-5z" fill="currentColor"></path>
+      </svg>
+    `;
+
+    const menu = document.createElement("div");
+    menu.className = "app-select-menu";
+
+    select.parentNode.insertBefore(shell, select);
+    shell.appendChild(select);
+    shell.appendChild(button);
+    shell.appendChild(menu);
+
+    select.dataset.enhancedDropdown = "true";
+    select.tabIndex = -1;
+
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeCustomDropdowns(shell);
+      shell.classList.toggle("open");
+      refreshCustomDropdown(select);
+      positionCustomDropdown(shell);
+    });
+
+    select.addEventListener("change", () => {
+      refreshCustomDropdown(select);
+      closeCustomDropdowns();
+    });
+
+    refreshCustomDropdown(select);
+  });
+
+  if (!dropdownCloseHandlerInstalled) {
+    document.addEventListener("click", () => closeCustomDropdowns());
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeCustomDropdowns();
+    });
+    dropdownCloseHandlerInstalled = true;
+  }
+}
+
+function refreshCustomDropdown(select) {
+  const shell = select.closest(".app-select-shell");
+  if (!shell) return;
+
+  const valueEl = shell.querySelector(".app-select-value");
+  const menu = shell.querySelector(".app-select-menu");
+  const button = shell.querySelector(".app-select-button");
+  const selectedOption = select.options[select.selectedIndex] || select.options[0];
+
+  valueEl.textContent = selectedOption ? selectedOption.textContent : "";
+  button.disabled = select.disabled;
+  menu.innerHTML = `
+    <div class="app-select-options"></div>
+    <div class="app-select-scrollbar">
+      <div class="app-select-scrollbar-thumb"></div>
+    </div>
+  `;
+
+  const optionsList = menu.querySelector(".app-select-options");
+  optionsList.addEventListener("scroll", () => updateCustomDropdownScrollbar(shell), { passive: true });
+  optionsList.addEventListener("wheel", (event) => {
+    const canScroll = optionsList.scrollHeight > optionsList.clientHeight + 1;
+    if (!canScroll) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const atTop = optionsList.scrollTop <= 0;
+    const atBottom = optionsList.scrollTop + optionsList.clientHeight >= optionsList.scrollHeight - 1;
+    const scrollingUp = event.deltaY < 0;
+    const scrollingDown = event.deltaY > 0;
+
+    if ((scrollingUp && atTop) || (scrollingDown && atBottom)) {
+      event.preventDefault();
+    }
+    event.stopPropagation();
+  }, { passive: false });
+
+  Array.from(select.options).forEach((option) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "app-select-option";
+    item.textContent = option.textContent;
+    item.disabled = option.disabled;
+    item.dataset.value = option.value;
+
+    if (option.selected) item.classList.add("selected");
+    if (option.disabled) item.classList.add("disabled");
+
+    item.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (option.disabled) return;
+
+      select.value = option.value;
+      option.selected = true;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      refreshCustomDropdown(select);
+      closeCustomDropdowns();
+    });
+
+    optionsList.appendChild(item);
+  });
+
+  requestAnimationFrame(() => updateCustomDropdownScrollbar(shell));
+}
+
+function positionCustomDropdown(shell) {
+  if (!shell || !shell.classList.contains("open")) return;
+
+  const menu = shell.querySelector(".app-select-menu");
+  const optionsList = shell.querySelector(".app-select-options");
+  if (!menu) return;
+
+  shell.classList.remove("drop-up");
+  const shellRect = shell.getBoundingClientRect();
+  const menuHeight = Math.min((optionsList?.scrollHeight || menu.scrollHeight || 0) + 12, 260);
+  const spaceBelow = window.innerHeight - shellRect.bottom;
+  const spaceAbove = shellRect.top;
+
+  if (spaceBelow < menuHeight + 18 && spaceAbove > spaceBelow) {
+    shell.classList.add("drop-up");
+  }
+}
+
+function updateCustomDropdownScrollbar(shell) {
+  const optionsList = shell?.querySelector(".app-select-options");
+  const scrollbar = shell?.querySelector(".app-select-scrollbar");
+  const thumb = shell?.querySelector(".app-select-scrollbar-thumb");
+  if (!optionsList || !scrollbar || !thumb) return;
+
+  if (optionsList.scrollHeight <= optionsList.clientHeight + 1) {
+    scrollbar.classList.remove("visible");
+    return;
+  }
+
+  scrollbar.classList.add("visible");
+  const trackHeight = scrollbar.clientHeight;
+  const thumbHeight = Math.max(32, (optionsList.clientHeight / optionsList.scrollHeight) * trackHeight);
+  const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+  const maxScroll = Math.max(1, optionsList.scrollHeight - optionsList.clientHeight);
+  const thumbTop = (optionsList.scrollTop / maxScroll) * maxThumbTop;
+
+  thumb.style.height = `${thumbHeight}px`;
+  thumb.style.transform = `translateY(${thumbTop}px)`;
+}
+
+function closeCustomDropdowns(exceptShell = null) {
+  document.querySelectorAll(".app-select-shell.open").forEach((shell) => {
+    if (shell !== exceptShell) {
+      shell.classList.remove("open", "drop-up");
+    }
+  });
+}
+
+function containWheelScroll(scrollEl) {
+  if (!scrollEl || scrollEl.dataset.wheelContained === "true") return;
+
+  scrollEl.addEventListener("wheel", (event) => {
+    const canScroll = scrollEl.scrollHeight > scrollEl.clientHeight + 1;
+    if (!canScroll) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    const atTop = scrollEl.scrollTop <= 0;
+    const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 1;
+    const scrollingUp = event.deltaY < 0;
+    const scrollingDown = event.deltaY > 0;
+
+    if ((scrollingUp && atTop) || (scrollingDown && atBottom)) {
+      event.preventDefault();
+    }
+    event.stopPropagation();
+  }, { passive: false });
+
+  scrollEl.dataset.wheelContained = "true";
+}
+
+function setupLogModalScrollbar() {
+  if (!dom.httpLogsList || logModalScrollbar) return;
+
+  const card = dom.httpLogsList.closest(".custom-log-card");
+  if (!card) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "log-scrollbar-overlay";
+  overlay.innerHTML = `<div class="log-scrollbar-thumb"></div>`;
+  card.appendChild(overlay);
+
+  logModalScrollbar = {
+    card,
+    body: dom.httpLogsList,
+    overlay,
+    thumb: overlay.querySelector(".log-scrollbar-thumb")
+  };
+
+  containWheelScroll(dom.httpLogsList);
+  dom.httpLogsList.addEventListener("scroll", updateLogModalScrollbar, { passive: true });
+
+  if (window.ResizeObserver) {
+    const resizeObserver = new ResizeObserver(updateLogModalScrollbar);
+    resizeObserver.observe(card);
+    resizeObserver.observe(dom.httpLogsList);
+  }
+
+  if (window.MutationObserver) {
+    const mutationObserver = new MutationObserver(() => {
+      requestAnimationFrame(updateLogModalScrollbar);
+    });
+    mutationObserver.observe(dom.httpLogsList, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+      attributeFilter: ["class", "style"]
+    });
+  }
+
+  requestAnimationFrame(updateLogModalScrollbar);
+}
+
+function updateLogModalScrollbar() {
+  if (!logModalScrollbar) return;
+
+  const { card, body, overlay, thumb } = logModalScrollbar;
+  if (!body || body.scrollHeight <= body.clientHeight + 1) {
+    overlay.classList.remove("visible");
+    return;
+  }
+
+  const cardRect = card.getBoundingClientRect();
+  const bodyRect = body.getBoundingClientRect();
+  overlay.style.top = `${Math.max(0, bodyRect.top - cardRect.top + 2)}px`;
+  overlay.style.bottom = `${Math.max(0, cardRect.bottom - bodyRect.bottom + 2)}px`;
+  overlay.classList.add("visible");
+
+  const trackHeight = overlay.clientHeight;
+  const thumbHeight = Math.max(38, (body.clientHeight / body.scrollHeight) * trackHeight);
+  const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+  const maxScroll = Math.max(1, body.scrollHeight - body.clientHeight);
+  const thumbTop = (body.scrollTop / maxScroll) * maxThumbTop;
+
+  thumb.style.height = `${thumbHeight}px`;
+  thumb.style.transform = `translateY(${thumbTop}px)`;
+}
+
+function updateLogSectionScrollbar(pre) {
+  const wrapper = pre?.closest(".log-section-pre-wrapper");
+  const scrollbar = wrapper?.querySelector(".log-section-scrollbar");
+  const thumb = wrapper?.querySelector(".log-section-scrollbar-thumb");
+  if (!pre || !scrollbar || !thumb) return;
+
+  if (pre.scrollHeight <= pre.clientHeight + 1) {
+    scrollbar.classList.remove("visible");
+    return;
+  }
+
+  scrollbar.classList.add("visible");
+  const trackHeight = scrollbar.clientHeight;
+  const thumbHeight = Math.max(26, (pre.clientHeight / pre.scrollHeight) * trackHeight);
+  const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+  const maxScroll = Math.max(1, pre.scrollHeight - pre.clientHeight);
+  const thumbTop = (pre.scrollTop / maxScroll) * maxThumbTop;
+
+  thumb.style.height = `${thumbHeight}px`;
+  thumb.style.transform = `translateY(${thumbTop}px)`;
+}
+
+function setupLogSectionScrollbar(pre) {
+  if (!pre || pre.dataset.sectionScrollbarReady === "true") return;
+
+  containWheelScroll(pre);
+  pre.addEventListener("scroll", () => updateLogSectionScrollbar(pre), { passive: true });
+  pre.dataset.sectionScrollbarReady = "true";
+
+  if (window.ResizeObserver) {
+    const resizeObserver = new ResizeObserver(() => updateLogSectionScrollbar(pre));
+    resizeObserver.observe(pre);
+  }
+
+  requestAnimationFrame(() => updateLogSectionScrollbar(pre));
+}
+
 function switchTab(tabName) {
   state.activeTab = tabName;
   
@@ -437,7 +832,7 @@ function switchTab(tabName) {
   }
   
   // Reload corresponding tab data
-   else if (tabName === "pending" || tabName === "all") {
+  if (tabName === "pending" || tabName === "all") {
     renderLargeTables();
   } else if (tabName === "settings") {
     // Lazy-load settings data on-demand
@@ -448,6 +843,9 @@ function switchTab(tabName) {
       }
     }).catch(console.error);
   }
+
+  requestAnimationFrame(updateThemedPageScrollbar);
+  setTimeout(updateThemedPageScrollbar, 120);
 }
 
 // Setup Event List filter listeners
@@ -508,6 +906,15 @@ function setupActionListeners() {
   
   // Sync
   if (dom.syncBtn) dom.syncBtn.addEventListener("click", syncAll);
+
+  document.addEventListener("click", (event) => {
+    const markAllBtn = event.target.closest("#btn-mark-all-synced");
+    if (!markAllBtn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    markAllPendingAsSynced(markAllBtn);
+  }, true);
   
   // Custom Modals trigger overlays
   if (dom.btnTriggerClear) {
@@ -691,11 +1098,14 @@ async function initializeApplication() {
       await invoke("set_config_value", { key: "enableDefaultIgnoreRules", value: "true" });
     }
     
+    let customFilesVal = await invoke("get_config_value", { key: "customIgnoredFileNames" });
+    if (dom.ignoreFiles) dom.ignoreFiles.value = customFilesVal || defaultIgnoredFileNames;
+
     let customExtsVal = await invoke("get_config_value", { key: "customIgnoredExtensions" });
-    if (dom.ignoreExts) dom.ignoreExts.value = customExtsVal || "tmp, log, asd, part";
+    if (dom.ignoreExts) dom.ignoreExts.value = customExtsVal || defaultIgnoredExtensions;
     
     let customDirsVal = await invoke("get_config_value", { key: "customIgnoredDirectoryNames" });
-    if (dom.ignoreDirs) dom.ignoreDirs.value = customDirsVal || ".git, node_modules, dist";
+    if (dom.ignoreDirs) dom.ignoreDirs.value = customDirsVal || defaultIgnoredDirectoryNames;
 
     // Load autoSync setting
     let autoSyncVal = await invoke("get_config_value", { key: "autoSync" });
@@ -705,7 +1115,7 @@ async function initializeApplication() {
     // 2. Fetch monitored directories
     let dirsVal = await invoke("get_config_value", { key: "monitoredDirectories" });
     if (dirsVal) {
-      state.monitoredPaths = JSON.parse(dirsVal);
+      state.monitoredPaths = normalizePathArray(dirsVal);
       // Synchronize bindings from SQLite DB to localStorage
       for (const path of state.monitoredPaths) {
         try {
@@ -725,11 +1135,16 @@ async function initializeApplication() {
     } else {
       state.monitoredPaths = [];
     }
+
+    let disabledDirsVal = await invoke("get_config_value", { key: "disabledMonitoredDirectories" });
+    state.disabledMonitoredPaths = normalizePathArray(disabledDirsVal)
+      .filter(path => state.monitoredPaths.includes(path));
     renderMonitoredDirectories();
     
     // 3. Start file monitor background process
-    if (state.monitoredPaths.length > 0) {
-      await invoke("start_file_monitor", { paths: state.monitoredPaths });
+    const activeMonitoredPaths = getActiveMonitoredPaths();
+    if (activeMonitoredPaths.length > 0) {
+      await invoke("start_file_monitor", { paths: activeMonitoredPaths });
     }
     
     // 4. Load events and render
@@ -755,26 +1170,15 @@ async function initializeApplication() {
 
     listen("sync-progress", (event) => {
       const { step, title, status, progress } = event.payload;
-      if (dom.syncBanner) {
-        dom.syncBanner.classList.remove("hidden");
-      }
-      if (dom.syncBannerTitle) dom.syncBannerTitle.textContent = title;
-      if (dom.syncBannerStatus) dom.syncBannerStatus.textContent = status;
-      if (dom.syncBannerFill) dom.syncBannerFill.style.width = `${progress}%`;
+      updateSyncProgressUI({ title, status, progress });
       
       if (step === "complete") {
         fetchEvents();
         setTimeout(() => {
           if (dom.syncBanner) dom.syncBanner.classList.add("hidden");
           state.isSyncing = false;
-          
+          setPendingSyncButtonsLoading(false);
           if (dom.syncBtn) dom.syncBtn.disabled = false;
-          const btnPush = document.getElementById("btn-sync-all-pending-push");
-          const btnPull = document.getElementById("btn-sync-all-pending-pull");
-          const btnMark = document.getElementById("btn-mark-all-synced");
-          if (btnPush) btnPush.disabled = false;
-          if (btnPull) btnPull.disabled = false;
-          if (btnMark) btnMark.disabled = false;
           
           let toastMsg = "同步完成！所有文件已双向同步。";
           if (state.currentSyncDirection === "push") {
@@ -790,14 +1194,8 @@ async function initializeApplication() {
         setTimeout(() => {
           if (dom.syncBanner) dom.syncBanner.classList.add("hidden");
           state.isSyncing = false;
-          
+          setPendingSyncButtonsLoading(false);
           if (dom.syncBtn) dom.syncBtn.disabled = false;
-          const btnPush = document.getElementById("btn-sync-all-pending-push");
-          const btnPull = document.getElementById("btn-sync-all-pending-pull");
-          const btnMark = document.getElementById("btn-mark-all-synced");
-          if (btnPush) btnPush.disabled = false;
-          if (btnPull) btnPull.disabled = false;
-          if (btnMark) btnMark.disabled = false;
           
           state.currentSyncDirection = null;
           showGlobalToast("同步失败: " + status, true);
@@ -831,13 +1229,85 @@ async function fetchEvents() {
   try {
     let events = await invoke("get_file_events", { pendingOnly: false });
     state.fileEvents = events || [];
+    reconcilePendingSelection();
     renderEvents();
     renderHomeRecentEvents();
     renderLargeTables();
     updateHomeStats();
+    updatePendingDetailPanel();
     
   } catch (e) {
     console.error("Error fetching events:", e);
+  }
+}
+
+function normalizePathForCompare(path = "") {
+  return String(path).replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function clearPendingSelection() {
+  state.selectedPendingEventId = null;
+  state.selectedPendingNode = null;
+}
+
+function reconcilePendingSelection() {
+  if (!state.selectedPendingNode && !state.selectedPendingEventId) return;
+
+  const pendingEvents = (state.fileEvents || []).filter(e => !e.is_synced);
+  if (pendingEvents.length === 0) {
+    clearPendingSelection();
+    return;
+  }
+
+  const node = state.selectedPendingNode;
+  if (node?.type === "directory") {
+    const selectedPath = normalizePathForCompare(node.path);
+    const stillHasPendingChildren = pendingEvents.some(event => {
+      const eventPath = normalizePathForCompare(event.path);
+      return eventPath === selectedPath || eventPath.startsWith(`${selectedPath}/`);
+    });
+    if (!stillHasPendingChildren) clearPendingSelection();
+    return;
+  }
+
+  const selectedId = node?.event?.id || state.selectedPendingEventId;
+  if (selectedId && !pendingEvents.some(event => event.id === selectedId)) {
+    clearPendingSelection();
+  }
+}
+
+function normalizePathArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch (_) {
+    return String(value).split(",").map(s => s.trim()).filter(Boolean);
+  }
+}
+
+function isDirectoryMonitoringEnabled(path) {
+  return !state.disabledMonitoredPaths.includes(path);
+}
+
+function getActiveMonitoredPaths() {
+  return state.monitoredPaths.filter(isDirectoryMonitoringEnabled);
+}
+
+async function saveDisabledMonitoredPaths() {
+  state.disabledMonitoredPaths = state.disabledMonitoredPaths.filter(path => state.monitoredPaths.includes(path));
+  await invoke("set_config_value", {
+    key: "disabledMonitoredDirectories",
+    value: JSON.stringify(state.disabledMonitoredPaths)
+  });
+}
+
+async function restartActiveFileMonitor() {
+  await invoke("stop_file_monitor");
+  const activePaths = getActiveMonitoredPaths();
+  if (activePaths.length > 0) {
+    await invoke("start_file_monitor", { paths: activePaths });
   }
 }
 
@@ -875,11 +1345,11 @@ function renderMonitoredDirectories() {
     dom.dirGridContainer.innerHTML = `
       <div class="settings-row" id="settings-dirs-empty">
         <div class="settings-row-text">
-          <span class="settings-row-title">监控文件夹</span>
-          <span class="settings-row-subtitle">尚未添加目录</span>
+          <span class="settings-row-title">${t("监控文件夹")}</span>
+          <span class="settings-row-subtitle">${t("尚未添加目录")}</span>
         </div>
         <button class="pill-btn primary" id="btn-settings-add-dir" style="padding: 6px 14px; min-width: 0; min-height: 0; height: auto;">
-          <span>添加</span>
+          <span>${t("添加")}</span>
         </button>
       </div>
     `;
@@ -900,9 +1370,10 @@ function renderMonitoredDirectories() {
   state.monitoredPaths.forEach(path => {
     let cleanPath = path.replace(/\\/g, "/");
     let name = cleanPath.split("/").pop() || path;
+    const monitoringEnabled = isDirectoryMonitoringEnabled(path);
     
     // Check if we have knowledgebases cached
-    let kbOptions = `<option value="default">默认 (新建笔记)</option>`;
+    let kbOptions = `<option value="default">${t("默认 (新建笔记)")}</option>`;
     if (state.availableKnowledgeBases && state.availableKnowledgeBases.length > 0) {
         state.availableKnowledgeBases.forEach(kb => {
             let finalKbId = kb.id || kb.knowledgeBaseId || kb.kb_id;
@@ -910,11 +1381,11 @@ function renderMonitoredDirectories() {
         });
     } else {
         if (state.kbLoadError) {
-            kbOptions += `<option value="error" disabled selected>❌ 加载失败: ${state.kbLoadError}</option>`;
+            kbOptions += `<option value="error" disabled selected>${t("加载失败：")}${state.kbLoadError}</option>`;
         } else if (state.credentials) {
-            kbOptions += `<option value="loading" disabled selected>🔄 云端知识库加载中...</option>`;
+            kbOptions += `<option value="loading" disabled selected>${t("云端知识库加载中...")}</option>`;
         } else {
-            kbOptions += `<option value="unauth" disabled selected>🔑 请先登录腾讯 IMA 账号</option>`;
+            kbOptions += `<option value="unauth" disabled selected>${t("请先登录腾讯 IMA 账号")}</option>`;
         }
     }
 
@@ -922,23 +1393,27 @@ function renderMonitoredDirectories() {
     kbOptions = kbOptions.replace(`value="${currentKbId}"`, `value="${currentKbId}" selected`);
 
     let rowHtml = `
-      <div class="monitored-dir-row">
+      <div class="monitored-dir-row ${monitoringEnabled ? "" : "monitoring-disabled"}">
         <div class="settings-row" style="border-bottom: none; min-height: 48px;">
           <div class="settings-row-text">
             <span class="settings-row-title">${name}</span>
             <span class="settings-row-subtitle">${path}</span>
           </div>
-          <button class="quiet-btn red dir-remove-btn" data-path="${path}" title="移除目录">
+          <div class="dir-monitor-toggle-wrap" title="${monitoringEnabled ? t("监听已开启") : t("监听已关闭")}">
+            <span class="dir-monitor-status ${monitoringEnabled ? "active" : "paused"}">${monitoringEnabled ? t("监听中") : t("已暂停")}</span>
+            <input type="checkbox" class="app-toggle dir-monitor-toggle" data-path="${path}" ${monitoringEnabled ? "checked" : ""} aria-label="${t("开启或关闭目录监听")}">
+          </div>
+          <button class="quiet-btn red dir-remove-btn" data-path="${path}" title="${t("移除目录")}">
             <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor; pointer-events: none;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4 11H8v-2h8v2z"/></svg>
           </button>
         </div>
         <div class="monitored-dir-kb-binder">
-          <span style="font-size: 11px; color: var(--text-muted);">同步至知识库</span>
+          <span style="font-size: 11px; color: var(--text-muted);">${t("同步至知识库")}</span>
           <div style="display: flex; align-items: center; gap: 4px;">
             <select class="app-dropdown kb-selector" data-path="${path}" style="width: 180px;">
               ${kbOptions}
             </select>
-            <button class="quiet-btn kb-refresh-btn" title="刷新云端知识库列表">
+            <button class="quiet-btn kb-refresh-btn" title="${t("刷新云端知识库列表")}">
               <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor; pointer-events: none;"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
             </button>
           </div>
@@ -954,6 +1429,10 @@ function renderMonitoredDirectories() {
       removeFolder(path);
     });
 
+    card.querySelector(".dir-monitor-toggle").addEventListener("change", async (e) => {
+      await toggleDirectoryMonitoring(path, e.target.checked, card);
+    });
+
     card.querySelector(".kb-selector").addEventListener("change", (e) => {
       let newKbId = e.target.value;
       localStorage.setItem(`kb_binding_${path}`, newKbId);
@@ -964,9 +1443,9 @@ function renderMonitoredDirectories() {
     card.querySelector(".kb-refresh-btn").addEventListener("click", async () => {
       try {
         await loadAvailableKnowledgeBases();
-        showGlobalToast("知识库列表已刷新");
+        showGlobalToast(t("知识库列表已刷新"));
       } catch(e) {
-        showGlobalToast("刷新失败", true);
+        showGlobalToast(t("刷新失败"), true);
       }
     });
     
@@ -977,10 +1456,10 @@ function renderMonitoredDirectories() {
   let addMoreHtml = `
     <div class="settings-row">
       <div class="settings-row-text">
-        <span class="settings-row-title">添加更多目录</span>
-        <span class="settings-row-subtitle">继续监控其他文件夹</span>
+        <span class="settings-row-title">${t("添加更多目录")}</span>
+        <span class="settings-row-subtitle">${t("继续监控其他文件夹")}</span>
       </div>
-      <button class="quiet-btn" id="btn-settings-add-more">添加</button>
+      <button class="quiet-btn" id="btn-settings-add-more">${t("添加")}</button>
     </div>
   `;
   let addWrapper = document.createElement("div");
@@ -991,7 +1470,33 @@ function renderMonitoredDirectories() {
     addFolder();
   });
   
+  enhanceAppDropdowns(dom.dirGridContainer);
   updateHomeStats();
+}
+
+async function toggleDirectoryMonitoring(path, enabled, card = null) {
+  const toggle = card?.querySelector(".dir-monitor-toggle");
+  if (toggle) toggle.disabled = true;
+
+  try {
+    if (enabled) {
+      state.disabledMonitoredPaths = state.disabledMonitoredPaths.filter(p => p !== path);
+    } else if (!state.disabledMonitoredPaths.includes(path)) {
+      state.disabledMonitoredPaths.push(path);
+    }
+
+    await saveDisabledMonitoredPaths();
+    await restartActiveFileMonitor();
+    renderMonitoredDirectories();
+    updateHomeStats();
+    showGlobalToast(enabled ? t("目录监听已开启") : t("目录监听已暂停"));
+  } catch (err) {
+    if (toggle) {
+      toggle.checked = !enabled;
+      toggle.disabled = false;
+    }
+    showGlobalToast(t("切换目录监听失败: ") + err, true);
+  }
 }
 
 // Add monitored folder
@@ -1005,13 +1510,13 @@ async function addFolder() {
       }
       
       state.monitoredPaths.push(result);
+      state.disabledMonitoredPaths = state.disabledMonitoredPaths.filter(p => p !== result);
       // Save back to db
       await invoke("set_config_value", { key: "monitoredDirectories", value: JSON.stringify(state.monitoredPaths) });
+      await saveDisabledMonitoredPaths();
       renderMonitoredDirectories();
       
-      // Stop and restart monitor process
-      await invoke("stop_file_monitor");
-      await invoke("start_file_monitor", { paths: state.monitoredPaths });
+      await restartActiveFileMonitor();
       
       showGlobalToast("成功开启文件夹同步监控：" + result.split("/").pop());
       await fetchEvents();
@@ -1025,14 +1530,12 @@ async function addFolder() {
 async function removeFolder(path) {
   try {
     state.monitoredPaths = state.monitoredPaths.filter(p => p !== path);
+    state.disabledMonitoredPaths = state.disabledMonitoredPaths.filter(p => p !== path);
     await invoke("set_config_value", { key: "monitoredDirectories", value: JSON.stringify(state.monitoredPaths) });
+    await saveDisabledMonitoredPaths();
     renderMonitoredDirectories();
     
-    // Stop and restart
-    await invoke("stop_file_monitor");
-    if (state.monitoredPaths.length > 0) {
-      await invoke("start_file_monitor", { paths: state.monitoredPaths });
-    }
+    await restartActiveFileMonitor();
     showGlobalToast("已移除该文件夹的同步监控。");
     await fetchEvents();
   } catch (err) {
@@ -1204,14 +1707,14 @@ function renderTreeNodeDOM(node, depth) {
     
     const arrow = document.createElement("div");
     arrow.className = `tree-arrow ${isExpanded ? 'expanded' : ''}`;
-    arrow.innerHTML = `<svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>`;
+    arrow.innerHTML = `<svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     
     // Folder Icon
     const folderIcon = document.createElement("div");
     folderIcon.className = "tree-icon directory-icon";
     folderIcon.innerHTML = isExpanded 
-      ? `<svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 12H4V8h16v10z" fill="currentColor"/></svg>`
-      : `<svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="currentColor"/></svg>`;
+      ? `<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 7.5h6.2l1.8 2h9v7.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V7.5z" fill="currentColor" opacity="0.18"/><path d="M3.5 7.5h6.2l1.8 2h9v7.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V7.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 6.5h6.1l2 2h8.9v8.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V6.5z" fill="currentColor" opacity="0.16"/><path d="M3.5 6.5h6.1l2 2h8.9v8.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V6.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
 
     const name = document.createElement("div");
     name.className = "tree-row-details";
@@ -1280,7 +1783,7 @@ function renderTreeNodeDOM(node, depth) {
         state.expandedPaths.delete(node.path);
         arrow.classList.remove("expanded");
         childrenContainer.classList.add("collapsed");
-        folderIcon.innerHTML = `<svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="currentColor"/></svg>`;
+        folderIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 6.5h6.1l2 2h8.9v8.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V6.5z" fill="currentColor" opacity="0.16"/><path d="M3.5 6.5h6.1l2 2h8.9v8.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V6.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
       }
     });
 
@@ -1377,9 +1880,77 @@ function renderTreeNodeDOM(node, depth) {
   return wrapper;
 }
 
+function extractProgressCount(status = "") {
+  const match = String(status).match(/\((\d+)\s*\/\s*(\d+)\)/);
+  if (!match) return null;
+  return `${match[1]}/${match[2]}`;
+}
+
+function updateSyncProgressUI({ title = "", status = "", progress = 0 } = {}) {
+  if (dom.syncBanner) dom.syncBanner.classList.remove("hidden");
+  if (dom.syncBannerTitle) dom.syncBannerTitle.textContent = title || t("正在同步至 IMA...");
+  if (dom.syncBannerStatus) dom.syncBannerStatus.textContent = status || t("正在准备数据...");
+  if (dom.syncBannerFill) {
+    const normalizedProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+    dom.syncBannerFill.style.width = `${normalizedProgress}%`;
+  }
+  if (dom.syncBannerCount) {
+    const countText = extractProgressCount(status);
+    if (countText) {
+      dom.syncBannerCount.textContent = countText;
+      dom.syncBannerCount.classList.remove("hidden");
+    } else {
+      dom.syncBannerCount.classList.add("hidden");
+    }
+  }
+}
+
+function setPendingSyncButtonsLoading(isLoading) {
+  const btnPush = document.getElementById("btn-sync-all-pending-push");
+  const btnPull = document.getElementById("btn-sync-all-pending-pull");
+  const btnMark = document.getElementById("btn-mark-all-synced");
+
+  if (isLoading) {
+    state.syncButtonHtmls = {
+      push: btnPush?.innerHTML || "",
+      pull: btnPull?.innerHTML || ""
+    };
+    if (btnPush) {
+      btnPush.innerHTML = `
+        <div class="spinner" style="width: 13px; height: 13px; border-width: 1.5px; margin-right: 6px;"></div>
+        <span>${t("正在同步...")}</span>
+      `;
+      btnPush.classList.add("syncing");
+    }
+    if (btnPull) btnPull.classList.add("syncing");
+  } else if (state.syncButtonHtmls) {
+    if (btnPush && state.syncButtonHtmls.push) {
+      btnPush.innerHTML = state.syncButtonHtmls.push;
+      btnPush.classList.remove("syncing");
+    }
+    if (btnPull && state.syncButtonHtmls.pull) {
+      btnPull.innerHTML = state.syncButtonHtmls.pull;
+      btnPull.classList.remove("syncing");
+    }
+    state.syncButtonHtmls = null;
+  }
+
+  if (btnPush) btnPush.disabled = isLoading;
+  if (btnPull) btnPull.disabled = isLoading;
+  if (btnMark) btnMark.disabled = isLoading;
+}
+
 // Performs a bidirectional or directional sync calling the Tauri backend command
 async function syncAll(direction = null) {
-  if (state.isSyncing) return;
+  if (state.isSyncing) {
+    showGlobalToast(t("同步正在进行中"));
+    return;
+  }
+
+  if (direction === "push" && !state.fileEvents.some(e => !e.is_synced)) {
+    showGlobalToast(t("当前没有待处理项"));
+    return;
+  }
   
   let creds = await invoke("get_ima_credentials");
   if (!creds) {
@@ -1390,7 +1961,7 @@ async function syncAll(direction = null) {
 
   let mappings = {};
   let boundCount = 0;
-  state.monitoredPaths.forEach(path => {
+  getActiveMonitoredPaths().forEach(path => {
     let kbId = localStorage.getItem(`kb_binding_${path}`);
     if (kbId && kbId !== "default") {
       mappings[path] = kbId;
@@ -1408,27 +1979,27 @@ async function syncAll(direction = null) {
   state.currentSyncDirection = direction;
   
   if (dom.syncBtn) dom.syncBtn.disabled = true;
-  const btnPush = document.getElementById("btn-sync-all-pending-push");
-  const btnPull = document.getElementById("btn-sync-all-pending-pull");
-  const btnMark = document.getElementById("btn-mark-all-synced");
-  if (btnPush) btnPush.disabled = true;
-  if (btnPull) btnPull.disabled = true;
-  if (btnMark) btnMark.disabled = true;
+  setPendingSyncButtonsLoading(true);
   
   // Show bottom floating progress banner
-  if (dom.syncBanner) {
-    dom.syncBanner.classList.remove("hidden");
-    if (direction === "push") {
-      dom.syncBannerTitle.textContent = "正在同步至 IMA...";
-      dom.syncBannerStatus.textContent = "正在扫描本地待同步的改动记录...";
-    } else if (direction === "pull") {
-      dom.syncBannerTitle.textContent = "正在从云端拉取更新...";
-      dom.syncBannerStatus.textContent = "正在连接并获取云端知识库列表...";
-    } else {
-      dom.syncBannerTitle.textContent = "开始双向同步...";
-      dom.syncBannerStatus.textContent = "正在准备数据...";
-    }
-    dom.syncBannerFill.style.width = "0%";
+  if (direction === "push") {
+    updateSyncProgressUI({
+      title: t("正在同步至 IMA..."),
+      status: t("正在扫描本地待同步的改动记录..."),
+      progress: 2
+    });
+  } else if (direction === "pull") {
+    updateSyncProgressUI({
+      title: t("正在从云端拉取更新..."),
+      status: t("正在连接并获取云端知识库列表..."),
+      progress: 2
+    });
+  } else {
+    updateSyncProgressUI({
+      title: t("开始双向同步..."),
+      status: t("正在准备数据..."),
+      progress: 2
+    });
   }
 
   try {
@@ -1438,9 +2009,7 @@ async function syncAll(direction = null) {
     state.isSyncing = false;
     state.currentSyncDirection = null;
     if (dom.syncBtn) dom.syncBtn.disabled = false;
-    if (btnPush) btnPush.disabled = false;
-    if (btnPull) btnPull.disabled = false;
-    if (btnMark) btnMark.disabled = false;
+    setPendingSyncButtonsLoading(false);
     if (dom.syncBanner) dom.syncBanner.classList.add("hidden");
     showGlobalToast("同步发生错误: " + err, true);
   }
@@ -1449,17 +2018,16 @@ async function syncAll(direction = null) {
 // Save ignores
 async function saveIgnoreSettings() {
   try {
-    let exts = dom.ignoreExts.value;
-    let dirs = dom.ignoreDirs.value;
+    let files = dom.ignoreFiles?.value || defaultIgnoredFileNames;
+    let exts = dom.ignoreExts?.value || defaultIgnoredExtensions;
+    let dirs = dom.ignoreDirs?.value || defaultIgnoredDirectoryNames;
     
+    await invoke("set_config_value", { key: "customIgnoredFileNames", value: files });
     await invoke("set_config_value", { key: "customIgnoredExtensions", value: exts });
     await invoke("set_config_value", { key: "customIgnoredDirectoryNames", value: dirs });
     
     // Re-trigger monitor with updated ignore rules
-    if (state.monitoredPaths.length > 0) {
-      await invoke("stop_file_monitor");
-      await invoke("start_file_monitor", { paths: state.monitoredPaths });
-    }
+    await restartActiveFileMonitor();
     
     showGlobalToast("过滤规则保存并应用成功！");
   } catch (e) {
@@ -1752,16 +2320,20 @@ async function resetToFactoryDefaults() {
   
   // 3. Clear monitored directories
   state.monitoredPaths = [];
+  state.disabledMonitoredPaths = [];
   await invoke("set_config_value", { key: "monitoredDirectories", value: "" });
+  await invoke("set_config_value", { key: "disabledMonitoredDirectories", value: "" });
   renderMonitoredDirectories();
   
   // 4. Restore custom configs to default
   await invoke("set_config_value", { key: "enableDefaultIgnoreRules", value: "true" });
-  await invoke("set_config_value", { key: "customIgnoredExtensions", value: "tmp, log, asd, part" });
-  await invoke("set_config_value", { key: "customIgnoredDirectoryNames", value: ".git, node_modules, dist" });
+  await invoke("set_config_value", { key: "customIgnoredFileNames", value: defaultIgnoredFileNames });
+  await invoke("set_config_value", { key: "customIgnoredExtensions", value: defaultIgnoredExtensions });
+  await invoke("set_config_value", { key: "customIgnoredDirectoryNames", value: defaultIgnoredDirectoryNames });
   
-  if (dom.ignoreExts) dom.ignoreExts.value = "tmp, log, asd, part";
-  if (dom.ignoreDirs) dom.ignoreDirs.value = ".git, node_modules, dist";
+  if (dom.ignoreFiles) dom.ignoreFiles.value = defaultIgnoredFileNames;
+  if (dom.ignoreExts) dom.ignoreExts.value = defaultIgnoredExtensions;
+  if (dom.ignoreDirs) dom.ignoreDirs.value = defaultIgnoredDirectoryNames;
   
   // 5. Clear credentials
   await invoke("clear_ima_credentials");
@@ -1846,6 +2418,8 @@ function updateAutoSyncUI() {
   const modeVal = document.getElementById("home-status-mode");
   const capsule = document.getElementById("home-sync-mode-capsule");
   const icon = document.getElementById("home-sync-mode-icon");
+  const autoSyncToggle = document.getElementById("setting-auto-sync");
+  const syncDesc = document.getElementById("sync-mode-desc");
   
   if (state.autoSync) {
     if (toggle) toggle.classList.add("active");
@@ -1854,6 +2428,8 @@ function updateAutoSyncUI() {
     if (modeVal) modeVal.textContent = t("自动同步");
     if (capsule) capsule.classList.add("active");
     if (icon) icon.style.fill = "var(--app-mint)";
+    if (autoSyncToggle) autoSyncToggle.checked = true;
+    if (syncDesc) syncDesc.textContent = t("自动同步：文件稳定 2 秒后上传到云端");
   } else {
     if (toggle) toggle.classList.remove("active");
     if (label) label.textContent = t("手动同步");
@@ -1861,6 +2437,8 @@ function updateAutoSyncUI() {
     if (modeVal) modeVal.textContent = t("手动同步");
     if (capsule) capsule.classList.remove("active");
     if (icon) icon.style.fill = "var(--text-secondary)";
+    if (autoSyncToggle) autoSyncToggle.checked = false;
+    if (syncDesc) syncDesc.textContent = t("手动同步：点击同步按钮时上传");
   }
 }
 
@@ -1938,7 +2516,7 @@ function renderHomeRecentEvents() {
         <svg viewBox="0 0 24 24" width="36" height="36" fill="var(--text-muted)">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
         </svg>
-        <p>开始监控后，这里会显示最新文件变动。</p>
+        <p>${t("开始监控后，这里会显示最新文件变动。")}</p>
       </div>
     `;
     return;
@@ -2305,33 +2883,9 @@ function setupLargeTablesListeners() {
   
   const btnMark = document.getElementById("btn-mark-all-synced");
   if (btnMark) {
-    btnMark.addEventListener("click", async () => {
-      if (state.isSyncing) return;
-      
-      const confirmMark = confirm(t("确定要将所有待同步文件标记为已完成吗？此操作仅修改本地状态，不会上传/下载腾讯云。"));
-      if (!confirmMark) return;
-      
-      try {
-        state.isSyncing = true;
-        if (dom.syncBtn) dom.syncBtn.disabled = true;
-        if (btnPush) btnPush.disabled = true;
-        if (btnPull) btnPull.disabled = true;
-        if (btnMark) btnMark.disabled = true;
-        
-        await invoke("mark_all_events_synced");
-        
-        showGlobalToast("已成功将所有待同步项标记为已同步。");
-      } catch (err) {
-        console.error("Mark all synced failed:", err);
-        showGlobalToast("标记已同步失败: " + err, true);
-      } finally {
-        state.isSyncing = false;
-        if (dom.syncBtn) dom.syncBtn.disabled = false;
-        if (btnPush) btnPush.disabled = false;
-        if (btnPull) btnPull.disabled = false;
-        if (btnMark) btnMark.disabled = false;
-        fetchEvents();
-      }
+    btnMark.addEventListener("click", (event) => {
+      event.preventDefault();
+      markAllPendingAsSynced(btnMark);
     });
   }
   
@@ -2379,6 +2933,53 @@ function setupLargeTablesListeners() {
   }
 }
 
+async function markAllPendingAsSynced(triggerButton = document.getElementById("btn-mark-all-synced")) {
+  if (state.isMarkingAllPending) return;
+
+  const pendingCount = state.fileEvents.filter(e => !e.is_synced).length;
+  if (pendingCount === 0) {
+    showGlobalToast(t("当前没有待处理项"));
+    return;
+  }
+
+  const btnPush = document.getElementById("btn-sync-all-pending-push");
+  const btnPull = document.getElementById("btn-sync-all-pending-pull");
+  const btnMark = triggerButton || document.getElementById("btn-mark-all-synced");
+  const originalMarkHtml = btnMark?.innerHTML || "";
+
+  try {
+    state.isMarkingAllPending = true;
+    if (btnPush) btnPush.disabled = true;
+    if (btnPull) btnPull.disabled = true;
+    if (btnMark) {
+      btnMark.disabled = true;
+      btnMark.innerHTML = `
+        <div class="spinner" style="width: 12px; height: 12px; border-width: 1.5px; margin-right: 6px;"></div>
+        <span>${t("正在标记...")}</span>
+      `;
+    }
+
+    const affected = await invoke("mark_all_events_synced");
+    state.selectedPendingEventId = null;
+    state.selectedPendingNode = null;
+    await fetchEvents();
+
+    const markedCount = Number.isFinite(Number(affected)) ? Number(affected) : pendingCount;
+    showGlobalToast(t("已成功将 {count} 个待处理项标记为已同步。").replace("{count}", markedCount));
+  } catch (err) {
+    console.error("Mark all synced failed:", err);
+    showGlobalToast(t("标记已同步失败: ") + err, true);
+  } finally {
+    state.isMarkingAllPending = false;
+    if (btnPush && !state.isSyncing) btnPush.disabled = false;
+    if (btnPull && !state.isSyncing) btnPull.disabled = false;
+    if (btnMark) {
+      btnMark.innerHTML = originalMarkHtml;
+      btnMark.disabled = state.fileEvents.every(e => e.is_synced);
+    }
+  }
+}
+
 // Consolidated rendering for large tables and tree views
 function renderLargeTables() {
   renderPendingTable();
@@ -2393,6 +2994,10 @@ function renderPendingTable() {
   
   let allPending = state.fileEvents.filter(e => !e.is_synced);
   let totalPendingCount = allPending.length;
+  const markAllBtn = document.getElementById("btn-mark-all-synced");
+  if (markAllBtn && !state.isSyncing && !state.isMarkingAllPending) {
+    markAllBtn.disabled = totalPendingCount === 0;
+  }
   
   // Real-time badge updates (Sidebar badge and Global Rail icon badge)
   const countBadge = document.getElementById("pending-count-badge");
@@ -2427,8 +3032,8 @@ function renderPendingTable() {
         <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--app-mint-glow); color: var(--app-mint); display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </div>
-        <p style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">没有待同步文件</p>
-        <p style="font-size: 0.72rem; color: var(--text-secondary);">所有变动都已处理完成。</p>
+        <p style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">${t("没有待同步文件")}</p>
+        <p style="font-size: 0.72rem; color: var(--text-secondary);">${t("所有变动都已处理完成。")}</p>
       </div>
     `;
     return;
@@ -2549,7 +3154,7 @@ function renderAllTable() {
         <svg viewBox="0 0 24 24" width="36" height="36" fill="var(--text-muted)">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
         </svg>
-        <p>暂无相关历史变更记录</p>
+        <p>${t("暂无相关历史变更记录")}</p>
       </div>
     `;
     return;
@@ -2590,7 +3195,7 @@ function renderAllTable() {
     let actionArea = item.is_synced ? `
       <span style="font-size: 0.76rem; color: var(--text-muted); font-weight: 500;">${t("已归档")}</span>
     ` : `
-      <button class="pill-btn primary table-action-btn" data-id="${item.id}" style="padding: 4px 10px; font-size: 0.74rem;">同步</button>
+      <button class="pill-btn primary table-action-btn" data-id="${item.id}" style="padding: 4px 10px; font-size: 0.74rem;">${t("同步")}</button>
     `;
     
     row.innerHTML = `
@@ -2699,13 +3304,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // --- 2. Sync Group ---
         const autoSyncToggle = document.getElementById("setting-auto-sync");
-        const syncDesc = document.getElementById("sync-mode-desc");
         if (autoSyncToggle) {
-            autoSyncToggle.checked = (localStorage.getItem("autoSync") === "true");
-            syncDesc.innerText = autoSyncToggle.checked ? t("自动同步：文件稳定 30 秒后上传到云端") : t("手动同步：点击同步按钮时上传");
-            autoSyncToggle.addEventListener("change", (e) => {
-                localStorage.setItem("autoSync", e.target.checked);
-                syncDesc.innerText = e.target.checked ? t("自动同步：文件稳定 30 秒后上传到云端") : t("手动同步：点击同步按钮时上传");
+            autoSyncToggle.checked = state.autoSync;
+            autoSyncToggle.addEventListener("change", async (e) => {
+                state.autoSync = e.target.checked;
+                updateAutoSyncUI();
+                try {
+                    await invoke("set_config_value", { key: "autoSync", value: state.autoSync ? "true" : "false" });
+                    showGlobalToast(state.autoSync ? "自动同步模式已开启" : "手动同步模式已开启");
+                } catch (err) {
+                    showGlobalToast("保存同步模式失败: " + err, true);
+                }
             });
         }
 
@@ -2782,13 +3391,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (defaultIgnToggle) defaultIgnToggle.checked = (e !== "false");
             
             let fn = await invoke("get_config_value", { key: "customIgnoredFileNames" });
-            if (ignFile) ignFile.value = fn || "";
+            if (ignFile) ignFile.value = fn || defaultIgnoredFileNames;
 
             let exts = await invoke("get_config_value", { key: "customIgnoredExtensions" });
-            if (ignExt) ignExt.value = exts || "tmp, log, asd, part";
+            if (ignExt) ignExt.value = exts || defaultIgnoredExtensions;
 
             let dirs = await invoke("get_config_value", { key: "customIgnoredDirectoryNames" });
-            if (ignDir) ignDir.value = dirs || ".git, node_modules, dist";
+            if (ignDir) ignDir.value = dirs || defaultIgnoredDirectoryNames;
         };
 
         const saveIgnoreConfig = async () => {
@@ -2809,8 +3418,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (ignDir) ignDir.addEventListener("blur", saveIgnoreConfig);
         if (btnResetIgn) {
             btnResetIgn.addEventListener("click", async () => {
-                await invoke("set_config_value", { key: "customIgnoredExtensions", value: "tmp, log, asd, part" });
-                await invoke("set_config_value", { key: "customIgnoredDirectoryNames", value: ".git, node_modules, dist" });
+                await invoke("set_config_value", { key: "customIgnoredFileNames", value: defaultIgnoredFileNames });
+                await invoke("set_config_value", { key: "customIgnoredExtensions", value: defaultIgnoredExtensions });
+                await invoke("set_config_value", { key: "customIgnoredDirectoryNames", value: defaultIgnoredDirectoryNames });
                 await loadIgnoreConfig();
                 await invoke("update_ignore_rules").catch(()=>{});
                 showGlobalToast("忽略规则已恢复默认");
@@ -2821,7 +3431,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const openLogsDialog = () => {
             if (dom.overlayHttpLogs) {
                 dom.overlayHttpLogs.classList.remove("hidden");
+                setupLogModalScrollbar();
                 loadAndRenderHttpLogs();
+                requestAnimationFrame(updateLogModalScrollbar);
             }
         };
         if (dom.btnShowLogs) {
@@ -2834,6 +3446,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             dom.btnCloseLogs.addEventListener("click", () => {
                 if (dom.overlayHttpLogs) {
                     dom.overlayHttpLogs.classList.add("hidden");
+                    updateLogModalScrollbar();
                 }
             });
         }
@@ -2841,6 +3454,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             dom.overlayHttpLogs.addEventListener("click", (e) => {
                 if (e.target === dom.overlayHttpLogs) {
                     dom.overlayHttpLogs.classList.add("hidden");
+                    updateLogModalScrollbar();
                 }
             });
         }
@@ -2885,8 +3499,8 @@ function renderPendingTree() {
         <div style="width: 44px; height: 44px; border-radius: 50%; background: var(--app-mint-glow); color: var(--app-mint); display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
         </div>
-        <p style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">没有待同步文件</p>
-        <p style="font-size: 0.72rem; color: var(--text-secondary);">没有符合当前筛选条件的待同步文件。</p>
+        <p style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">${t("没有待同步文件")}</p>
+        <p style="font-size: 0.72rem; color: var(--text-secondary);">${t("没有符合当前筛选条件的待同步文件。")}</p>
       </div>
     `;
     return;
@@ -2930,13 +3544,13 @@ function renderPendingTreeNodeDOM(node, depth) {
     
     const arrow = document.createElement("div");
     arrow.className = `tree-arrow ${isExpanded ? 'expanded' : ''}`;
-    arrow.innerHTML = `<svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-6 6-1.41-1.41z" fill="currentColor"/></svg>`;
+    arrow.innerHTML = `<svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     
     const folderIcon = document.createElement("div");
     folderIcon.className = "tree-icon directory-icon";
     folderIcon.innerHTML = isExpanded 
-      ? `<svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 12H4V8h16v10z" fill="currentColor"/></svg>`
-      : `<svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="currentColor"/></svg>`;
+      ? `<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 7.5h6.2l1.8 2h9v7.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V7.5z" fill="currentColor" opacity="0.18"/><path d="M3.5 7.5h6.2l1.8 2h9v7.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V7.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 6.5h6.1l2 2h8.9v8.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V6.5z" fill="currentColor" opacity="0.16"/><path d="M3.5 6.5h6.1l2 2h8.9v8.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V6.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
 
     const name = document.createElement("div");
     name.className = "tree-row-details";
@@ -3014,7 +3628,7 @@ function renderPendingTreeNodeDOM(node, depth) {
           state.expandedPaths.delete(node.path);
           arrow.classList.remove("expanded");
           childrenContainer.classList.add("collapsed");
-          folderIcon.innerHTML = `<svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="currentColor"/></svg>`;
+        folderIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none"><path d="M3.5 6.5h6.1l2 2h8.9v8.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V6.5z" fill="currentColor" opacity="0.16"/><path d="M3.5 6.5h6.1l2 2h8.9v8.8c0 1.2-.8 2.2-2 2.2h-13c-1.2 0-2-1-2-2.2V6.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
         }
       }
       
@@ -3201,19 +3815,19 @@ function updatePendingDetailPanel() {
 
         <div class="detail-meta-list">
           <div class="detail-meta-item">
-            <span class="detail-meta-label">文件类型</span>
+            <span class="detail-meta-label">${t("文件类型")}</span>
             <span class="detail-meta-value">${isDir ? t("文件夹") : (fileExt + t(" 文件"))}</span>
           </div>
           <div class="detail-meta-item">
-            <span class="detail-meta-label">捕获时间</span>
+            <span class="detail-meta-label">${t("捕获时间")}</span>
             <span class="detail-meta-value">${timeStr}</span>
           </div>
           <div class="detail-meta-item">
-            <span class="detail-meta-label">完整路径</span>
+            <span class="detail-meta-label">${t("完整路径")}</span>
             <span class="detail-meta-value" style="font-family: monospace; font-size: 0.74rem;">${item.path}</span>
           </div>
           <div class="detail-meta-item">
-            <span class="detail-meta-label">绑定知识库</span>
+            <span class="detail-meta-label">${t("绑定知识库")}</span>
             <span class="detail-meta-value" style="font-weight: 600;">${kbName}</span>
           </div>
         </div>
@@ -3221,22 +3835,22 @@ function updatePendingDetailPanel() {
         ${!isBound ? `
           <div class="detail-binding-warning">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-            <div>该文件所属监控根目录暂未绑定腾讯 IMA 知识库，请前往系统设置完成绑定后才能执行同步。</div>
+            <div>${t("该文件所属监控根目录暂未绑定腾讯 IMA 知识库，请前往系统设置完成绑定后才能执行同步。")}</div>
           </div>
         ` : `
           <div class="detail-binding-success">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-            <div>知识库绑定正常。随时可以开始单个文件的增量更新同步。</div>
+            <div>${t("知识库绑定正常。随时可以开始单个文件的增量更新同步。")}</div>
           </div>
         `}
 
         <div class="detail-actions">
           <button class="action-main" id="detail-btn-sync" ${!isBound ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right: 6px;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" fill="currentColor"/></svg>
-            <span>立即同步此项</span>
+            <span>${t("立即同步此项")}</span>
           </button>
           <button class="action-secondary" id="detail-btn-mark">
-            标记为已同步
+            ${t("标记为已同步")}
           </button>
         </div>
       </div>
@@ -3321,25 +3935,25 @@ function updatePendingDetailPanel() {
           </div>
           <div style="flex: 1; min-width: 0;">
             <h2 class="outfit-font" style="margin: 0 0 4px 0; font-size: 1.1rem; color: var(--text-primary); font-weight: 700; word-break: break-all;" title="${baseName}">${baseName}</h2>
-            <span class="event-type-badge modified" style="background: rgba(233, 146, 47, 0.08); color: var(--app-amber); border-color: rgba(233, 146, 47, 0.15);">文件夹</span>
+          <span class="event-type-badge modified" style="background: rgba(233, 146, 47, 0.08); color: var(--app-amber); border-color: rgba(233, 146, 47, 0.15);">${t("文件夹")}</span>
           </div>
         </div>
 
         <div class="detail-meta-list">
           <div class="detail-meta-item">
-            <span class="detail-meta-label">包含待同步改动</span>
-            <span class="detail-meta-value" style="font-weight: 700; color: var(--app-rose); font-size: 0.9rem;">${node.pendingCount} 项变动</span>
+            <span class="detail-meta-label">${t("包含待同步改动")}</span>
+            <span class="detail-meta-value" style="font-weight: 700; color: var(--app-rose); font-size: 0.9rem;">${t("{count} 项变动").replace("{count}", node.pendingCount)}</span>
           </div>
           <div class="detail-meta-item">
-            <span class="detail-meta-label">路径类型</span>
-            <span class="detail-meta-value">文件夹 / 目录拓扑</span>
+            <span class="detail-meta-label">${t("路径类型")}</span>
+            <span class="detail-meta-value">${t("文件夹 / 目录拓扑")}</span>
           </div>
           <div class="detail-meta-item">
-            <span class="detail-meta-label">完整路径</span>
+            <span class="detail-meta-label">${t("完整路径")}</span>
             <span class="detail-meta-value" style="font-family: monospace; font-size: 0.74rem;">${node.path}</span>
           </div>
           <div class="detail-meta-item">
-            <span class="detail-meta-label">绑定知识库</span>
+            <span class="detail-meta-label">${t("绑定知识库")}</span>
             <span class="detail-meta-value" style="font-weight: 600;">${kbName}</span>
           </div>
         </div>
@@ -3347,22 +3961,22 @@ function updatePendingDetailPanel() {
         ${!isBound ? `
           <div class="detail-binding-warning">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-            <div>该文件夹所属监控根目录暂未绑定腾讯 IMA 知识库，请前往系统设置完成绑定后才能执行同步。</div>
+            <div>${t("该文件夹所属监控根目录暂未绑定腾讯 IMA 知识库，请前往系统设置完成绑定后才能执行同步。")}</div>
           </div>
         ` : `
           <div class="detail-binding-success">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-            <div>知识库绑定正常。可以批量同步该文件夹下所有文件的子变更。</div>
+            <div>${t("知识库绑定正常。可以批量同步该文件夹下所有文件的子变更。")}</div>
           </div>
         `}
 
         <div class="detail-actions">
           <button class="action-main" id="detail-btn-sync" ${!isBound || eventsToSync.length === 0 ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="margin-right: 6px;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z" fill="currentColor"/></svg>
-            <span>同步目录下所有改动 (${eventsToSync.length})</span>
+            <span>${t("同步目录下所有改动 ({count})").replace("{count}", eventsToSync.length)}</span>
           </button>
           <button class="action-secondary" id="detail-btn-mark" ${eventsToSync.length === 0 ? 'disabled' : ''}>
-            全部标记为已同步
+            ${t("全部标记为已同步")}
           </button>
         </div>
       </div>
@@ -3462,6 +4076,7 @@ async function loadAndRenderHttpLogs() {
           <div style="font-size: 12px; color: var(--text-secondary);">${t("所有的 IMA 接口请求和响应详情都会记录在这里")}</div>
         </div>
       `;
+      requestAnimationFrame(updateLogModalScrollbar);
       return;
     }
     
@@ -3542,12 +4157,15 @@ async function loadAndRenderHttpLogs() {
         } else {
           content.classList.add("hidden");
         }
+        requestAnimationFrame(updateLogModalScrollbar);
       });
       
       dom.httpLogsList.appendChild(item);
     });
+    requestAnimationFrame(updateLogModalScrollbar);
   } catch(e) {
     dom.httpLogsList.innerHTML = `<div style="padding: 20px; color: var(--app-rose); font-size: 13px;">Error loading logs: ${e}</div>`;
+    requestAnimationFrame(updateLogModalScrollbar);
   }
 }
 
@@ -3620,11 +4238,18 @@ function appendLogSection(container, title, content, isError = false) {
         <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 14H8V7h11v14z" fill="currentColor"/></svg>
       </button>
     </div>
-    <pre class="log-section-pre" style="${isError ? 'color: var(--app-rose);' : ''}"></pre>
+    <div class="log-section-pre-wrapper">
+      <pre class="log-section-pre" style="${isError ? 'color: var(--app-rose);' : ''}"></pre>
+      <div class="log-section-scrollbar">
+        <div class="log-section-scrollbar-thumb"></div>
+      </div>
+    </div>
   `;
   
   // Set content text safely inside pre to avoid HTML injection
-  section.querySelector(".log-section-pre").innerText = content;
+  const pre = section.querySelector(".log-section-pre");
+  pre.innerText = content;
+  setupLogSectionScrollbar(pre);
   
   // Wire copy listener
   section.querySelector(".log-copy-btn").addEventListener("click", (e) => {

@@ -1,20 +1,21 @@
-mod db;
 mod credentials;
-mod monitor;
+mod db;
 mod ima_sync;
+mod monitor;
 mod tray;
 
-use std::sync::{Arc, Mutex};
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager, State, Emitter, PhysicalPosition};
 use rusqlite::params;
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State};
 
-use db::FileEvent;
-use monitor::{DirectoryMonitor, IgnoreRules};
 use credentials::CachedCredentials;
+use db::FileEvent;
 use ima_sync::{IMASyncClient, KnowledgeBase, KnowledgeInfo};
+use monitor::{DirectoryMonitor, IgnoreRules};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HttpLogEntry {
@@ -34,7 +35,9 @@ pub static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLo
 static LOG_ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 pub fn generate_log_id() -> String {
-    LOG_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed).to_string()
+    LOG_ID_COUNTER
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        .to_string()
 }
 
 pub fn get_http_logs_mutex() -> &'static Mutex<Vec<HttpLogEntry>> {
@@ -119,16 +122,21 @@ async fn sync_all_directories(
     }
 
     let emit_progress = |step: &str, title: &str, status: &str, progress: f64| {
-        let _ = app_handle.emit("sync-progress", SyncProgressPayload {
-            step: step.to_string(),
-            title: title.to_string(),
-            status: status.to_string(),
-            progress,
-        });
+        let _ = app_handle.emit(
+            "sync-progress",
+            SyncProgressPayload {
+                step: step.to_string(),
+                title: title.to_string(),
+                status: status.to_string(),
+                progress,
+            },
+        );
     };
 
-    let run_pull = direction.as_deref() != Some("push") && direction.as_deref() != Some("sync_to_ima");
-    let run_push = direction.as_deref() != Some("pull") && direction.as_deref() != Some("pull_from_remote");
+    let run_pull =
+        direction.as_deref() != Some("push") && direction.as_deref() != Some("sync_to_ima");
+    let run_push =
+        direction.as_deref() != Some("pull") && direction.as_deref() != Some("pull_from_remote");
 
     emit_progress("start", "开始同步...", "正在初始化云端连接...", 0.0);
 
@@ -136,11 +144,17 @@ async fn sync_all_directories(
     if total_dirs == 0 {
         let conn = state.db_conn.lock().unwrap();
         let _ = resume_watcher(&state, &conn, &app_handle);
-        emit_progress("complete", "同步完成！", "没有绑定任何需要同步的知识库。", 100.0);
+        emit_progress(
+            "complete",
+            "同步完成！",
+            "没有绑定任何需要同步的知识库。",
+            100.0,
+        );
         return Ok(());
     }
 
     let mut current_dir_idx = 0;
+    let mut failed_pushes: Vec<String> = Vec::new();
 
     for (local_path_str, kb_id) in &mappings {
         current_dir_idx += 1;
@@ -153,7 +167,8 @@ async fn sync_all_directories(
             continue;
         }
 
-        let dir_name = root_path.file_name()
+        let dir_name = root_path
+            .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| local_path_str.clone());
 
@@ -171,7 +186,12 @@ async fn sync_all_directories(
                 Err(e) => {
                     let conn = state.db_conn.lock().unwrap();
                     let _ = resume_watcher(&state, &conn, &app_handle);
-                    emit_progress("error", "同步发生错误", &format!("获取云端列表失败: {}", e), 100.0);
+                    emit_progress(
+                        "error",
+                        "同步发生错误",
+                        &format!("获取云端列表失败: {}", e),
+                        100.0,
+                    );
                     return Err(format!("获取云端列表失败: {}", e));
                 }
             };
@@ -184,12 +204,16 @@ async fn sync_all_directories(
                 }
             }
 
-            let folders: Vec<&KnowledgeInfo> = remote_items.iter().filter(|x| x.is_folder()).collect();
+            let folders: Vec<&KnowledgeInfo> =
+                remote_items.iter().filter(|x| x.is_folder()).collect();
             let mut folder_meta = HashMap::new();
             for f in &folders {
                 if let Some(fid) = f.folder_identifier() {
                     if !fid.is_empty() {
-                        folder_meta.insert(fid, (f.parent_folder_id.clone(), f.display_name().to_string()));
+                        folder_meta.insert(
+                            fid,
+                            (f.parent_folder_id.clone(), f.display_name().to_string()),
+                        );
                     }
                 }
             }
@@ -226,7 +250,10 @@ async fn sync_all_directories(
                                         let _ = std::fs::remove_file(p);
                                     }
                                 }
-                                let _ = conn.execute("DELETE FROM file_events WHERE id = ?1", params![local_ev.id]);
+                                let _ = conn.execute(
+                                    "DELETE FROM file_events WHERE id = ?1",
+                                    params![local_ev.id],
+                                );
                             }
                         }
                     }
@@ -234,7 +261,8 @@ async fn sync_all_directories(
             }
 
             // 2. Sync remote to local
-            let file_items: Vec<&KnowledgeInfo> = remote_items.iter().filter(|x| !x.is_folder()).collect();
+            let file_items: Vec<&KnowledgeInfo> =
+                remote_items.iter().filter(|x| !x.is_folder()).collect();
             let total_files = file_items.len();
 
             for f in &folders {
@@ -248,11 +276,18 @@ async fn sync_all_directories(
             }
 
             for (f_idx, item) in file_items.iter().enumerate() {
-                let file_progress = base_progress + step_progress_slice * 0.1 + (f_idx as f64 / total_files.max(1) as f64) * step_progress_slice * 0.4;
+                let file_progress = base_progress
+                    + step_progress_slice * 0.1
+                    + (f_idx as f64 / total_files.max(1) as f64) * step_progress_slice * 0.4;
                 emit_progress(
                     "pull",
                     &format!("正在拉取云端变动 ({}/{})", current_dir_idx, total_dirs),
-                    &format!("正在下载云端文件 ({}/{}): {}", f_idx + 1, total_files, item.display_name()),
+                    &format!(
+                        "正在下载云端文件 ({}/{}): {}",
+                        f_idx + 1,
+                        total_files,
+                        item.display_name()
+                    ),
                     file_progress,
                 );
 
@@ -287,7 +322,11 @@ async fn sync_all_directories(
                 }
 
                 if should_download {
-                    if client.download_file(&item.media_id, kb_id, &local_file_path, &creds).await.is_ok() {
+                    if client
+                        .download_file(&item.media_id, kb_id, &local_file_path, &creds)
+                        .await
+                        .is_ok()
+                    {
                         let conn = state.db_conn.lock().unwrap();
                         let timestamp = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
@@ -325,27 +364,57 @@ async fn sync_all_directories(
                 db::get_pending_events(&conn).unwrap_or_default()
             };
 
-            let current_root_events: Vec<FileEvent> = pending_local_events.into_iter()
+            let mut current_root_events: Vec<FileEvent> = pending_local_events
+                .into_iter()
                 .filter(|ev| Path::new(&ev.path).starts_with(root_path))
                 .collect();
+            current_root_events.sort_by(|a, b| {
+                let a_path = Path::new(&a.path);
+                let b_path = Path::new(&b.path);
+                let a_depth = a_path.components().count();
+                let b_depth = b_path.components().count();
+                let a_kind = if a.is_directory { 0 } else { 1 };
+                let b_kind = if b.is_directory { 0 } else { 1 };
+
+                a_depth
+                    .cmp(&b_depth)
+                    .then_with(|| a_kind.cmp(&b_kind))
+                    .then_with(|| {
+                        a.timestamp
+                            .partial_cmp(&b.timestamp)
+                            .unwrap_or(Ordering::Equal)
+                    })
+            });
 
             let total_pushes = current_root_events.len();
 
             for (p_idx, ev) in current_root_events.iter().enumerate() {
-                let push_progress = base_progress + step_progress_slice * 0.5 + (p_idx as f64 / total_pushes.max(1) as f64) * step_progress_slice * 0.45;
-                let file_name = Path::new(&ev.path).file_name()
+                let push_progress = base_progress
+                    + step_progress_slice * 0.5
+                    + (p_idx as f64 / total_pushes.max(1) as f64) * step_progress_slice * 0.45;
+                let file_name = Path::new(&ev.path)
+                    .file_name()
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_else(|| ev.path.clone());
 
                 emit_progress(
                     "push",
                     &format!("正在上传本地变动 ({}/{})", current_dir_idx, total_dirs),
-                    &format!("正在同步本地改动 ({}/{}): {}", p_idx + 1, total_pushes, file_name),
+                    &format!(
+                        "正在同步本地改动 ({}/{}): {}",
+                        p_idx + 1,
+                        total_pushes,
+                        file_name
+                    ),
                     push_progress,
                 );
 
                 let ev_path = Path::new(&ev.path);
-                let rel_folder_path = if let Ok(rel) = ev_path.parent().unwrap_or(root_path).strip_prefix(root_path) {
+                let rel_folder_path = if let Ok(rel) = ev_path
+                    .parent()
+                    .unwrap_or(root_path)
+                    .strip_prefix(root_path)
+                {
                     rel.to_string_lossy().to_string()
                 } else {
                     "".to_string()
@@ -354,46 +423,132 @@ async fn sync_all_directories(
                 match ev.event_type.as_str() {
                     "deleted" => {
                         if let Some(ref rid) = ev.remote_id {
-                            let _ = client.delete_knowledge_by_web_api(&[rid.clone()], kb_id, &creds).await;
+                            let _ = client
+                                .delete_knowledge_by_web_api(&[rid.clone()], kb_id, &creds)
+                                .await;
                         }
                         let conn = state.db_conn.lock().unwrap();
                         let _ = db::mark_event_synced(&conn, &ev.id);
                     }
                     "renamed" => {
-                        if let Some(ref rid) = ev.remote_id {
-                            let _ = client.rename_knowledge(rid, &file_name, kb_id, None, &creds).await;
-                        }
-                        let conn = state.db_conn.lock().unwrap();
-                        let _ = db::mark_event_synced(&conn, &ev.id);
-                    }
-                    "created" | "modified" => {
-                        if ev.is_directory {
-                            let resolved_folder_id = match client.resolve_folder_id_if_needed(kb_id, &rel_folder_path, &creds).await {
-                                Ok(fid) => fid,
-                                Err(_) => None,
-                            };
-                            match client.create_folder(&file_name, kb_id, resolved_folder_id.as_deref(), &creds).await {
-                                Ok(new_fid) => {
-                                    let conn = state.db_conn.lock().unwrap();
-                                    let _ = db::mark_event_synced_with_remote_id(&conn, &ev.id, &new_fid);
+                        if let Some(remote_id) = find_remote_id_for_event(&state, ev) {
+                            match client
+                                .resolve_folder_id_if_needed(kb_id, &rel_folder_path, &creds)
+                                .await
+                            {
+                                Ok(folder_id) => {
+                                    match client
+                                        .rename_knowledge(
+                                            &remote_id,
+                                            &file_name,
+                                            kb_id,
+                                            folder_id.as_deref(),
+                                            &creds,
+                                        )
+                                        .await
+                                    {
+                                        Ok(_) => {
+                                            let conn = state.db_conn.lock().unwrap();
+                                            let _ = db::mark_event_synced_with_remote_id(
+                                                &conn, &ev.id, &remote_id,
+                                            );
+                                        }
+                                        Err(e) => {
+                                            let message = format!(
+                                                "重命名云端项目失败 '{}': {}",
+                                                file_name, e
+                                            );
+                                            println!("{}", message);
+                                            failed_pushes.push(message);
+                                        }
+                                    }
                                 }
                                 Err(e) => {
-                                    println!("Failed to create remote directory '{}': {:?}", file_name, e);
+                                    let message =
+                                        format!("定位云端父目录失败 '{}': {}", rel_folder_path, e);
+                                    println!("{}", message);
+                                    failed_pushes.push(message);
                                 }
                             }
                         } else {
-                            let resolved_folder_id = match client.resolve_folder_id_if_needed(kb_id, &rel_folder_path, &creds).await {
+                            let message = format!(
+                                "无法重命名云端项目 '{}': 未找到旧路径对应的云端 ID",
+                                file_name
+                            );
+                            println!("{}", message);
+                            failed_pushes.push(message);
+                        }
+                    }
+                    "created" | "modified" => {
+                        if ev.is_directory {
+                            let rel_dir_path = ev_path
+                                .strip_prefix(root_path)
+                                .map(|rel| rel.to_string_lossy().to_string())
+                                .unwrap_or_else(|_| file_name.clone());
+                            match client
+                                .resolve_folder_id_if_needed(kb_id, &rel_dir_path, &creds)
+                                .await
+                            {
+                                Ok(Some(folder_id)) => {
+                                    let conn = state.db_conn.lock().unwrap();
+                                    let _ = db::mark_event_synced_with_remote_id(
+                                        &conn, &ev.id, &folder_id,
+                                    );
+                                }
+                                Ok(None) => {
+                                    let conn = state.db_conn.lock().unwrap();
+                                    let _ = db::mark_event_synced(&conn, &ev.id);
+                                }
+                                Err(e) => {
+                                    let message =
+                                        format!("创建云端目录失败 '{}': {}", rel_dir_path, e);
+                                    println!("{}", message);
+                                    failed_pushes.push(message.clone());
+                                    emit_progress(
+                                        "push",
+                                        &format!(
+                                            "正在上传本地变动 ({}/{})",
+                                            current_dir_idx, total_dirs
+                                        ),
+                                        &format!(
+                                            "同步失败 ({}/{}): {}",
+                                            p_idx + 1,
+                                            total_pushes,
+                                            message
+                                        ),
+                                        push_progress,
+                                    );
+                                }
+                            }
+                        } else {
+                            let resolved_folder_id = match client
+                                .resolve_folder_id_if_needed(kb_id, &rel_folder_path, &creds)
+                                .await
+                            {
                                 Ok(fid) => fid,
                                 Err(_) => None,
                             };
 
-                            match client.upload_to_wiki(ev_path, kb_id, resolved_folder_id.as_deref(), ev.remote_id.as_deref(), &creds).await {
+                            match client
+                                .upload_to_wiki(
+                                    ev_path,
+                                    kb_id,
+                                    resolved_folder_id.as_deref(),
+                                    ev.remote_id.as_deref(),
+                                    &creds,
+                                )
+                                .await
+                            {
                                 Ok(media_id) => {
                                     let conn = state.db_conn.lock().unwrap();
-                                    let _ = db::mark_event_synced_with_remote_id(&conn, &ev.id, &media_id);
+                                    let _ = db::mark_event_synced_with_remote_id(
+                                        &conn, &ev.id, &media_id,
+                                    );
                                 }
                                 Err(e) => {
-                                    println!("Failed to upload file '{}': {:?}", file_name, e);
+                                    let message = format!("上传文件失败 '{}': {}", file_name, e);
+                                    println!("{}", message);
+                                    failed_pushes.push(message);
                                 }
                             }
                         }
@@ -407,45 +562,76 @@ async fn sync_all_directories(
     let conn = state.db_conn.lock().unwrap();
     let _ = resume_watcher(&state, &conn, &app_handle);
 
-    emit_progress("complete", "同步完成！", "所有关联知识库与本地目录已双向同步成功。", 100.0);
+    if !failed_pushes.is_empty() {
+        let summary = if failed_pushes.len() == 1 {
+            failed_pushes[0].clone()
+        } else {
+            format!(
+                "{} 个项目同步失败：{}",
+                failed_pushes.len(),
+                failed_pushes
+                    .iter()
+                    .take(3)
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join("；")
+            )
+        };
+        emit_progress("error", "同步未完成", &summary, 100.0);
+        return Err(summary);
+    }
+
+    emit_progress(
+        "complete",
+        "同步完成！",
+        "所有关联知识库与本地目录已双向同步成功。",
+        100.0,
+    );
 
     Ok(())
 }
 
-fn resume_watcher(state: &AppState, conn: &rusqlite::Connection, app_handle: &AppHandle) -> Result<(), String> {
+fn resume_watcher(
+    state: &AppState,
+    conn: &rusqlite::Connection,
+    app_handle: &AppHandle,
+) -> Result<(), String> {
     let paths_str = db::get_config(conn, "monitoredDirectories")
         .unwrap_or(None)
         .or_else(|| db::get_config(conn, "monitoredPaths").unwrap_or(None))
         .unwrap_or_default();
-    
-    let paths: Vec<String> = if paths_str.is_empty() {
-        Vec::new()
-    } else {
-        serde_json::from_str(&paths_str).unwrap_or_else(|_| {
-            paths_str.split(',').map(|s| s.to_string()).filter(|s| !s.is_empty()).collect()
-        })
-    };
+
+    let disabled_paths_str = db::get_config(conn, "disabledMonitoredDirectories")
+        .unwrap_or(None)
+        .unwrap_or_default();
+    let disabled_paths: HashSet<String> = parse_config_path_list(&disabled_paths_str)
+        .into_iter()
+        .collect();
+    let paths: Vec<String> = parse_config_path_list(&paths_str)
+        .into_iter()
+        .filter(|path| !disabled_paths.contains(path))
+        .collect();
 
     if !paths.is_empty() {
         let mut monitor = state.monitor.lock().unwrap();
         let path_bufs: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
         let app_handle_clone = app_handle.clone();
-        
+
         let enable_default = db::get_config(conn, "enableDefaultIgnoreRules")
             .unwrap_or(None)
             .map(|v| v == "true")
             .unwrap_or(true);
-            
+
         let custom_files = db::get_config(conn, "customIgnoredFileNames")
             .unwrap_or(None)
             .map(|v| v.split(',').map(|s| s.to_string()).collect())
             .unwrap_or_else(Vec::new);
-            
+
         let custom_exts = db::get_config(conn, "customIgnoredExtensions")
             .unwrap_or(None)
             .map(|v| v.split(',').map(|s| s.to_string()).collect())
             .unwrap_or_else(Vec::new);
-            
+
         let custom_dirs = db::get_config(conn, "customIgnoredDirectoryNames")
             .unwrap_or(None)
             .map(|v| v.split(',').map(|s| s.to_string()).collect())
@@ -459,12 +645,29 @@ fn resume_watcher(state: &AppState, conn: &rusqlite::Connection, app_handle: &Ap
             let _ = app_handle_clone.emit("file-change-events", events);
         })?;
     }
-    
+
     Ok(())
 }
 
+fn parse_config_path_list(value: &str) -> Vec<String> {
+    if value.trim().is_empty() {
+        return Vec::new();
+    }
+
+    serde_json::from_str(value).unwrap_or_else(|_| {
+        value
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    })
+}
+
 #[tauri::command]
-fn get_file_events(state: State<'_, AppState>, pending_only: bool) -> Result<Vec<FileEvent>, String> {
+fn get_file_events(
+    state: State<'_, AppState>,
+    pending_only: bool,
+) -> Result<Vec<FileEvent>, String> {
     let conn = state.db_conn.lock().unwrap();
     if pending_only {
         db::get_pending_events(&conn).map_err(|e| e.to_string())
@@ -480,11 +683,28 @@ fn mark_event_synced(state: State<'_, AppState>, id: String) -> Result<(), Strin
 }
 
 #[tauri::command]
-fn mark_all_events_synced(state: State<'_, AppState>) -> Result<(), String> {
+fn mark_all_events_synced(state: State<'_, AppState>) -> Result<usize, String> {
     let conn = state.db_conn.lock().unwrap();
-    conn.execute("UPDATE file_events SET is_synced = 1 WHERE is_synced = 0", [])
+    let affected = conn
+        .execute(
+            "UPDATE file_events SET is_synced = 1 WHERE is_synced = 0",
+            [],
+        )
         .map_err(|e| e.to_string())?;
-    Ok(())
+    Ok(affected)
+}
+
+fn find_remote_id_for_event(state: &AppState, ev: &FileEvent) -> Option<String> {
+    if let Some(remote_id) = ev.remote_id.clone() {
+        return Some(remote_id);
+    }
+
+    let old_path = ev.old_path.as_ref()?;
+    let conn = state.db_conn.lock().ok()?;
+    db::get_latest_synced_event(&conn, old_path)
+        .ok()
+        .flatten()
+        .and_then(|event| event.remote_id)
 }
 
 #[tauri::command]
@@ -513,13 +733,18 @@ async fn sync_single_event(
             .ok_or_else(|| "找不到该文件变动记录".to_string())?
     };
 
-    let file_name = Path::new(&ev.path).file_name()
+    let file_name = Path::new(&ev.path)
+        .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| ev.path.clone());
 
     let ev_path = Path::new(&ev.path);
     let root_path = Path::new(&root_path_str);
-    let rel_folder_path = if let Ok(rel) = ev_path.parent().unwrap_or(root_path).strip_prefix(root_path) {
+    let rel_folder_path = if let Ok(rel) = ev_path
+        .parent()
+        .unwrap_or(root_path)
+        .strip_prefix(root_path)
+    {
         rel.to_string_lossy().to_string()
     } else {
         "".to_string()
@@ -528,47 +753,86 @@ async fn sync_single_event(
     let sync_result = match ev.event_type.as_str() {
         "deleted" => {
             if let Some(ref rid) = ev.remote_id {
-                let _ = client.delete_knowledge_by_web_api(&[rid.clone()], &kb_id, &creds).await;
+                let _ = client
+                    .delete_knowledge_by_web_api(&[rid.clone()], &kb_id, &creds)
+                    .await;
             }
             let conn = state.db_conn.lock().unwrap();
             db::mark_event_synced(&conn, &ev.id).map_err(|e| e.to_string())
         }
         "renamed" => {
-            if let Some(ref rid) = ev.remote_id {
-                let _ = client.rename_knowledge(rid, &file_name, &kb_id, None, &creds).await;
+            let remote_id = find_remote_id_for_event(&state, &ev)
+                .ok_or_else(|| "无法重命名云端项目：未找到旧路径对应的云端 ID".to_string())?;
+
+            let resolved_folder_id = client
+                .resolve_folder_id_if_needed(&kb_id, &rel_folder_path, &creds)
+                .await
+                .map_err(|e| format!("定位云端父目录失败: {}", e))?;
+
+            match client
+                .rename_knowledge(
+                    &remote_id,
+                    &file_name,
+                    &kb_id,
+                    resolved_folder_id.as_deref(),
+                    &creds,
+                )
+                .await
+            {
+                Ok(_) => {
+                    let conn = state.db_conn.lock().unwrap();
+                    db::mark_event_synced_with_remote_id(&conn, &ev.id, &remote_id)
+                        .map_err(|e| e.to_string())
+                }
+                Err(e) => Err(format!("重命名云端项目失败: {}", e)),
             }
-            let conn = state.db_conn.lock().unwrap();
-            db::mark_event_synced(&conn, &ev.id).map_err(|e| e.to_string())
         }
         "created" | "modified" => {
             if ev.is_directory {
-                let resolved_folder_id = match client.resolve_folder_id_if_needed(&kb_id, &rel_folder_path, &creds).await {
-                    Ok(fid) => fid,
-                    Err(_) => None,
-                };
-                match client.create_folder(&file_name, &kb_id, resolved_folder_id.as_deref(), &creds).await {
-                    Ok(new_fid) => {
+                let rel_dir_path = ev_path
+                    .strip_prefix(root_path)
+                    .map(|rel| rel.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| file_name.clone());
+                match client
+                    .resolve_folder_id_if_needed(&kb_id, &rel_dir_path, &creds)
+                    .await
+                {
+                    Ok(Some(folder_id)) => {
                         let conn = state.db_conn.lock().unwrap();
-                        db::mark_event_synced_with_remote_id(&conn, &ev.id, &new_fid).map_err(|e| e.to_string())
+                        db::mark_event_synced_with_remote_id(&conn, &ev.id, &folder_id)
+                            .map_err(|e| e.to_string())
                     }
-                    Err(e) => {
-                        Err(format!("创建云端文件夹失败: {:?}", e))
+                    Ok(None) => {
+                        let conn = state.db_conn.lock().unwrap();
+                        db::mark_event_synced(&conn, &ev.id).map_err(|e| e.to_string())
                     }
+                    Err(e) => Err(format!("创建云端文件夹失败: {}", e)),
                 }
             } else {
-                let resolved_folder_id = match client.resolve_folder_id_if_needed(&kb_id, &rel_folder_path, &creds).await {
+                let resolved_folder_id = match client
+                    .resolve_folder_id_if_needed(&kb_id, &rel_folder_path, &creds)
+                    .await
+                {
                     Ok(fid) => fid,
                     Err(_) => None,
                 };
 
-                match client.upload_to_wiki(ev_path, &kb_id, resolved_folder_id.as_deref(), ev.remote_id.as_deref(), &creds).await {
+                match client
+                    .upload_to_wiki(
+                        ev_path,
+                        &kb_id,
+                        resolved_folder_id.as_deref(),
+                        ev.remote_id.as_deref(),
+                        &creds,
+                    )
+                    .await
+                {
                     Ok(media_id) => {
                         let conn = state.db_conn.lock().unwrap();
-                        db::mark_event_synced_with_remote_id(&conn, &ev.id, &media_id).map_err(|e| e.to_string())
+                        db::mark_event_synced_with_remote_id(&conn, &ev.id, &media_id)
+                            .map_err(|e| e.to_string())
                     }
-                    Err(e) => {
-                        Err(format!("上传文件失败: {:?}", e))
-                    }
+                    Err(e) => Err(format!("上传文件失败: {:?}", e)),
                 }
             }
         }
@@ -605,8 +869,18 @@ async fn get_ima_credentials() -> Option<CachedCredentials> {
 }
 
 #[tauri::command]
-async fn save_ima_credentials(token: String, refresh_token: String, uid: String, guid: String) -> Result<(), String> {
-    let creds = CachedCredentials { token, refresh_token, uid, guid };
+async fn save_ima_credentials(
+    token: String,
+    refresh_token: String,
+    uid: String,
+    guid: String,
+) -> Result<(), String> {
+    let creds = CachedCredentials {
+        token,
+        refresh_token,
+        uid,
+        guid,
+    };
     credentials::save_credentials(&creds)
 }
 
@@ -637,27 +911,31 @@ fn set_kb_binding(state: State<'_, AppState>, path: String, kb_id: String) -> Re
 #[tauri::command]
 fn get_launch_at_login() -> bool {
     let home = std::env::var("HOME").unwrap_or_default();
-    if home.is_empty() { return false; }
-    let plist_path = std::path::PathBuf::from(home)
-        .join("Library/LaunchAgents/com.filesyncmonitor.plist");
+    if home.is_empty() {
+        return false;
+    }
+    let plist_path =
+        std::path::PathBuf::from(home).join("Library/LaunchAgents/com.filesyncmonitor.plist");
     plist_path.exists()
 }
 
 #[tauri::command]
 fn set_launch_at_login(enable: bool) -> Result<(), String> {
     let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-    if home.is_empty() { return Err("HOME directory not found".to_string()); }
-    
+    if home.is_empty() {
+        return Err("HOME directory not found".to_string());
+    }
+
     let launch_agents_dir = std::path::PathBuf::from(&home).join("Library/LaunchAgents");
     let plist_path = launch_agents_dir.join("com.filesyncmonitor.plist");
-    
+
     if enable {
         let exe_path = std::env::current_exe()
             .map_err(|e| format!("Failed to get current exe path: {}", e))?;
         let exe_str = exe_path.to_string_lossy();
-        
+
         let _ = std::fs::create_dir_all(&launch_agents_dir);
-        
+
         let plist_content = format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -693,17 +971,17 @@ fn update_ignore_rules(state: State<'_, AppState>) -> Result<(), String> {
         .unwrap_or(None)
         .map(|v| v == "true")
         .unwrap_or(true);
-        
+
     let custom_files = db::get_config(&conn, "customIgnoredFileNames")
         .unwrap_or(None)
         .map(|v| v.split(',').map(|s| s.to_string()).collect())
         .unwrap_or_else(Vec::new);
-        
+
     let custom_exts = db::get_config(&conn, "customIgnoredExtensions")
         .unwrap_or(None)
         .map(|v| v.split(',').map(|s| s.to_string()).collect())
         .unwrap_or_else(Vec::new);
-        
+
     let custom_dirs = db::get_config(&conn, "customIgnoredDirectoryNames")
         .unwrap_or(None)
         .map(|v| v.split(',').map(|s| s.to_string()).collect())
@@ -716,48 +994,82 @@ fn update_ignore_rules(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn get_ima_knowledge_bases(token: String, refresh_token: String, uid: String, guid: String) -> Result<Vec<KnowledgeBase>, String> {
-    let creds = CachedCredentials { token, refresh_token, uid, guid };
+async fn get_ima_knowledge_bases(
+    token: String,
+    refresh_token: String,
+    uid: String,
+    guid: String,
+) -> Result<Vec<KnowledgeBase>, String> {
+    let creds = CachedCredentials {
+        token,
+        refresh_token,
+        uid,
+        guid,
+    };
     let client = IMASyncClient::new();
     client.get_knowledge_bases(&creds).await
 }
 
 #[tauri::command]
-async fn get_ima_user_profile(token: String, refresh_token: String, uid: String, guid: String) -> Result<(String, String), String> {
-    let creds = CachedCredentials { token, refresh_token, uid, guid };
+async fn get_ima_user_profile(
+    token: String,
+    refresh_token: String,
+    uid: String,
+    guid: String,
+) -> Result<(String, String), String> {
+    let creds = CachedCredentials {
+        token,
+        refresh_token,
+        uid,
+        guid,
+    };
     let client = IMASyncClient::new();
     client.get_user_profile(&creds).await
 }
 
 #[tauri::command]
-async fn get_ima_space_quota(token: String, refresh_token: String, uid: String, guid: String) -> Result<ima_sync::SpaceQuota, String> {
-    let creds = CachedCredentials { token, refresh_token, uid, guid };
+async fn get_ima_space_quota(
+    token: String,
+    refresh_token: String,
+    uid: String,
+    guid: String,
+) -> Result<ima_sync::SpaceQuota, String> {
+    let creds = CachedCredentials {
+        token,
+        refresh_token,
+        uid,
+        guid,
+    };
     let client = IMASyncClient::new();
     client.get_space_quota(&creds).await
 }
 
 #[tauri::command]
-fn start_file_monitor(state: State<'_, AppState>, paths: Vec<String>, app_handle: AppHandle) -> Result<(), String> {
+fn start_file_monitor(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+    app_handle: AppHandle,
+) -> Result<(), String> {
     let mut monitor = state.monitor.lock().unwrap();
     let path_bufs: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
-    
+
     // Load config ignore settings to pass to monitor
     let conn = state.db_conn.lock().unwrap();
     let enable_default = db::get_config(&conn, "enableDefaultIgnoreRules")
         .unwrap_or(None)
         .map(|v| v == "true")
         .unwrap_or(true);
-        
+
     let custom_files = db::get_config(&conn, "customIgnoredFileNames")
         .unwrap_or(None)
         .map(|v| v.split(',').map(|s| s.to_string()).collect())
         .unwrap_or_else(Vec::new);
-        
+
     let custom_exts = db::get_config(&conn, "customIgnoredExtensions")
         .unwrap_or(None)
         .map(|v| v.split(',').map(|s| s.to_string()).collect())
         .unwrap_or_else(Vec::new);
-        
+
     let custom_dirs = db::get_config(&conn, "customIgnoredDirectoryNames")
         .unwrap_or(None)
         .map(|v| v.split(',').map(|s| s.to_string()).collect())
@@ -778,12 +1090,14 @@ fn start_file_monitor(state: State<'_, AppState>, paths: Vec<String>, app_handle
 #[tauri::command]
 async fn select_directory(app_handle: AppHandle) -> Result<Option<String>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    app_handle.run_on_main_thread(move || {
-        let folder = rfd::FileDialog::new().pick_folder();
-        let res = folder.map(|path| path.to_string_lossy().to_string());
-        let _ = tx.send(res);
-    }).map_err(|e| e.to_string())?;
-    
+    app_handle
+        .run_on_main_thread(move || {
+            let folder = rfd::FileDialog::new().pick_folder();
+            let res = folder.map(|path| path.to_string_lossy().to_string());
+            let _ = tx.send(res);
+        })
+        .map_err(|e| e.to_string())?;
+
     rx.await.map_err(|e| e.to_string())
 }
 
@@ -826,29 +1140,56 @@ fn set_window_theme(window: tauri::Window, theme: String) -> Result<(), String> 
     window.set_theme(tauri_theme).map_err(|e| e.to_string())
 }
 
-
-async fn refresh_credentials_via_api(creds: &CachedCredentials) -> Result<CachedCredentials, String> {
+async fn refresh_credentials_via_api(
+    creds: &CachedCredentials,
+) -> Result<CachedCredentials, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| e.to_string())?;
 
     let url = "https://ima.qq.com/auth_login/refresh";
-    
+
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert("Host", reqwest::header::HeaderValue::from_static("ima.qq.com"));
-    headers.insert("Content-Type", reqwest::header::HeaderValue::from_static("application/json"));
-    headers.insert("from_browser_ima", reqwest::header::HeaderValue::from_static("1"));
-    headers.insert("LAUNCH_CHANNELID", reqwest::header::HeaderValue::from_static("900000"));
-    headers.insert("Origin", reqwest::header::HeaderValue::from_static("https://ima.qq.com"));
-    headers.insert("Referer", reqwest::header::HeaderValue::from_static("https://ima.qq.com/"));
+    headers.insert(
+        "Host",
+        reqwest::header::HeaderValue::from_static("ima.qq.com"),
+    );
+    headers.insert(
+        "Content-Type",
+        reqwest::header::HeaderValue::from_static("application/json"),
+    );
+    headers.insert(
+        "from_browser_ima",
+        reqwest::header::HeaderValue::from_static("1"),
+    );
+    headers.insert(
+        "LAUNCH_CHANNELID",
+        reqwest::header::HeaderValue::from_static("900000"),
+    );
+    headers.insert(
+        "Origin",
+        reqwest::header::HeaderValue::from_static("https://ima.qq.com"),
+    );
+    headers.insert(
+        "Referer",
+        reqwest::header::HeaderValue::from_static("https://ima.qq.com/"),
+    );
     headers.insert("User-Agent", reqwest::header::HeaderValue::from_static("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 IMA/143.0.7499.4456"));
-    
+
     let bkn = credentials::calculate_bkn(&creds.token);
-    headers.insert("x-ima-bkn", reqwest::header::HeaderValue::from_str(&bkn.to_string()).unwrap_or(reqwest::header::HeaderValue::from_static("0")));
-    
+    headers.insert(
+        "x-ima-bkn",
+        reqwest::header::HeaderValue::from_str(&bkn.to_string())
+            .unwrap_or(reqwest::header::HeaderValue::from_static("0")),
+    );
+
     let cookie_str = credentials::get_cookie_string(creds);
-    headers.insert("x-ima-cookie", reqwest::header::HeaderValue::from_str(&cookie_str).unwrap_or(reqwest::header::HeaderValue::from_static("")));
+    headers.insert(
+        "x-ima-cookie",
+        reqwest::header::HeaderValue::from_str(&cookie_str)
+            .unwrap_or(reqwest::header::HeaderValue::from_static("")),
+    );
 
     let body = serde_json::json!({
         "refresh_token": creds.refresh_token,
@@ -856,13 +1197,18 @@ async fn refresh_credentials_via_api(creds: &CachedCredentials) -> Result<Cached
         "user_id": creds.uid
     });
 
-    println!("[IMASilentRefresh] Sending direct API refresh request to {}", url);
-    
+    println!(
+        "[IMASilentRefresh] Sending direct API refresh request to {}",
+        url
+    );
+
     let log_id = generate_log_id();
     let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let headers_str = headers.iter().map(|(key, val)| {
-        format!("{}: {:?}", key, val)
-    }).collect::<Vec<String>>().join("\n");
+    let headers_str = headers
+        .iter()
+        .map(|(key, val)| format!("{}: {:?}", key, val))
+        .collect::<Vec<String>>()
+        .join("\n");
     let req_body_str = serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
 
     add_http_log(HttpLogEntry {
@@ -877,7 +1223,8 @@ async fn refresh_credentials_via_api(creds: &CachedCredentials) -> Result<Cached
         error: None,
     });
 
-    let res = client.post(url)
+    let res = client
+        .post(url)
         .headers(headers)
         .json(&body)
         .send()
@@ -898,7 +1245,10 @@ async fn refresh_credentials_via_api(creds: &CachedCredentials) -> Result<Cached
     update_http_log_response(&log_id, status.as_u16(), &body_str);
 
     if !status.is_success() {
-        return Err(format!("Direct refresh returned HTTP error: {} - {}", status, body_str));
+        return Err(format!(
+            "Direct refresh returned HTTP error: {} - {}",
+            status, body_str
+        ));
     }
 
     #[derive(serde::Deserialize)]
@@ -910,11 +1260,17 @@ async fn refresh_credentials_via_api(creds: &CachedCredentials) -> Result<Cached
     }
 
     let parsed: RefreshResponse = serde_json::from_str(&body_str).map_err(|e| {
-        format!("Failed to parse refresh response: {:?}. Body: {}", e, body_str)
+        format!(
+            "Failed to parse refresh response: {:?}. Body: {}",
+            e, body_str
+        )
     })?;
 
     if parsed.code != 0 {
-        return Err(format!("Direct refresh API returned error code {}: {}", parsed.code, parsed.msg));
+        return Err(format!(
+            "Direct refresh API returned error code {}: {}",
+            parsed.code, parsed.msg
+        ));
     }
 
     if parsed.token.is_empty() {
@@ -926,16 +1282,18 @@ async fn refresh_credentials_via_api(creds: &CachedCredentials) -> Result<Cached
     if !parsed.user_id.is_empty() {
         updated_creds.uid = parsed.user_id;
     }
-    
+
     credentials::save_credentials(&updated_creds)?;
     println!("[IMASilentRefresh] Direct API refresh succeeded.");
-    
+
     Ok(updated_creds)
 }
 
-pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<CachedCredentials, String> {
+pub async fn refresh_ima_credentials_silently(
+    app: &tauri::AppHandle,
+) -> Result<CachedCredentials, String> {
     println!("[IMASilentRefresh] Starting silent credentials refresh...");
-    
+
     // 1. Try direct API refresh first if credentials exist
     if let Some(creds) = credentials::load_credentials() {
         if !creds.refresh_token.is_empty() {
@@ -954,18 +1312,18 @@ pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<
     } else {
         println!("[IMASilentRefresh] No stored credentials found. Falling back to WebView-based capture.");
     }
-    
+
     // If a silent refresh window is already open, close it
     if let Some(win) = app.get_webview_window("ima_silent_refresh") {
         let _ = win.close();
     }
-    
+
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<CachedCredentials, String>>();
     let tx = Arc::new(Mutex::new(Some(tx)));
-    
+
     let url_str = "https://ima.qq.com/login/";
     let url = tauri::Url::parse(url_str).map_err(|e| e.to_string())?;
-    
+
     let js_injection = r##"
         (() => {
             if (window.__fsmLoginCaptureInstalled) return;
@@ -1089,7 +1447,7 @@ pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<
     let app_clone_for_nav = app.clone();
     let tx_clone = Arc::clone(&tx);
     let tx_clone_for_nav = Arc::clone(&tx);
-    
+
     app.run_on_main_thread(move || {
         let builder = tauri::WebviewWindowBuilder::new(&app_clone, "ima_silent_refresh", tauri::WebviewUrl::External(url))
             .visible(false)
@@ -1157,7 +1515,7 @@ pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<
                 }
                 false
             });
-            
+
         if let Err(e) = builder.build() {
             println!("[SilentRefresh] Failed to build hidden WebviewWindow: {:?}", e);
             let mut guard = tx_clone.lock().unwrap();
@@ -1170,7 +1528,7 @@ pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<
     // Wait up to 10 seconds for the silent login
     let timeout = tokio::time::sleep(std::time::Duration::from_secs(10));
     tokio::pin!(timeout);
-    
+
     tokio::select! {
         res = rx => {
             match res {
@@ -1199,7 +1557,7 @@ pub async fn refresh_ima_credentials_silently(app: &tauri::AppHandle) -> Result<
 #[tauri::command]
 fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
-    
+
     if let Some(win) = app.get_webview_window("ima_login") {
         win.set_focus().unwrap();
         return Ok(());
@@ -1399,14 +1757,14 @@ fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
 
     let app_clone = app.clone();
     let app_clone2 = app.clone();
-    
+
     app.run_on_main_thread(move || {
         let builder = tauri::WebviewWindowBuilder::new(&app_clone2, "ima_login", tauri::WebviewUrl::External(url))
             .title("微信扫码登录")
             .inner_size(350.0, 410.0)
             .resizable(false)
             .decorations(false)
-            
+
             .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .initialization_script(js_injection)
             .on_navigation(move |url| {
@@ -1468,10 +1826,10 @@ fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
                     _ => false,
                 }
             });
-            
+
         // Make it modal relative to main window
-        
-        
+
+
         if let Ok(win) = builder.center().build() {
             if let Some(main_window) = app_clone2.get_webview_window("main") {
                 if let (Ok(main_pos), Ok(main_size), Ok(login_size)) = (
@@ -1500,31 +1858,32 @@ pub fn run() {
             let _ = APP_HANDLE.set(app.handle().clone());
 
             // Locate user data directory for SQLite database
-            let app_dir = app.path().app_data_dir()
+            let app_dir = app
+                .path()
+                .app_data_dir()
                 .unwrap_or_else(|_| PathBuf::from("./"));
-            
+
             // Ensure app directory exists
             std::fs::create_dir_all(&app_dir).unwrap_or_default();
-            
+
             // Initalize credentials module with the correct sandbox data directory
             let _ = credentials::APP_DATA_DIR.set(app_dir.clone());
-            
+
             let db_path = app_dir.join("file_sync_monitor.db");
-            let conn = db::init_db(&db_path)
-                .expect("Failed to initialize SQLite database");
- 
+            let conn = db::init_db(&db_path).expect("Failed to initialize SQLite database");
+
             let monitor = DirectoryMonitor::new(IgnoreRules::new(true, vec![], vec![], vec![]));
- 
+
             // Setup global shared State
             app.manage(AppState {
                 db_conn: Mutex::new(conn),
                 monitor: Arc::new(Mutex::new(monitor)),
                 db_path,
             });
- 
+
             // Scaffold dynamic System Tray
             tray::setup_system_tray(app.handle())?;
- 
+
             // Automatically show and focus the main window in development mode
             #[cfg(debug_assertions)]
             {

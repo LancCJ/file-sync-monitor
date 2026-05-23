@@ -1,6 +1,6 @@
-use std::sync::OnceLock;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use serde::{Serialize, Deserialize};
+use std::sync::OnceLock;
 
 pub static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -29,7 +29,7 @@ pub fn load_credentials() -> Option<CachedCredentials> {
             return Some(creds);
         }
     }
-    
+
     // Attempt migration from legacy path if exists
     let legacy_path = std::env::temp_dir().join("fsm_ima_creds.json");
     if legacy_path.exists() {
@@ -42,7 +42,7 @@ pub fn load_credentials() -> Option<CachedCredentials> {
             }
         }
     }
-    
+
     None
 }
 
@@ -51,10 +51,13 @@ pub fn save_credentials(creds: &CachedCredentials) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    
+
     let json_str = serde_json::to_string(creds).map_err(|e| e.to_string())?;
     std::fs::write(&path, &json_str).map_err(|e| format!("Failed to write credentials: {}", e))?;
-    println!("[Credentials] Saved successfully to sandbox storage: {:?}", path);
+    println!(
+        "[Credentials] Saved successfully to sandbox storage: {:?}",
+        path
+    );
     Ok(())
 }
 
@@ -63,12 +66,12 @@ pub fn clear_credentials() -> Result<(), String> {
     if path.exists() {
         let _ = std::fs::remove_file(&path);
     }
-    
+
     let legacy_path = std::env::temp_dir().join("fsm_ima_creds.json");
     if legacy_path.exists() {
         let _ = std::fs::remove_file(&legacy_path);
     }
-    
+
     println!("[Credentials] Sandbox and legacy credentials cleared.");
     Ok(())
 }

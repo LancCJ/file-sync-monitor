@@ -1,11 +1,11 @@
+use hmac::{Hmac, Mac};
 use reqwest::header::{HeaderMap, HeaderValue};
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use serde::de::{self, Deserializer, Visitor};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sha1::Sha1;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
-use hmac::{Hmac, Mac};
-use sha1::Sha1;
 
 use crate::credentials::{self, CachedCredentials};
 
@@ -70,11 +70,7 @@ impl COSSigner {
             http_headers
         );
 
-        let string_to_sign = format!(
-            "sha1\n{}\n{}\n",
-            key_time,
-            sha1(&http_string)
-        );
+        let string_to_sign = format!("sha1\n{}\n{}\n", key_time, sha1(&http_string));
 
         let signature = hmac_sha1(sign_key.as_bytes(), &string_to_sign);
 
@@ -112,17 +108,20 @@ where
         D: Deserializer<'de>,
     {
         let value = serde_json::Value::deserialize(deserializer)?;
-        
-        let code = value.get("code")
+
+        let code = value
+            .get("code")
             .and_then(|v| v.as_i64())
             .map(|v| v as i32)
             .unwrap_or(0);
-            
-        let msg = value.get("msg")
+
+        let msg = value
+            .get("msg")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-            
-        let request_id = value.get("requestId")
+
+        let request_id = value
+            .get("requestId")
             .or_else(|| value.get("request_id"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
@@ -188,10 +187,19 @@ impl<'de> Deserialize<'de> for KnowledgeBase {
     {
         #[derive(Deserialize)]
         struct RawKB {
-            #[serde(alias = "knowledgeBaseId", alias = "knowledge_base_id", alias = "kb_id")]
+            #[serde(
+                alias = "knowledgeBaseId",
+                alias = "knowledge_base_id",
+                alias = "kb_id"
+            )]
             kb_id: Option<String>,
             id: Option<String>,
-            #[serde(alias = "knowledge_base_name", alias = "kb_name", alias = "title", alias = "name")]
+            #[serde(
+                alias = "knowledge_base_name",
+                alias = "kb_name",
+                alias = "title",
+                alias = "name"
+            )]
             name: Option<String>,
             description: Option<String>,
             count: Option<i32>,
@@ -202,7 +210,7 @@ impl<'de> Deserialize<'de> for KnowledgeBase {
         let raw = RawKB::deserialize(deserializer)?;
 
         let final_id = raw.kb_id.or(raw.id).unwrap_or_default();
-        
+
         let mut final_name = raw.name.unwrap_or_default();
         if final_name.is_empty() {
             if let Some(basic_info) = raw.basic_info {
@@ -393,16 +401,25 @@ impl<'de> Deserialize<'de> for KnowledgeInfo {
         }
 
         let raw = RawInfo::deserialize(deserializer)?;
-        
-        let media_id = raw.media_id.clone().or_else(|| raw.folder_id.clone()).unwrap_or_default();
-        
-        let title = raw.title.clone()
+
+        let media_id = raw
+            .media_id
+            .clone()
+            .or_else(|| raw.folder_id.clone())
+            .unwrap_or_default();
+
+        let title = raw
+            .title
+            .clone()
             .or_else(|| raw.name.clone())
             .or_else(|| raw.folder_info.as_ref().and_then(|fi| fi.name.clone()))
             .unwrap_or_default();
 
-        let parent_folder_id = raw.parent_folder_id.clone()
-            .or_else(|| raw.folder_info.as_ref().and_then(|fi| fi.parent_folder_id.clone()));
+        let parent_folder_id = raw.parent_folder_id.clone().or_else(|| {
+            raw.folder_info
+                .as_ref()
+                .and_then(|fi| fi.parent_folder_id.clone())
+        });
 
         Ok(KnowledgeInfo {
             media_id,
@@ -472,7 +489,10 @@ impl KnowledgeInfo {
         }
 
         if let Some(ref fid) = self.folder_id {
-            if fid.starts_with("folder_") && self.media_type.is_none() && (self.media_id.is_empty() || self.media_id == *fid) {
+            if fid.starts_with("folder_")
+                && self.media_type.is_none()
+                && (self.media_id.is_empty() || self.media_id == *fid)
+            {
                 return Some(fid.clone());
             }
         }
@@ -494,7 +514,17 @@ impl KnowledgeInfo {
 
     #[allow(dead_code)]
     pub fn is_note(&self) -> bool {
-        self.media_type == Some(11) || self.notebook_ext_info.as_ref().map(|nei| nei.notebook_id.as_ref().map(|n| !n.is_empty()).unwrap_or(false)).unwrap_or(false)
+        self.media_type == Some(11)
+            || self
+                .notebook_ext_info
+                .as_ref()
+                .map(|nei| {
+                    nei.notebook_id
+                        .as_ref()
+                        .map(|n| !n.is_empty())
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false)
     }
 }
 
@@ -523,18 +553,35 @@ impl<'de> Deserialize<'de> for KnowledgeListPayload {
 
         let raw = RawPayload::deserialize(deserializer)?;
         let mut items = Vec::new();
-        if let Some(list) = raw.knowledge_list { items.extend(list); }
-        if let Some(list) = raw.folder_list { items.extend(list); }
-        if let Some(list) = raw.info_list { items.extend(list); }
-        if let Some(list) = raw.list { items.extend(list); }
-        if let Some(list) = raw.items { items.extend(list); }
+        if let Some(list) = raw.knowledge_list {
+            items.extend(list);
+        }
+        if let Some(list) = raw.folder_list {
+            items.extend(list);
+        }
+        if let Some(list) = raw.info_list {
+            items.extend(list);
+        }
+        if let Some(list) = raw.list {
+            items.extend(list);
+        }
+        if let Some(list) = raw.items {
+            items.extend(list);
+        }
 
         let mut seen = std::collections::HashSet::new();
-        let deduped = items.into_iter().filter(|item| {
-            let id = item.folder_identifier().unwrap_or_else(|| item.media_id.clone());
-            if id.is_empty() { return true; }
-            seen.insert(id)
-        }).collect();
+        let deduped = items
+            .into_iter()
+            .filter(|item| {
+                let id = item
+                    .folder_identifier()
+                    .unwrap_or_else(|| item.media_id.clone());
+                if id.is_empty() {
+                    return true;
+                }
+                seen.insert(id)
+            })
+            .collect();
 
         Ok(KnowledgeListPayload {
             knowledge_list: deduped,
@@ -583,9 +630,21 @@ pub struct MediaInfoPayload {
 impl MediaInfoPayload {
     pub fn has_usable_content(&self) -> bool {
         if self.media_type == 11 {
-            return self.notebook_ext_info.as_ref().map(|nei| nei.notebook_id.as_ref().map(|n| !n.is_empty()).unwrap_or(false)).unwrap_or(false);
+            return self
+                .notebook_ext_info
+                .as_ref()
+                .map(|nei| {
+                    nei.notebook_id
+                        .as_ref()
+                        .map(|n| !n.is_empty())
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
         }
-        self.url_info.as_ref().map(|ui| !ui.url.is_empty()).unwrap_or(false)
+        self.url_info
+            .as_ref()
+            .map(|ui| !ui.url.is_empty())
+            .unwrap_or(false)
     }
 }
 
@@ -606,7 +665,17 @@ impl<'de> Deserialize<'de> for NoteContentPayload {
         D: serde::Deserializer<'de>,
     {
         let val = serde_json::Value::deserialize(deserializer)?;
-        let content = find_string_in_value(&val, &["content", "doc_content", "text", "plain_text", "markdown", "md_content"]);
+        let content = find_string_in_value(
+            &val,
+            &[
+                "content",
+                "doc_content",
+                "text",
+                "plain_text",
+                "markdown",
+                "md_content",
+            ],
+        );
         Ok(NoteContentPayload { content })
     }
 }
@@ -638,7 +707,6 @@ fn find_string_in_value(val: &serde_json::Value, keys: &[&str]) -> Option<String
         _ => None,
     }
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmptyPayload {}
@@ -740,27 +808,51 @@ impl IMASyncClient {
         headers.insert("Connection", HeaderValue::from_static("keep-alive"));
         headers.insert("sec-ch-ua-platform", HeaderValue::from_static("macOS"));
         headers.insert("from_browser_ima", HeaderValue::from_static("1"));
-        headers.insert("sec-ch-ua", HeaderValue::from_static("\"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\""));
-        headers.insert("x-ima-bkn", HeaderValue::from_str(&credentials::calculate_bkn(&creds.token).to_string()).unwrap_or(HeaderValue::from_static("0")));
+        headers.insert(
+            "sec-ch-ua",
+            HeaderValue::from_static("\"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\""),
+        );
+        headers.insert(
+            "x-ima-bkn",
+            HeaderValue::from_str(&credentials::calculate_bkn(&creds.token).to_string())
+                .unwrap_or(HeaderValue::from_static("0")),
+        );
         headers.insert("sec-ch-ua-mobile", HeaderValue::from_static("?0"));
-        headers.insert("x-ima-cookie", HeaderValue::from_str(&credentials::get_cookie_string(creds)).unwrap_or(HeaderValue::from_static("")));
+        headers.insert(
+            "x-ima-cookie",
+            HeaderValue::from_str(&credentials::get_cookie_string(creds))
+                .unwrap_or(HeaderValue::from_static("")),
+        );
         headers.insert("User-Agent", HeaderValue::from_static("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 IMA/143.0.7499.4456"));
         headers.insert("accept", HeaderValue::from_static("application/json"));
         headers.insert("extension_version", HeaderValue::from_static("4.25.3"));
-        headers.insert("Origin", HeaderValue::from_static("chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi"));
-        headers.insert("Accept-Language", HeaderValue::from_static("zh-CN,zh;q=0.9"));
+        headers.insert(
+            "Origin",
+            HeaderValue::from_static("chrome-extension://nkohmbngmopdajidckglcoehlaeepeoi"),
+        );
+        headers.insert(
+            "Accept-Language",
+            HeaderValue::from_static("zh-CN,zh;q=0.9"),
+        );
         headers
     }
-    pub async fn post_json<T: DeserializeOwned>(&self, path: &str, body: serde_json::Value, creds: &CachedCredentials) -> Result<IMAResponse<T>, String> {
+    pub async fn post_json<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: serde_json::Value,
+        creds: &CachedCredentials,
+    ) -> Result<IMAResponse<T>, String> {
         let url = format!("{}/{}", self.base_url, path);
         let headers = self.build_headers(creds);
 
         // Capture request details
         let log_id = crate::generate_log_id();
         let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        let headers_str = headers.iter().map(|(key, val)| {
-            format!("{}: {:?}", key, val)
-        }).collect::<Vec<String>>().join("\n");
+        let headers_str = headers
+            .iter()
+            .map(|(key, val)| format!("{}: {:?}", key, val))
+            .collect::<Vec<String>>()
+            .join("\n");
         let req_body_str = serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
 
         crate::add_http_log(crate::HttpLogEntry {
@@ -784,7 +876,9 @@ impl IMASyncClient {
         }
         println!("[IMA Client] Body: {}", body);
 
-        let res = self.client.post(&url)
+        let res = self
+            .client
+            .post(&url)
             .headers(headers)
             .json(&body)
             .send()
@@ -817,15 +911,17 @@ impl IMASyncClient {
             return Err(err_msg);
         }
 
-        let parsed: IMAResponse<T> = serde_json::from_str(&body_str)
-            .map_err(|e| {
-                let err_msg = format!("Serialization failed: {:?}. Raw response: {}", e, body_str);
-                println!("[IMA Client] Deserialization error: {}", err_msg);
-                crate::update_http_log_error(&log_id, &err_msg);
-                err_msg
-            })?;
+        let parsed: IMAResponse<T> = serde_json::from_str(&body_str).map_err(|e| {
+            let err_msg = format!("Serialization failed: {:?}. Raw response: {}", e, body_str);
+            println!("[IMA Client] Deserialization error: {}", err_msg);
+            crate::update_http_log_error(&log_id, &err_msg);
+            err_msg
+        })?;
 
-        println!("[IMA Client] Successfully parsed response with code: {}", parsed.code);
+        println!(
+            "[IMA Client] Successfully parsed response with code: {}",
+            parsed.code
+        );
 
         if parsed.code == 600001 {
             println!("[IMA Client] Token expired (code 600001). Attempting silent refresh...");
@@ -833,16 +929,20 @@ impl IMASyncClient {
                 match crate::refresh_ima_credentials_silently(app).await {
                     Ok(new_creds) => {
                         println!("[IMA Client] Silent refresh succeeded. Retrying request with new credentials...");
-                        
+
                         let url = format!("{}/{}", self.base_url, path);
                         let headers = self.build_headers(&new_creds);
-                        
+
                         let retry_log_id = crate::generate_log_id();
-                        let retry_timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-                        let retry_headers_str = headers.iter().map(|(key, val)| {
-                            format!("{}: {:?}", key, val)
-                        }).collect::<Vec<String>>().join("\n");
-                        let retry_req_body_str = serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
+                        let retry_timestamp =
+                            chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                        let retry_headers_str = headers
+                            .iter()
+                            .map(|(key, val)| format!("{}: {:?}", key, val))
+                            .collect::<Vec<String>>()
+                            .join("\n");
+                        let retry_req_body_str = serde_json::to_string_pretty(&body)
+                            .unwrap_or_else(|_| body.to_string());
 
                         crate::add_http_log(crate::HttpLogEntry {
                             id: retry_log_id.clone(),
@@ -856,7 +956,9 @@ impl IMASyncClient {
                             error: None,
                         });
 
-                        let res = self.client.post(&url)
+                        let res = self
+                            .client
+                            .post(&url)
                             .headers(headers)
                             .json(&body)
                             .send()
@@ -877,19 +979,28 @@ impl IMASyncClient {
                         crate::update_http_log_response(&retry_log_id, status.as_u16(), &body_str);
 
                         if !status.is_success() {
-                            let err_msg = format!("IMA API retry returned HTTP error: {} - {}", status, body_str);
+                            let err_msg = format!(
+                                "IMA API retry returned HTTP error: {} - {}",
+                                status, body_str
+                            );
                             crate::update_http_log_error(&retry_log_id, &err_msg);
                             return Err(err_msg);
                         }
 
                         let parsed_retry: IMAResponse<T> = serde_json::from_str(&body_str)
                             .map_err(|e| {
-                                let err_msg = format!("Serialization failed on retry: {:?}. Raw response: {}", e, body_str);
+                                let err_msg = format!(
+                                    "Serialization failed on retry: {:?}. Raw response: {}",
+                                    e, body_str
+                                );
                                 crate::update_http_log_error(&retry_log_id, &err_msg);
                                 err_msg
                             })?;
 
-                        println!("[IMA Client] Successfully parsed retry response with code: {}", parsed_retry.code);
+                        println!(
+                            "[IMA Client] Successfully parsed retry response with code: {}",
+                            parsed_retry.code
+                        );
                         return Ok(parsed_retry);
                     }
                     Err(e) => {
@@ -902,16 +1013,26 @@ impl IMASyncClient {
         }
 
         Ok(parsed)
-    }    #[allow(dead_code)]
+    }
+    #[allow(dead_code)]
     pub async fn validate_credentials(&self, creds: &CachedCredentials) -> bool {
-        let res: Result<IMAResponse<H5UserInfoDetail>, String> = self.post_json("cgi-bin/user_info/get_user_info", serde_json::json!({}), creds).await;
+        let res: Result<IMAResponse<H5UserInfoDetail>, String> = self
+            .post_json(
+                "cgi-bin/user_info/get_user_info",
+                serde_json::json!({}),
+                creds,
+            )
+            .await;
         match res {
             Ok(response) => response.code == 0,
             Err(_) => false,
         }
     }
 
-    pub async fn get_knowledge_bases(&self, creds: &CachedCredentials) -> Result<Vec<KnowledgeBase>, String> {
+    pub async fn get_knowledge_bases(
+        &self,
+        creds: &CachedCredentials,
+    ) -> Result<Vec<KnowledgeBase>, String> {
         let body = serde_json::json!({
             "params": [
                 {"type": 1001, "cursor": "", "limit": 20},
@@ -921,7 +1042,13 @@ impl IMASyncClient {
             ]
         });
 
-        let response: IMAResponse<H5KnowledgeBaseListResponse> = self.post_json("cgi-bin/knowledge_tab_reader/get_knowledge_base_list", body, creds).await?;
+        let response: IMAResponse<H5KnowledgeBaseListResponse> = self
+            .post_json(
+                "cgi-bin/knowledge_tab_reader/get_knowledge_base_list",
+                body,
+                creds,
+            )
+            .await?;
         if response.code != 0 {
             return Err(format!("API Error ({}): {:?}", response.code, response.msg));
         }
@@ -938,8 +1065,17 @@ impl IMASyncClient {
         Ok(list)
     }
 
-    pub async fn get_user_profile(&self, creds: &CachedCredentials) -> Result<(String, String), String> {
-        let response: IMAResponse<H5UserInfoDetail> = self.post_json("cgi-bin/user_info/get_user_info", serde_json::json!({}), creds).await?;
+    pub async fn get_user_profile(
+        &self,
+        creds: &CachedCredentials,
+    ) -> Result<(String, String), String> {
+        let response: IMAResponse<H5UserInfoDetail> = self
+            .post_json(
+                "cgi-bin/user_info/get_user_info",
+                serde_json::json!({}),
+                creds,
+            )
+            .await?;
         if response.code != 0 {
             return Err(format!("API Error ({}): {:?}", response.code, response.msg));
         }
@@ -961,7 +1097,9 @@ impl IMASyncClient {
             }
         });
 
-        let response: IMAResponse<H5SpaceQuotaResponse> = self.post_json("cgi-bin/space/get_user_space", body, creds).await?;
+        let response: IMAResponse<H5SpaceQuotaResponse> = self
+            .post_json("cgi-bin/space/get_user_space", body, creds)
+            .await?;
         if response.code != 0 {
             return Err(format!("API Error ({}): {:?}", response.code, response.msg));
         }
@@ -983,7 +1121,13 @@ impl IMASyncClient {
         })
     }
 
-    pub async fn get_knowledge_list(&self, kb_id: &str, folder_id: Option<&str>, cursor: &str, creds: &CachedCredentials) -> Result<KnowledgeListPayload, String> {
+    pub async fn get_knowledge_list(
+        &self,
+        kb_id: &str,
+        folder_id: Option<&str>,
+        cursor: &str,
+        creds: &CachedCredentials,
+    ) -> Result<KnowledgeListPayload, String> {
         let mut body = serde_json::json!({
             "sort_type": 9,
             "need_default_cover": true,
@@ -995,19 +1139,35 @@ impl IMASyncClient {
 
         if let Some(fid) = folder_id {
             if !fid.is_empty() {
-                body.as_object_mut().unwrap().insert("folder_id".to_string(), serde_json::Value::String(fid.to_string()));
+                body.as_object_mut().unwrap().insert(
+                    "folder_id".to_string(),
+                    serde_json::Value::String(fid.to_string()),
+                );
             }
         }
 
-        let response: IMAResponse<KnowledgeListPayload> = self.post_json("cgi-bin/knowledge_tab_reader/get_knowledge_list", body, creds).await?;
+        let response: IMAResponse<KnowledgeListPayload> = self
+            .post_json(
+                "cgi-bin/knowledge_tab_reader/get_knowledge_list",
+                body,
+                creds,
+            )
+            .await?;
         if response.code != 0 {
             return Err(format!("API Error ({}): {:?}", response.code, response.msg));
         }
 
-        response.data.ok_or_else(|| "No knowledge base list data returned".to_string())
+        response
+            .data
+            .ok_or_else(|| "No knowledge base list data returned".to_string())
     }
 
-    pub async fn get_media_info(&self, media_id: &str, kb_id: &str, creds: &CachedCredentials) -> Result<MediaInfoPayload, String> {
+    pub async fn get_media_info(
+        &self,
+        media_id: &str,
+        kb_id: &str,
+        creds: &CachedCredentials,
+    ) -> Result<MediaInfoPayload, String> {
         // Attempt H5 web endpoint first
         let h5_body = serde_json::json!({
             "media_id": media_id,
@@ -1015,7 +1175,9 @@ impl IMASyncClient {
             "need_default_cover": true
         });
 
-        let h5_res: Result<IMAResponse<H5GetKnowledgeResponse>, String> = self.post_json("cgi-bin/knowledge_tab_reader/get_knowledge", h5_body, creds).await;
+        let h5_res: Result<IMAResponse<H5GetKnowledgeResponse>, String> = self
+            .post_json("cgi-bin/knowledge_tab_reader/get_knowledge", h5_body, creds)
+            .await;
         if let Ok(resp) = h5_res {
             if resp.code == 0 {
                 if let Some(data) = resp.data {
@@ -1032,22 +1194,35 @@ impl IMASyncClient {
             "media_id": media_id
         });
 
-        let open_res: IMAResponse<MediaInfoPayload> = self.post_json("openapi/wiki/v1/get_media_info", open_body, creds).await?;
+        let open_res: IMAResponse<MediaInfoPayload> = self
+            .post_json("openapi/wiki/v1/get_media_info", open_body, creds)
+            .await?;
         if open_res.code != 0 {
-            return Err(format!("OpenAPI Error ({}): {:?}", open_res.code, open_res.msg));
+            return Err(format!(
+                "OpenAPI Error ({}): {:?}",
+                open_res.code, open_res.msg
+            ));
         }
 
-        open_res.data.ok_or_else(|| "Failed to get media info from both H5 and OpenAPI".to_string())
+        open_res
+            .data
+            .ok_or_else(|| "Failed to get media info from both H5 and OpenAPI".to_string())
     }
 
-    pub async fn get_note_content(&self, note_id: &str, creds: &CachedCredentials) -> Result<String, String> {
+    pub async fn get_note_content(
+        &self,
+        note_id: &str,
+        creds: &CachedCredentials,
+    ) -> Result<String, String> {
         // Attempt openapi
         let open_body = serde_json::json!({
             "note_id": note_id,
             "target_content_format": 0
         });
 
-        let open_res: Result<IMAResponse<NoteContentPayload>, String> = self.post_json("openapi/note/v1/get_doc_content", open_body, creds).await;
+        let open_res: Result<IMAResponse<NoteContentPayload>, String> = self
+            .post_json("openapi/note/v1/get_doc_content", open_body, creds)
+            .await;
         if let Ok(resp) = open_res {
             if resp.code == 0 {
                 if let Some(data) = resp.data {
@@ -1073,8 +1248,12 @@ impl IMASyncClient {
             }
         });
 
-        for path in &["cgi-bin/notebook_logic_get_doc", "cgi-bin/notebook_logic/get_doc"] {
-            let h5_res: Result<IMAResponse<NoteContentPayload>, String> = self.post_json(path, h5_body.clone(), creds).await;
+        for path in &[
+            "cgi-bin/notebook_logic_get_doc",
+            "cgi-bin/notebook_logic/get_doc",
+        ] {
+            let h5_res: Result<IMAResponse<NoteContentPayload>, String> =
+                self.post_json(path, h5_body.clone(), creds).await;
             if let Ok(resp) = h5_res {
                 if resp.code == 0 {
                     if let Some(data) = resp.data {
@@ -1091,25 +1270,40 @@ impl IMASyncClient {
         Err("未能读取 IMA 笔记正文".to_string())
     }
 
-    pub async fn download_file(&self, media_id: &str, kb_id: &str, destination: &Path, creds: &CachedCredentials) -> Result<(), String> {
+    pub async fn download_file(
+        &self,
+        media_id: &str,
+        kb_id: &str,
+        destination: &Path,
+        creds: &CachedCredentials,
+    ) -> Result<(), String> {
         let info = self.get_media_info(media_id, kb_id, creds).await?;
 
         if info.media_type == 11 {
             // Note type: get note markdown content and write
-            let note_id = info.notebook_ext_info.as_ref()
+            let note_id = info
+                .notebook_ext_info
+                .as_ref()
                 .and_then(|nei| nei.notebook_id.as_ref())
                 .cloned()
                 .unwrap_or_else(|| media_id.to_string());
-                
+
             let content = self.get_note_content(&note_id, creds).await?;
             if let Some(parent) = destination.parent() {
-                std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create folder: {:?}", e))?;
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create folder: {:?}", e))?;
             }
-            std::fs::write(destination, content).map_err(|e| format!("Failed to write note: {:?}", e))?;
+            std::fs::write(destination, content)
+                .map_err(|e| format!("Failed to write note: {:?}", e))?;
             return Ok(());
         }
 
-        let url_info = info.url_info.ok_or_else(|| format!("This media type is not supported for export (media_type = {})", info.media_type))?;
+        let url_info = info.url_info.ok_or_else(|| {
+            format!(
+                "This media type is not supported for export (media_type = {})",
+                info.media_type
+            )
+        })?;
         if url_info.url.is_empty() {
             return Err("Empty download URL received from cloud".to_string());
         }
@@ -1122,21 +1316,34 @@ impl IMASyncClient {
             }
         }
 
-        let resp = request.send().await.map_err(|e| format!("Download HTTP error: {:?}", e))?;
+        let resp = request
+            .send()
+            .await
+            .map_err(|e| format!("Download HTTP error: {:?}", e))?;
         if !resp.status().is_success() {
             return Err(format!("Download failed with status: {}", resp.status()));
         }
 
-        let bytes = resp.bytes().await.map_err(|e| format!("Failed to read response bytes: {:?}", e))?;
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| format!("Failed to read response bytes: {:?}", e))?;
         if let Some(parent) = destination.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create folder: {:?}", e))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create folder: {:?}", e))?;
         }
         std::fs::write(destination, bytes).map_err(|e| format!("Failed to write file: {:?}", e))?;
 
         Ok(())
     }
 
-    pub async fn create_folder(&self, title: &str, kb_id: &str, parent_folder_id: Option<&str>, creds: &CachedCredentials) -> Result<String, String> {
+    pub async fn create_folder(
+        &self,
+        title: &str,
+        kb_id: &str,
+        parent_folder_id: Option<&str>,
+        creds: &CachedCredentials,
+    ) -> Result<String, String> {
         let actual_folder_id = parent_folder_id.unwrap_or(kb_id);
 
         let body = serde_json::json!({
@@ -1145,16 +1352,27 @@ impl IMASyncClient {
             "title": title
         });
 
-        let response: IMAResponse<IMACreateFolderResponse> = self.post_json("cgi-bin/knowledge_tab_writer/create_folder", body, creds).await?;
+        let response: IMAResponse<IMACreateFolderResponse> = self
+            .post_json("cgi-bin/knowledge_tab_writer/create_folder", body, creds)
+            .await?;
         if response.code != 0 {
             return Err(format!("API Error ({}): {:?}", response.code, response.msg));
         }
 
-        let data = response.data.ok_or_else(|| "No folder response data returned".to_string())?;
+        let data = response
+            .data
+            .ok_or_else(|| "No folder response data returned".to_string())?;
         Ok(data.knowledge.media_id)
     }
 
-    pub async fn rename_knowledge(&self, media_id: &str, title: &str, kb_id: &str, folder_id: Option<&str>, creds: &CachedCredentials) -> Result<(), String> {
+    pub async fn rename_knowledge(
+        &self,
+        media_id: &str,
+        title: &str,
+        kb_id: &str,
+        folder_id: Option<&str>,
+        creds: &CachedCredentials,
+    ) -> Result<(), String> {
         let actual_folder_id = folder_id.unwrap_or(kb_id);
 
         let body = serde_json::json!({
@@ -1164,7 +1382,9 @@ impl IMASyncClient {
             "title": title
         });
 
-        let response: IMAResponse<EmptyPayload> = self.post_json("cgi-bin/knowledge_tab_writer/rename_knowledge", body, creds).await?;
+        let response: IMAResponse<EmptyPayload> = self
+            .post_json("cgi-bin/knowledge_tab_writer/rename_knowledge", body, creds)
+            .await?;
         if response.code != 0 {
             return Err(format!("API Error ({}): {:?}", response.code, response.msg));
         }
@@ -1172,13 +1392,20 @@ impl IMASyncClient {
         Ok(())
     }
 
-    pub async fn delete_knowledge_by_web_api(&self, media_ids: &[String], kb_id: &str, creds: &CachedCredentials) -> Result<(), String> {
+    pub async fn delete_knowledge_by_web_api(
+        &self,
+        media_ids: &[String],
+        kb_id: &str,
+        creds: &CachedCredentials,
+    ) -> Result<(), String> {
         let body = serde_json::json!({
             "knowledge_base_id": kb_id,
             "media_ids": media_ids
         });
 
-        let response: IMAResponse<DeleteKnowledgeWebResponse> = self.post_json("cgi-bin/knowledge_tab_writer/del_knowledge", body, creds).await?;
+        let response: IMAResponse<DeleteKnowledgeWebResponse> = self
+            .post_json("cgi-bin/knowledge_tab_writer/del_knowledge", body, creds)
+            .await?;
         if response.code != 0 {
             return Err(format!("API Error ({}): {:?}", response.code, response.msg));
         }
@@ -1193,14 +1420,24 @@ impl IMASyncClient {
                 }
             }
             if !failed.is_empty() {
-                return Err(format!("Failed to delete some items: {}", failed.join(", ")));
+                return Err(format!(
+                    "Failed to delete some items: {}",
+                    failed.join(", ")
+                ));
             }
         }
 
         Ok(())
     }
 
-    pub async fn check_repeated_names(&self, name: &str, media_type: i32, kb_id: &str, folder_id: Option<&str>, creds: &CachedCredentials) -> Result<bool, String> {
+    pub async fn check_repeated_names(
+        &self,
+        name: &str,
+        media_type: i32,
+        kb_id: &str,
+        folder_id: Option<&str>,
+        creds: &CachedCredentials,
+    ) -> Result<bool, String> {
         let inner_param = serde_json::json!({
             "name": name,
             "media_type": media_type
@@ -1213,11 +1450,20 @@ impl IMASyncClient {
 
         if let Some(fid) = folder_id {
             if !fid.is_empty() {
-                body.as_object_mut().unwrap().insert("folder_id".to_string(), serde_json::Value::String(fid.to_string()));
+                body.as_object_mut().unwrap().insert(
+                    "folder_id".to_string(),
+                    serde_json::Value::String(fid.to_string()),
+                );
             }
         }
 
-        let response: IMAResponse<CheckRepeatedNamesPayload> = self.post_json("cgi-bin/knowledge_tab_reader/check_repeated_names", body, creds).await?;
+        let response: IMAResponse<CheckRepeatedNamesPayload> = self
+            .post_json(
+                "cgi-bin/knowledge_tab_reader/check_repeated_names",
+                body,
+                creds,
+            )
+            .await?;
         if response.code != 0 {
             return Err(format!("API Error ({}): {:?}", response.code, response.msg));
         }
@@ -1233,11 +1479,21 @@ impl IMASyncClient {
         Ok(false)
     }
 
-    pub async fn fetch_all_knowledge_items(&self, kb_id: &str, folder_id: Option<&str>, creds: &CachedCredentials) -> Result<Vec<KnowledgeInfo>, String> {
+    pub async fn fetch_all_knowledge_items(
+        &self,
+        kb_id: &str,
+        folder_id: Option<&str>,
+        creds: &CachedCredentials,
+    ) -> Result<Vec<KnowledgeInfo>, String> {
         if folder_id.is_none() {
-            let default_root = self.fetch_knowledge_items_page_by_page(kb_id, None, creds).await?;
+            let default_root = self
+                .fetch_knowledge_items_page_by_page(kb_id, None, creds)
+                .await?;
             // Merge with explicit root if successful
-            match self.fetch_knowledge_items_page_by_page(kb_id, Some(kb_id), creds).await {
+            match self
+                .fetch_knowledge_items_page_by_page(kb_id, Some(kb_id), creds)
+                .await
+            {
                 Ok(explicit_root) => {
                     let mut merged = default_root;
                     for item in explicit_root {
@@ -1247,19 +1503,27 @@ impl IMASyncClient {
                     }
                     Ok(merged)
                 }
-                Err(_) => Ok(default_root)
+                Err(_) => Ok(default_root),
             }
         } else {
-            self.fetch_knowledge_items_page_by_page(kb_id, folder_id, creds).await
+            self.fetch_knowledge_items_page_by_page(kb_id, folder_id, creds)
+                .await
         }
     }
 
-    async fn fetch_knowledge_items_page_by_page(&self, kb_id: &str, folder_id: Option<&str>, creds: &CachedCredentials) -> Result<Vec<KnowledgeInfo>, String> {
+    async fn fetch_knowledge_items_page_by_page(
+        &self,
+        kb_id: &str,
+        folder_id: Option<&str>,
+        creds: &CachedCredentials,
+    ) -> Result<Vec<KnowledgeInfo>, String> {
         let mut all_items = Vec::new();
         let mut cursor = String::new();
 
         loop {
-            let page = self.get_knowledge_list(kb_id, folder_id, &cursor, creds).await?;
+            let page = self
+                .get_knowledge_list(kb_id, folder_id, &cursor, creds)
+                .await?;
             all_items.extend(page.knowledge_list);
 
             if page.is_end || page.next_cursor.is_empty() {
@@ -1279,7 +1543,8 @@ impl IMASyncClient {
         existing_remote_id: Option<&str>,
         creds: &CachedCredentials,
     ) -> Result<String, String> {
-        let original_file_name = file_path.file_name()
+        let original_file_name = file_path
+            .file_name()
             .ok_or_else(|| "Invalid file path".to_string())?
             .to_string_lossy()
             .to_string();
@@ -1292,7 +1557,8 @@ impl IMASyncClient {
             return Err("Empty local file is not allowed for upload".to_string());
         }
 
-        let file_ext = file_path.extension()
+        let file_ext = file_path
+            .extension()
             .map(|e| e.to_string_lossy().to_string().to_lowercase())
             .unwrap_or_default();
 
@@ -1300,7 +1566,9 @@ impl IMASyncClient {
             .ok_or_else(|| format!("Unsupported file extension: .{}", file_ext))?;
 
         // 1. Check Repeated Names
-        let is_repeated = self.check_repeated_names(&original_file_name, media_type, kb_id, folder_id, creds).await?;
+        let is_repeated = self
+            .check_repeated_names(&original_file_name, media_type, kb_id, folder_id, creds)
+            .await?;
         let mut upload_file_name = original_file_name.clone();
 
         if is_repeated {
@@ -1308,18 +1576,28 @@ impl IMASyncClient {
             let mut resolved_id = existing_remote_id.unwrap_or("").to_string();
             if resolved_id.is_empty() {
                 // Try to find it by display name
-                let items = self.fetch_all_knowledge_items(kb_id, folder_id, creds).await?;
-                if let Some(found) = items.iter().find(|item| !item.is_folder() && item.display_name() == original_file_name) {
+                let items = self
+                    .fetch_all_knowledge_items(kb_id, folder_id, creds)
+                    .await?;
+                if let Some(found) = items
+                    .iter()
+                    .find(|item| !item.is_folder() && item.display_name() == original_file_name)
+                {
                     resolved_id = found.media_id.clone();
                 }
             }
 
             if !resolved_id.is_empty() {
                 // Delete old file
-                let _ = self.delete_knowledge_by_web_api(&[resolved_id], kb_id, creds).await;
+                let _ = self
+                    .delete_knowledge_by_web_api(&[resolved_id], kb_id, creds)
+                    .await;
             } else {
                 // Auto rename with timestamp
-                let stem = file_path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+                let stem = file_path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "file".to_string());
                 let timestamp = chrono::Local::now().format("%Y%m%d%H%M%S").to_string();
                 upload_file_name = if file_ext.is_empty() {
                     format!("{}_{}", stem, timestamp)
@@ -1338,15 +1616,29 @@ impl IMASyncClient {
             "knowledge_base_id": kb_id
         });
 
-        let create_res: IMAResponse<CreateMediaPayload> = self.post_json("cgi-bin/file_manager/create_media", create_body, creds).await?;
+        let create_res: IMAResponse<CreateMediaPayload> = self
+            .post_json("cgi-bin/file_manager/create_media", create_body, creds)
+            .await?;
         if create_res.code != 0 {
-            return Err(format!("Create Media Error ({}): {:?}", create_res.code, create_res.msg));
+            return Err(format!(
+                "Create Media Error ({}): {:?}",
+                create_res.code, create_res.msg
+            ));
         }
 
-        let payload = create_res.data.ok_or_else(|| "No create media payload returned".to_string())?;
+        let payload = create_res
+            .data
+            .ok_or_else(|| "No create media payload returned".to_string())?;
 
         // 3. Upload to COS
-        self.upload_to_cos(&file_data, &upload_file_name, &payload, &content_type, file_size).await?;
+        self.upload_to_cos(
+            &file_data,
+            &upload_file_name,
+            &payload,
+            &content_type,
+            file_size,
+        )
+        .await?;
 
         // Short cooldown to ensure cloud metadata persistence completes
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
@@ -1368,19 +1660,38 @@ impl IMASyncClient {
 
         if let Some(fid) = folder_id {
             if !fid.is_empty() {
-                add_body.as_object_mut().unwrap().insert("folder_id".to_string(), serde_json::Value::String(fid.to_string()));
+                add_body.as_object_mut().unwrap().insert(
+                    "folder_id".to_string(),
+                    serde_json::Value::String(fid.to_string()),
+                );
             }
         }
 
-        let add_res: IMAResponse<EmptyPayload> = self.post_json("cgi-bin/knowledge_tab_writer/add_knowledge", add_body, creds).await?;
+        let add_res: IMAResponse<EmptyPayload> = self
+            .post_json(
+                "cgi-bin/knowledge_tab_writer/add_knowledge",
+                add_body,
+                creds,
+            )
+            .await?;
         if add_res.code != 0 {
-            return Err(format!("Add Knowledge Error ({}): {:?}", add_res.code, add_res.msg));
+            return Err(format!(
+                "Add Knowledge Error ({}): {:?}",
+                add_res.code, add_res.msg
+            ));
         }
 
         Ok(payload.media_id)
     }
 
-    async fn upload_to_cos(&self, file_data: &[u8], _file_name: &str, payload: &CreateMediaPayload, content_type: &str, file_size: usize) -> Result<(), String> {
+    async fn upload_to_cos(
+        &self,
+        file_data: &[u8],
+        _file_name: &str,
+        payload: &CreateMediaPayload,
+        content_type: &str,
+        file_size: usize,
+    ) -> Result<(), String> {
         let cos = &payload.cos_credential;
         let hostname = format!("{}.cos.{}.myqcloud.com", cos.bucket_name, cos.region);
         let url = format!("https://{}/{}", hostname, cos.cos_key);
@@ -1389,8 +1700,14 @@ impl IMASyncClient {
         headers.insert("host".to_string(), hostname.clone());
         headers.insert("content-length".to_string(), file_size.to_string());
 
-        let start_time = cos.start_time.parse::<i64>().unwrap_or_else(|_| chrono::Utc::now().timestamp());
-        let expired_time = cos.expired_time.parse::<i64>().unwrap_or_else(|_| start_time + 3600);
+        let start_time = cos
+            .start_time
+            .parse::<i64>()
+            .unwrap_or_else(|_| chrono::Utc::now().timestamp());
+        let expired_time = cos
+            .expired_time
+            .parse::<i64>()
+            .unwrap_or_else(|_| start_time + 3600);
 
         let signature = COSSigner::sign(
             "PUT",
@@ -1402,7 +1719,9 @@ impl IMASyncClient {
             &headers,
         );
 
-        let res = self.client.put(&url)
+        let res = self
+            .client
+            .put(&url)
             .header("Content-Type", content_type)
             .header("Content-Length", file_size)
             .header("x-cos-security-token", &cos.token)
@@ -1416,18 +1735,27 @@ impl IMASyncClient {
         if !res.status().is_success() {
             let status = res.status();
             let err_body = res.text().await.unwrap_or_default();
-            return Err(format!("COS upload failed with HTTP status {}: {}", status, err_body));
+            return Err(format!(
+                "COS upload failed with HTTP status {}: {}",
+                status, err_body
+            ));
         }
 
         Ok(())
     }
 
-    pub async fn resolve_folder_id_if_needed(&self, kb_id: &str, relative_path: &str, creds: &CachedCredentials) -> Result<Option<String>, String> {
+    pub async fn resolve_folder_id_if_needed(
+        &self,
+        kb_id: &str,
+        relative_path: &str,
+        creds: &CachedCredentials,
+    ) -> Result<Option<String>, String> {
         if relative_path.trim().is_empty() {
             return Ok(None);
         }
 
-        let segments: Vec<&str> = relative_path.split('/')
+        let segments: Vec<&str> = relative_path
+            .split('/')
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
             .collect();
@@ -1439,14 +1767,21 @@ impl IMASyncClient {
         let mut parent_id: Option<String> = None;
 
         for segment in segments {
-            let children = self.fetch_all_knowledge_items(kb_id, parent_id.as_deref(), creds).await?;
-            if let Some(folder) = children.iter().find(|item| item.is_folder() && item.display_name() == segment) {
+            let children = self
+                .fetch_all_knowledge_items(kb_id, parent_id.as_deref(), creds)
+                .await?;
+            if let Some(folder) = children
+                .iter()
+                .find(|item| item.is_folder() && item.display_name() == segment)
+            {
                 parent_id = folder.folder_identifier();
                 continue;
             }
 
             // Create folder automatically
-            let new_folder_id = self.create_folder(segment, kb_id, parent_id.as_deref(), creds).await?;
+            let new_folder_id = self
+                .create_folder(segment, kb_id, parent_id.as_deref(), creds)
+                .await?;
             parent_id = Some(new_folder_id);
         }
 
@@ -1464,17 +1799,22 @@ mod tests {
         if let Some(creds) = credentials::load_credentials() {
             println!("Testing with creds: {:?}", creds);
             let client = IMASyncClient::new();
-            
+
             // 1. Check get_user_info
-            let user_res = client.post_json::<serde_json::Value>(
-                "cgi-bin/user_info/get_user_info",
-                serde_json::json!({}),
-                &creds,
-            ).await;
-            
+            let user_res = client
+                .post_json::<serde_json::Value>(
+                    "cgi-bin/user_info/get_user_info",
+                    serde_json::json!({}),
+                    &creds,
+                )
+                .await;
+
             match user_res {
                 Ok(val) => {
-                    println!("SUCCESS User Info Response: {}", serde_json::to_string_pretty(&val).unwrap());
+                    println!(
+                        "SUCCESS User Info Response: {}",
+                        serde_json::to_string_pretty(&val).unwrap()
+                    );
                 }
                 Err(e) => {
                     println!("ERROR User Info: {}", e);
@@ -1490,16 +1830,21 @@ mod tests {
                     {"type": 1005, "cursor": "", "limit": 50}
                 ]
             });
-            
-            let res = client.post_json::<serde_json::Value>(
-                "cgi-bin/knowledge_tab_reader/get_knowledge_base_list",
-                body,
-                &creds,
-            ).await;
-            
+
+            let res = client
+                .post_json::<serde_json::Value>(
+                    "cgi-bin/knowledge_tab_reader/get_knowledge_base_list",
+                    body,
+                    &creds,
+                )
+                .await;
+
             match res {
                 Ok(val) => {
-                    println!("SUCCESS KB List Response: {}", serde_json::to_string_pretty(&val).unwrap());
+                    println!(
+                        "SUCCESS KB List Response: {}",
+                        serde_json::to_string_pretty(&val).unwrap()
+                    );
                 }
                 Err(e) => {
                     println!("ERROR KB List: {}", e);

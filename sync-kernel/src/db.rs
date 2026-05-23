@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection, Result};
-use std::path::Path;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEvent {
@@ -17,7 +17,7 @@ pub struct FileEvent {
 
 pub fn init_db<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
     let conn = Connection::open(db_path)?;
-    
+
     // Create File Events Table
     conn.execute(
         "CREATE TABLE IF NOT EXISTS file_events (
@@ -35,7 +35,10 @@ pub fn init_db<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
     )?;
 
     // Safely apply migrations for older installations
-    let _ = conn.execute("ALTER TABLE file_events ADD COLUMN is_directory INTEGER NOT NULL DEFAULT 0;", []);
+    let _ = conn.execute(
+        "ALTER TABLE file_events ADD COLUMN is_directory INTEGER NOT NULL DEFAULT 0;",
+        [],
+    );
     let _ = conn.execute("ALTER TABLE file_events ADD COLUMN remote_id TEXT;", []);
 
     // Create App Config Table
@@ -69,7 +72,127 @@ pub fn insert_event(conn: &Connection, event: &FileEvent) -> Result<()> {
     Ok(())
 }
 
+fn is_default_new_folder_name(path: &Path) -> bool {
+    let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
+        return false;
+    };
+
+    let normalized = file_name.trim().to_lowercase();
+    normalized == "untitled folder"
+        || normalized == "new folder"
+        || normalized == "未命名文件夹"
+        || normalized == "新建文件夹"
+        || normalized.starts_with("untitled folder ")
+        || normalized.starts_with("new folder ")
+        || normalized.starts_with("未命名文件夹 ")
+        || normalized.starts_with("新建文件夹 ")
+}
+
+fn same_parent(left: &Path, right: &Path) -> bool {
+    left.parent().is_some() && left.parent() == right.parent()
+}
+
+fn same_file_extension(left: &Path, right: &Path) -> bool {
+    left.extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        == right
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_lowercase())
+}
+
+fn paths_look_like_same_item_kind(old_path: &Path, new_path: &Path) -> bool {
+    if new_path.is_dir() {
+        return true;
+    }
+
+    same_file_extension(old_path, new_path)
+}
+
+pub fn cleanup_transient_default_folder_events(conn: &Connection) -> Result<usize> {
+    let mut stmt = conn.prepare(
+        "SELECT id, path FROM file_events
+         WHERE is_synced = 0 AND is_directory = 1
+         AND type IN ('created', 'modified', 'deleted')",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            PathBuf::from(row.get::<_, String>(1)?),
+        ))
+    })?;
+
+    let mut entries = Vec::new();
+    for row in rows {
+        entries.push(row?);
+    }
+
+    let mut deleted = 0;
+    for (id, path) in &entries {
+        if !is_default_new_folder_name(path) {
+            continue;
+        }
+
+        let has_final_sibling = entries.iter().any(|(_, other_path)| {
+            other_path != path
+                && !is_default_new_folder_name(other_path)
+                && same_parent(path, other_path)
+        });
+
+        if has_final_sibling {
+            deleted += conn.execute("DELETE FROM file_events WHERE id = ?1", params![id])?;
+        }
+    }
+
+    Ok(deleted)
+}
+
+pub fn cleanup_unsynced_created_rename_events(conn: &Connection) -> Result<usize> {
+    let mut stmt = conn.prepare(
+        "SELECT id, path, timestamp FROM file_events
+         WHERE is_synced = 0 AND type = 'created'
+         ORDER BY timestamp ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            PathBuf::from(row.get::<_, String>(1)?),
+            row.get::<_, f64>(2)?,
+        ))
+    })?;
+
+    let mut entries = Vec::new();
+    for row in rows {
+        entries.push(row?);
+    }
+
+    let mut deleted = 0;
+    for (id, old_path, old_timestamp) in &entries {
+        if old_path.exists() {
+            continue;
+        }
+
+        let has_final_sibling = entries.iter().any(|(_, new_path, new_timestamp)| {
+            new_path != old_path
+                && new_path.exists()
+                && new_timestamp >= old_timestamp
+                && (*new_timestamp - *old_timestamp) <= 30.0
+                && same_parent(old_path, new_path)
+                && paths_look_like_same_item_kind(old_path, new_path)
+        });
+
+        if has_final_sibling {
+            deleted += conn.execute("DELETE FROM file_events WHERE id = ?1", params![id])?;
+        }
+    }
+
+    Ok(deleted)
+}
+
 pub fn get_all_events(conn: &Connection) -> Result<Vec<FileEvent>> {
+    let _ = cleanup_transient_default_folder_events(conn);
+    let _ = cleanup_unsynced_created_rename_events(conn);
     let mut stmt = conn.prepare(
         "SELECT id, path, old_path, type, timestamp, is_synced, has_notified, is_directory, remote_id FROM file_events ORDER BY timestamp DESC"
     )?;
@@ -95,6 +218,8 @@ pub fn get_all_events(conn: &Connection) -> Result<Vec<FileEvent>> {
 }
 
 pub fn get_pending_events(conn: &Connection) -> Result<Vec<FileEvent>> {
+    let _ = cleanup_transient_default_folder_events(conn);
+    let _ = cleanup_unsynced_created_rename_events(conn);
     let mut stmt = conn.prepare(
         "SELECT id, path, old_path, type, timestamp, is_synced, has_notified, is_directory, remote_id FROM file_events WHERE is_synced = 0 ORDER BY timestamp DESC"
     )?;
@@ -148,20 +273,26 @@ pub fn get_latest_synced_event(conn: &Connection, path: &str) -> Result<Option<F
 
 #[allow(dead_code)]
 pub fn has_unsynced_local_changes(conn: &Connection, path: &str) -> Result<bool> {
-    let mut stmt = conn.prepare("SELECT COUNT(*) FROM file_events WHERE path = ?1 AND is_synced = 0")?;
+    let mut stmt =
+        conn.prepare("SELECT COUNT(*) FROM file_events WHERE path = ?1 AND is_synced = 0")?;
     let count: i64 = stmt.query_row(params![path], |row| row.get(0))?;
     Ok(count > 0)
 }
 
 #[allow(dead_code)]
 pub fn has_local_deletion_record(conn: &Connection, path: &str) -> Result<bool> {
-    let mut stmt = conn.prepare("SELECT COUNT(*) FROM file_events WHERE path = ?1 AND type = 'deleted'")?;
+    let mut stmt =
+        conn.prepare("SELECT COUNT(*) FROM file_events WHERE path = ?1 AND type = 'deleted'")?;
     let count: i64 = stmt.query_row(params![path], |row| row.get(0))?;
     Ok(count > 0)
 }
 
 #[allow(dead_code)]
-pub fn get_event_by_remote_id(conn: &Connection, remote_id: &str, root_path: &str) -> Result<Option<FileEvent>> {
+pub fn get_event_by_remote_id(
+    conn: &Connection,
+    remote_id: &str,
+    root_path: &str,
+) -> Result<Option<FileEvent>> {
     let mut stmt = conn.prepare(
         "SELECT id, path, old_path, type, timestamp, is_synced, has_notified, is_directory, remote_id \
          FROM file_events WHERE remote_id = ?1 AND is_synced = 1 ORDER BY timestamp DESC"
@@ -199,7 +330,11 @@ pub fn mark_event_synced(conn: &Connection, id: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn mark_event_synced_with_remote_id(conn: &Connection, id: &str, remote_id: &str) -> Result<()> {
+pub fn mark_event_synced_with_remote_id(
+    conn: &Connection,
+    id: &str,
+    remote_id: &str,
+) -> Result<()> {
     conn.execute(
         "UPDATE file_events SET is_synced = 1, remote_id = ?2 WHERE id = ?1",
         params![id, remote_id],

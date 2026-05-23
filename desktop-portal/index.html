@@ -938,15 +938,56 @@
             
             <!-- Subpane 2: Sync Logic Table (hidden by default) -->
             <div class="help-subpane hidden" id="help-subpane-syncLogic">
+              
+              <!-- Section 1: 本地到云端 (Local to Cloud) Detailed Logic -->
+              <div class="section-card synclogic-card" style="padding: 22px; margin-bottom: 20px;">
+                <div class="section-title-row" style="margin-bottom: 16px;">
+                  <div style="display: flex; gap: 12px; align-items: center;">
+                    <div class="faq-hero-badge">
+                      <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3zm-5.5-8h-3v3H8l4 4 4-4h-2.5z"/></svg>
+                    </div>
+                    <div>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="本地到云端同步逻辑">本地到云端同步逻辑</h3>
+                      <p class="subtitle" style="margin-top: 2px;" data-i18n="了解本地目录中的变更（增、删、改、重命名）如何处理并推送到腾讯 IMA 个人知识库。">了解本地目录中的变更（增、删、改、重命名）如何处理并推送到腾讯 IMA 个人知识库。</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="help-sync-steps-flow" style="display: flex; flex-direction: column; gap: 14px; padding: 4px 8px;">
+                  <div class="help-sync-step-item" style="display: flex; gap: 12px;">
+                    <div style="font-weight: 700; color: var(--app-mint); font-size: 1rem; width: 24px; flex-shrink: 0;">01</div>
+                    <div>
+                      <h4 style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary); margin-bottom: 2px;" data-i18n="变更捕获与防抖">变更捕获与防抖</h4>
+                      <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;" data-i18n="基于 OS 级别的底层监视（macOS FSEvents），程序会静默捕获目录内所有文件的读写变化。为防止文本保存时产生高频碎片的冗余写入，应用引入了 2 秒防抖机制，待文件写入稳定后，才生成一条合规记录进入队列。">基于 OS 级别的底层监视（macOS FSEvents），程序会静默捕获目录内所有文件的读写变化。为防止文本保存时产生高频碎片的冗余写入，应用引入了 2 秒防抖机制，待文件写入稳定后，才生成一条合规记录进入队列。</p>
+                    </div>
+                  </div>
+                  <div class="help-sync-step-item" style="display: flex; gap: 12px;">
+                    <div style="font-weight: 700; color: var(--app-mint); font-size: 1rem; width: 24px; flex-shrink: 0;">02</div>
+                    <div>
+                      <h4 style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary); margin-bottom: 2px;" data-i18n="本地事件抵消与合并">本地事件抵消与合并</h4>
+                      <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;" data-i18n="【新建并删除抵消】如果在文件同步到云端前，本地发生了删除，应用会自动检测并直接抹除数据库中对应的未同步创建记录，两起事件完全抵消，不产生任何同步任务与冗余记录。对于频繁发生的修改，只会合并更新时间戳，绝不产生重复记录。">【新建并删除抵消】如果在文件同步到云端前，本地发生了删除，应用会自动检测并直接抹除数据库中对应的未同步创建记录，两起事件完全抵消，不产生任何同步任务与冗余记录。对于频繁发生的修改，只会合并更新时间戳，绝不产生重复记录。</p>
+                    </div>
+                  </div>
+                  <div class="help-sync-step-item" style="display: flex; gap: 12px;">
+                    <div style="font-weight: 700; color: var(--app-mint); font-size: 1rem; width: 24px; flex-shrink: 0;">03</div>
+                    <div>
+                      <h4 style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary); margin-bottom: 2px;" data-i18n="云端增量更新">云端增量更新</h4>
+                      <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;" data-i18n="【同步避环】同步开始时会暂停本地文件监视，同步完毕后重新启用，彻底杜绝同步下载本身触发 of “本地二次变动”死循环。【增量执行】对于新建及修改事件，上传文件并更新保存云端关联 ID；对于删除事件，若检测到该文件曾有云端绑定历史，则调用腾讯 IMA 接口对云端对应文档一并进行物理删除。">【同步避环】同步开始时会暂停本地文件监视，同步完毕后重新启用，彻底杜绝同步下载本身触发的“本地二次变动”死循环。【增量执行】对于新建及修改事件，上传文件并更新保存云端关联 ID；对于删除事件，若检测到该文件曾有云端绑定历史，则调用腾讯 IMA 接口对云端对应文档一并进行物理删除。</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section 2: 本地操作细节表 -->
               <div class="section-card synclogic-card" style="padding: 22px;">
                 <div class="section-title-row" style="margin-bottom: 20px;">
                   <div style="display: flex; gap: 12px; align-items: center;">
                     <div class="faq-hero-badge">
-                      <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/></svg>
+                      <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>
                     </div>
                     <div>
-                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="本地操作同步逻辑">本地操作同步逻辑</h3>
-                      <p class="subtitle" style="margin-top: 2px;" data-i18n="理解每种文件操作会如何进入待同步列表、自动同步和历史记录。">理解每种文件操作会如何进入待同步列表、自动同步和历史记录。</p>
+                      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);" data-i18n="本地文件事件决议细则">本地文件事件决议细则</h3>
+                      <p class="subtitle" style="margin-top: 2px;" data-i18n="查看不同本地场景下，文件变动最终被决议成的状态及同步后的响应。">查看不同本地场景下，文件变动最终被决议成的状态及同步后的响应。</p>
                     </div>
                   </div>
                 </div>
@@ -968,7 +1009,7 @@
                         <span data-i18n="新增文件">新增文件</span>
                       </div>
                       <div class="type-cell font-mono mint">created</div>
-                      <div class="proc-cell" data-i18n="生成一条待同步记录；手动模式等待点击同步，自动模式在文件稳定 30 秒后上传。">生成一条待同步记录；手动模式等待点击同步，自动模式在文件稳定 30 秒后上传。</div>
+                      <div class="proc-cell" data-i18n="生成一条待同步记录；手动模式等待点击同步，自动模式在文件稳定 2 秒后上传。">生成一条待同步记录；手动模式等待点击同步，自动模式在文件稳定 2 秒后上传。</div>
                       <div class="note-cell" data-i18n="如果新建后又立即删除，应用会抵消这次短暂变动，不再产生待同步事项。">如果新建后又立即删除，应用会抵消这次短暂变动，不再产生待同步事项。</div>
                     </div>
                     
@@ -980,7 +1021,7 @@
                       </div>
                       <div class="type-cell font-mono blue">modified</div>
                       <div class="proc-cell" data-i18n="同一路径已有未同步记录时只更新时间，避免反复保存产生多条记录。">同一路径已有未同步记录时只更新时间，避免反复保存产生多条记录。</div>
-                      <div class="note-cell" data-i18n="自动同步会在最后一次修改后重新等待 30 秒。">自动同步会在最后一次修改后重新等待 30 秒。</div>
+                      <div class="note-cell" data-i18n="自动同步会在最后一次修改后重新等待 2 秒。">自动同步会在最后一次修改后重新等待 2 秒。</div>
                     </div>
                     
                     <!-- Row 3: 删除文件 -->
@@ -990,8 +1031,8 @@
                         <span data-i18n="删除文件">删除文件</span>
                       </div>
                       <div class="type-cell font-mono rose">deleted</div>
-                      <div class="proc-cell" data-i18n="删除会生成删除记录；同步时仅在本地标记完成。">删除会生成删除记录；同步时仅在本地标记完成。</div>
-                      <div class="note-cell" data-i18n="当前 IMA 未开放云端删除接口，云端已有文档需要用户按需手动清理。">当前 IMA 未开放云端删除接口，云端已有文档需要用户按需手动清理。</div>
+                      <div class="proc-cell" data-i18n="生成删除记录；同步时如果该文件已存在于云端，应用会自动调用接口将云端对应文档一并删除。">生成删除记录；同步时如果该文件已存在于云端，应用会自动调用接口将云端对应文档一并删除。</div>
+                      <div class="note-cell" data-i18n="如果删除的文件从未同步过，则会自动触发本地记录抵消，不产生任何同步任务和历史记录。">如果删除的文件从未同步过，则会自动触发本地记录抵消，不产生任何同步任务和历史记录。</div>
                     </div>
                     
                     <!-- Row 4: 重命名文件 -->
@@ -1034,7 +1075,7 @@
                         <span data-i18n="自动同步">自动同步</span>
                       </div>
                       <div class="type-cell font-mono amber">auto</div>
-                      <div class="proc-cell" data-i18n="开启后，文件变动稳定 30 秒再上传到绑定知识库。">开启后，文件变动稳定 30 秒再上传到绑定知识库。</div>
+                      <div class="proc-cell" data-i18n="开启后，文件变动稳定 2 秒再上传到绑定知识库。">开启后，文件变动稳定 2 秒再上传到绑定知识库。</div>
                       <div class="note-cell" data-i18n="频繁保存会重置等待时间，避免上传半成品。">频繁保存会重置等待时间，避免上传半成品。</div>
                     </div>
                   </div>
@@ -1200,7 +1241,7 @@
                       </div>
                       <div class="feature-point-details">
                         <h4 data-i18n="自动同步">自动同步</h4>
-                        <p data-i18n="开启后，文件稳定 30 秒会自动上传，减少频繁保存造成的重复同步。">开启后，文件稳定 30 秒会自动上传，减少频繁保存造成的重复同步。</p>
+                        <p data-i18n="开启后，文件稳定 2 秒会自动上传，减少频繁保存造成的重复同步。">开启后，文件稳定 2 秒会自动上传，减少频繁保存造成的重复同步。</p>
                       </div>
                     </div>
                     

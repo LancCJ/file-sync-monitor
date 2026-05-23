@@ -2,179 +2,264 @@
 
 [English](README_en.md) | [中文](README.md)
 
-FileSyncMonitor is a macOS file change monitoring and sync confirmation tool. It monitors file changes in specified directories, records create, modify, delete, and rename events, and reminds users to handle pending sync files via the main window, menu bar badge, and system notifications.
+FileSyncMonitor is a cross-platform desktop tool for monitoring local file changes and confirming sync tasks. The current codebase has moved from the old SwiftUI-only app to a **Tauri 2 + Rust backend + vanilla HTML/CSS/JS frontend** architecture, designed for macOS and Windows.
 
-The current version is built with SwiftUI + SwiftData, with underlying monitoring based on macOS FSEvents. It supports local report exporting and optional Tencent IMA cloud uploading.
+It monitors configured directories for create, modify, delete, and rename events, stores records in local SQLite, and helps users process pending sync tasks from the main window and system tray. It also integrates with Tencent IMA knowledge bases through QR-code login and supports local-to-cloud, cloud-to-local, and bidirectional sync flows.
 
-## 🖥️ UI Screenshots
+## UI Screenshots
 
-### 📊 Core Dashboards
-| Dashboard (Home) | Pending Sync |
+### Dashboard And Sync
+
+| Home | Pending Sync |
 | --- | --- |
-| ![Dashboard](docs/screenshot/首页.png) | ![Pending Sync](docs/screenshot/待同步.png) |
+| ![Home](docs/screenshot/首页.png) | ![Pending Sync](docs/screenshot/待同步.png) |
 
-### 📈 Records & Reports
-| All Records | Reports & Stats |
+### Records And Reports
+
+| All Records | Reports |
 | --- | --- |
 | ![All Records](docs/screenshot/全部记录.png) | ![Reports](docs/screenshot/报告.png) |
 
-### ⚙️ System Settings
-| General Settings | Filters & Cloud Settings |
-| --- | --- |
-| ![Settings](docs/screenshot/设置.png) | ![Settings 2](docs/screenshot/设置2.png) |
+### Settings And Sync Rules
 
-### ❓ Onboarding & Help
-| Help & FAQ | Onboarding - Step 1 | Onboarding - Step 2 |
+| Settings | Rules And Cloud |
+| --- | --- |
+| ![Settings](docs/screenshot/设置.png) | ![Rules And Cloud](docs/screenshot/设置2.png) |
+
+### Onboarding And Help
+
+| Help & About | Onboarding 1 | Onboarding 2 |
 | --- | --- | --- |
-| ![Help & FAQ](docs/screenshot/帮助与关于.png) | ![Onboarding 1](docs/screenshot/引导1.png) | ![Onboarding 2](docs/screenshot/引导2.png) |
+| ![Help & About](docs/screenshot/帮助与关于.png) | ![Onboarding 1](docs/screenshot/引导1.png) | ![Onboarding 2](docs/screenshot/引导2.png) |
 
 ## Features
 
-- **Directory Monitoring**: Add multiple directories and recursively monitor file and folder changes.
-- **Event Logging**: Record path, type, time, sync status, etc., and persist to local SwiftData.
-- **Pending Sync Confirmation**: New events default to pending sync status, and can be marked as completed individually or in bulk.
-- **Menu Bar Access**: Resides in the menu bar, displays the number of pending syncs, and provides recent pending records.
-- **Report Export**: Aggregate records by time range, supporting CSV and JSON export.
-- **IMA Cloud Integration**: Supports WeChat QR scan login to sync files to designated cloud knowledge bases with one click.
-- **Ignore Rules**: By default, it filters noise files like `.DS_Store`, temporary files, system directories, build caches, etc. It also supports custom file names, extensions, and directory names in the settings.
-- **Modern Desktop UI**: Features a FileSync dashboard, ultra-narrow icon rail, secondary list sidebar, and a fully adaptive dark/light appearance.
+- **Cross-platform desktop architecture**: Tauri 2 owns the desktop shell, tray, windows, packaging, and IPC.
+- **Rust file watcher core**: recursive directory watching through `notify`, with 2-second debounce and event coalescing.
+- **Local SQLite storage**: file events and app config are stored in a local SQLite database.
+- **Event records**: path, old path, event type, timestamp, sync status, directory flag, and remote ID.
+- **Pending sync queue**: new changes are pending by default and can be marked or synced individually, by folder, or in bulk.
+- **Manual and automatic sync**: users can trigger sync manually; auto sync attempts to process bound directories after detected changes.
+- **Tencent IMA sync**: WeChat QR login, knowledge base list, directory binding, upload, cloud pull, folder creation, rename, and delete API adaptation.
+- **Cloud path mapping**: each monitored directory can bind to an IMA knowledge base, with local subfolders mapped to remote folders.
+- **Ignore rules**: filters system files, temporary files, build outputs, cache folders, and custom names/extensions/directories.
+- **System tray**: open main window, sync all directories, and quit.
+- **Request logs**: recent IMA HTTP requests and responses are kept in memory for troubleshooting.
+- **CSV/JSON export**: synced history can be exported from the frontend.
+- **Bilingual UI**: Simplified Chinese and English strings are included.
 
-## System Requirements
+## Architecture
 
-- macOS 14.0 Sonoma or later
-- Swift 5.9+
-- Xcode 15+ or Swift Package Manager
+```text
+                    ┌──────────────────────────────────────┐
+                    │ desktop-portal Web UI                │
+                    │ HTML / CSS / Vanilla JS              │
+                    │ state, rendering, settings, i18n     │
+                    └──────────────────┬───────────────────┘
+                                       │ Tauri invoke/listen
+                    ┌──────────────────▼───────────────────┐
+                    │ sync-kernel Rust Backend              │
+                    │ commands, SQLite, notify, tray, IMA   │
+                    └──────┬────────────┬────────────┬──────┘
+                           │            │            │
+                     SQLite DB     OS file events   IMA Web APIs
+```
+
+### Frontend
+
+- `desktop-portal/index.html`: single-page app structure.
+- `desktop-portal/main.js`: app state, Tauri commands, event listeners, rendering.
+- `desktop-portal/styles.css`: desktop UI styles, theme variables, layout.
+- `desktop-portal/i18n.js`: English translation dictionary.
+
+### Backend
+
+- `sync-kernel/src/lib.rs`: Tauri setup, command registration, sync orchestration, login windows, silent refresh.
+- `sync-kernel/src/db.rs`: SQLite schema plus event/config CRUD.
+- `sync-kernel/src/monitor.rs`: directory watching, ignore rules, debounce/coalescing, event insertion.
+- `sync-kernel/src/ima_sync.rs`: IMA client, knowledge bases, upload/download, folders, delete, rename.
+- `sync-kernel/src/credentials.rs`: IMA credential loading, saving, and clearing.
+- `sync-kernel/src/tray.rs`: system tray menu and click behavior.
 
 ## Quick Start
 
-```bash
-swift build
-swift run
-```
+### Requirements
 
-After running:
+- Node.js 18+
+- Rust stable
+- A desktop environment supported by Tauri 2
+- macOS or Windows
 
-1. Open the main window or the menu bar app.
-2. Add the directories you want to monitor in the Home or Settings page.
-3. Modify, create, or delete files in the directories.
-4. Confirm events on the "Pending Sync" page, and mark them as completed, upload to IMA, or export records as needed.
-
-## Development Commands
+### Install Dependencies
 
 ```bash
-# Debug Build
-swift build
-
-# Run App
-swift run
-
-# Run Tests
-swift test
-
-# Release Build
-swift build -c release
+npm install
 ```
 
-> The current test target is configured, but no automated test cases have been added yet.
+### Run In Development
+
+```bash
+npm run dev
+```
+
+This enters `sync-kernel` and starts `tauri dev`.
+
+### Build App Bundle
+
+```bash
+npm run build
+```
+
+### Check Rust Backend
+
+```bash
+cd sync-kernel
+cargo check
+```
+
+## GitHub Automated Packaging
+
+The repository includes a GitHub Actions workflow:
+
+```text
+.github/workflows/release-tauri.yml
+```
+
+Trigger options:
+
+- Push a version tag, for example `v1.2.0`.
+- Run `Release Tauri App` manually from the GitHub Actions page.
+
+Build targets:
+
+- macOS Apple Silicon: `aarch64-apple-darwin`
+- macOS Intel: `x86_64-apple-darwin`
+- Windows x64
+
+The workflow uses the official `tauri-apps/tauri-action` to build installers and create/update a draft GitHub Release. Review the generated assets and notes on GitHub before publishing the release.
+
+Example:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+## Data And Config
+
+- File events are stored in `file_sync_monitor.db` under the Tauri app data directory.
+- Config values are stored in the SQLite `app_config` table; some frontend preferences are mirrored in `localStorage`.
+- IMA credentials are currently stored as `ima_credentials.json` under the Tauri app data directory, with migration from the old temp-file path.
+- HTTP request logs are in-memory only and capped at 100 entries.
+- Export files are generated by the frontend.
+
+## Event Flow
+
+1. The frontend reads saved monitored directories.
+2. The frontend calls `start_file_monitor`.
+3. The Rust backend starts recursive `notify` watchers.
+4. Raw events are filtered by ignore rules.
+5. Events enter a 2-second debounce/coalescing window.
+6. Resolved events are inserted into SQLite.
+7. The backend emits `file-change-events`.
+8. The frontend refreshes home stats, pending records, all records, and detail panels.
+
+## Sync Flow
+
+1. The user binds monitored directories to IMA knowledge bases.
+2. Manual sync is triggered, or auto sync runs after detected changes.
+3. The backend pauses file watching to avoid feedback loops.
+4. Pull phase reads the remote knowledge tree, creates local folders, and downloads files.
+5. Push phase scans local pending events, creates remote folders, or uploads files.
+6. Successful records are marked synced and updated with `remote_id`.
+7. The backend resumes watching and emits sync progress to the frontend.
 
 ## Ignore Rules
-
-Ignore rules are executed before events are saved to the database. Ignored files will not generate records, trigger notifications, or increase the menu bar badge.
 
 Default ignored items include:
 
 - File names: `.DS_Store`, `Icon\r`, `.localized`, `Thumbs.db`, `desktop.ini`
-- Temporary files: `~$*`, `.tmp`, `.temp`, `.swp`, `.swo`, `.part`, `.download`, `.crdownload`
+- Temporary prefixes: `~$`, `._`, `~wrl`, `~df`, `~rf`
+- Temporary extensions: `asd`, `lck`, `lock`, `tmp`, `temp`, `swp`, `swo`, `part`, `download`, `crdownload`
 - System directories: `.Trashes`, `.Spotlight-V100`, `.fseventsd`, `.TemporaryItems`
 - Development directories: `.git`, `.svn`, `.hg`, `node_modules`, `.next`, `.nuxt`, `dist`, `build`, `.build`, `DerivedData`
-- IDE and cache directories: `.idea`, `.vscode`, `.swiftpm`, `.cache`
+- IDE/cache directories: `.idea`, `.vscode`, `.swiftpm`, `.cache`
 
-In "Settings > Ignore Rules", you can:
+The Settings page can enable/disable default rules and customize ignored file names, extensions, and directory names.
 
-- Enable or disable default ignore rules.
-- Add custom ignored file names, e.g., `debug.log`.
-- Add custom ignored extensions, e.g., `.log`, `.tmp`.
-- Add custom ignored directory names, e.g., `node_modules`, `DerivedData`.
-- Restore default settings.
+## Tencent IMA Sync
 
-## IMA Cloud Sync Usage
+The app opens Tencent IMA login in an embedded Tauri WebView and injects login-response capture code to save required credentials. The sync layer adapts IMA Web/H5 APIs and supports:
 
-Click **WeChat Login** at the bottom-left of the main window or under "Settings > Cloud Sync". The system will display the official WeChat QR login page. Once logged in, you can:
+- User profile and quota lookup.
+- Knowledge base listing.
+- Knowledge tree listing.
+- Remote folder creation.
+- Local file upload to knowledge base folders.
+- Remote file or note download to local disk.
+- Remote rename and delete attempts.
+- Silent token refresh when credentials expire.
 
-- Test connection and storage quota.
-- Bind specific monitored directories to designated IMA knowledge bases in Settings.
-- Manually sync files or enable automatic background sync.
+> IMA cloud sync depends on unofficial interfaces and may break if server behavior changes. See [docs/IMA抓包接口总结.md](docs/IMA抓包接口总结.md) for sanitized packet-analysis notes.
 
 ## Project Structure
 
 ```text
 .
-├── Package.swift
-├── Sources/FileSyncMonitor
-│   ├── FileSyncMonitorApp.swift
-│   ├── Models
-│   │   └── FileEvent.swift
-│   ├── Services
-│   │   ├── FileMonitorService.swift
-│   │   ├── PersistenceController.swift
-│   │   ├── NotificationManager.swift
-│   │   ├── ExportService.swift
-│   │   ├── IMASyncService.swift
-│   │   └── StoreManager.swift
-│   ├── UI
-│   │   ├── MainView.swift
-│   │   ├── SettingsView.swift
-│   │   ├── ReportsView.swift
-│   │   ├── MenuBarManager.swift
-│   │   └── Theme.swift
-│   └── Resources
-│       └── Localizable.xcstrings
-├── Tests
-└── docs
+├── package.json
+├── package-lock.json
+├── desktop-portal/
+│   ├── index.html
+│   ├── main.js
+│   ├── styles.css
+│   ├── i18n.js
+│   └── assets/
+├── sync-kernel/
+│   ├── Cargo.toml
+│   ├── Cargo.lock
+│   ├── tauri.conf.json
+│   ├── build.rs
+│   ├── capabilities/
+│   ├── permissions/
+│   ├── icons/
+│   └── src/
+│       ├── main.rs
+│       ├── lib.rs
+│       ├── db.rs
+│       ├── monitor.rs
+│       ├── ima_sync.rs
+│       ├── credentials.rs
+│       └── tray.rs
+├── docs/
+└── scripts/
 ```
-
-## Data and Privacy
-
-- File event records are saved in the local SwiftData/SQLite database.
-- The app will not automatically sync file content unless the user actively clicks "Upload to IMA" or enables automatic sync.
-- Exported files are saved to a location chosen by the user via a save panel.
-- Monitored directory permissions are persisted via Security-Scoped Bookmarks.
 
 ## Known Limitations
 
-- Currently, file content diffing is not performed; only file system events are recorded.
-- FSEvents will coalesce high-frequency events in a short period; the event granularity depends on system callbacks.
-- Historical records already in the database will not be automatically deleted due to newly added ignore rules.
+- There is no automated test coverage yet; validate with real folders and a real IMA knowledge base before release.
+- IMA sync uses unofficial APIs and depends on Tencent server behavior.
+- Credentials are currently stored as a local JSON file and have not yet been moved to cross-platform Keyring/OS credential storage.
+- The system tray does not yet display a dynamic pending-count badge.
+- The app records filesystem events only and does not perform file content diffs.
+- `notify` and OS-level event streams may coalesce high-frequency changes.
+- Historical records already in SQLite are not automatically removed when new ignore rules are added.
 
-## 💖 Donation & Support
+## Donation And Support
 
-FileSyncMonitor is fully open-source and free to use. If it has saved you time and boosted your productivity, feel free to support its active development via donation. Your contribution is the best fuel to keep this project growing!
-
-**⚠️ Read Before Donating (Disclaimer Supplement):**
-- Donations are purely voluntary and act as gratuitous sponsorship to support the author's learning and open-source maintenance.
-- **Donation does not establish any purchase, employment, agency, or service contract**.
-- Please make sure you fully understand the [⚠️ Disclaimer](#-disclaimer) below before making a donation. Donating does not waive your legal risks or potential account issues resulting from the use of unofficial APIs.
+FileSyncMonitor is open source. If it saves you time, donations are welcome to support ongoing maintenance.
 
 | WeChat Pay | Alipay |
 | --- | --- |
 | <img src="docs/pay/wechat.jpg" width="260" alt="WeChat Pay" /> | <img src="docs/pay/alipay.jpg" width="260" alt="Alipay" /> |
 
-> 💡 Donation is entirely voluntary, and all features remain fully unlocked. Thank you for your support!
+Donations are completely voluntary and do not affect feature access.
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-**Please read the following terms carefully. By using this software, you agree to and accept all contents of this disclaimer:**
+This software and source code are intended for learning, research, and personal technical exchange. Tencent IMA cloud sync is adapted from unofficial interfaces. The author is not affiliated with Tencent Holdings Ltd. or any of its affiliates. Interfaces may stop working at any time, and users are responsible for account, data, API-change, and compliance risks.
 
-1. **Educational & Personal Use Only**: This software (FileSyncMonitor) and its entire source code are intended for **academic research, educational purposes, and personal technical exchange only**. Any commercial use or illegal activity is strictly prohibited.
-2. **Unofficial API Statement**: The Tencent IMA cloud synchronization integrated in this software uses APIs obtained through **unofficial packet analysis and reverse engineering**. The author of this software has no relationship or affiliation with Tencent Holdings Ltd. (or any of its affiliates). These unofficial APIs may stop working or return errors at any time due to server-side updates.
-3. **Legal Risk & User Responsibility**:
-   - The use of reverse-engineered APIs carries legal risks and potential account suspension/ban risks. Users assume all responsibility and consequences (including but not limited to account suspension, data loss, network issues) resulting from using unofficial APIs.
-   - The author shall not be held liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including but not limited to loss of profits, data loss, business interruption) arising in any way out of the use of this software.
-4. **Donation Terms**:
-   - The "Donation & Support" channel is completely **voluntary and gratuitous**. Donations are voluntary gifts to support the author's open-source maintenance.
-   - **Donations do not establish any purchase, employment, agency, or service contract**. Donating does not waive the user's own legal risks or represent that the author will bear any joint liability for legal disputes, intellectual property issues, or data issues caused by the software APIs.
-5. **No Warranty**: The software is provided "AS IS", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and non-infringement.
+The software is provided as is, without warranty of any kind. The author is not liable for any direct or indirect damages arising from use of the software or cloud sync features.
 
-## 📄 License
+## License
 
-This project is licensed under the [GPL-3.0 License](LICENSE). See the `LICENSE` file for details.
+This project is licensed under the [GPL-3.0](LICENSE) license.

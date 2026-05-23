@@ -1,18 +1,19 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{TrayIconBuilder, TrayIconEvent},
-    Runtime, Manager, Emitter,
+    Emitter, Manager, Runtime,
 };
 
 pub fn setup_system_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<(), tauri::Error> {
     let show_item = MenuItem::with_id(app, "show", "打开主窗口", true, None::<&str>)?;
     let sync_item = MenuItem::with_id(app, "sync_all", "立即同步所有目录", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "退出应用", true, None::<&str>)?;
-    
+
     let menu = Menu::with_items(app, &[&show_item, &sync_item, &quit_item])?;
 
     let icon_bytes = include_bytes!("../icons/AppMenuBarIcon.png");
-    let tray_icon = tauri::image::Image::from_bytes(icon_bytes).expect("Failed to load AppMenuBarIcon");
+    let tray_icon =
+        tauri::image::Image::from_bytes(icon_bytes).expect("Failed to load AppMenuBarIcon");
 
     let _tray = TrayIconBuilder::new()
         .tooltip("FileSyncMonitor")

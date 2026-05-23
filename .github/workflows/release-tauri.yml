@@ -1,0 +1,73 @@
+name: Release Tauri App
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish-tauri:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple Silicon
+            platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            tauri_script: "../node_modules/.bin/tauri"
+          - name: macOS Intel
+            platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+            tauri_script: "../node_modules/.bin/tauri"
+          - name: Windows x64
+            platform: windows-latest
+            args: ""
+            tauri_script: "../node_modules/.bin/tauri.cmd"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: npm
+
+      - name: Setup Rust stable for macOS
+        if: matrix.platform == 'macos-latest'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Setup Rust stable for Windows
+        if: matrix.platform == 'windows-latest'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust builds
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./sync-kernel -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and upload Tauri bundles
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: sync-kernel
+          tauriScript: ${{ matrix.tauri_script }}
+          tagName: "v__VERSION__"
+          releaseName: "FileSyncMonitor v__VERSION__"
+          releaseBody: "See the assets below to download and install FileSyncMonitor."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

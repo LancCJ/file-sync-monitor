@@ -1,10 +1,22 @@
-# Swift / SPM
-.build/
+# Dependencies
+node_modules/
+
+# Rust / Tauri build outputs
+target/
+sync-kernel/target/
 build/
+dist/
+gen/schemas/
+*.dmg
+*.app/
+*.msi
+*.exe
+*.AppImage
+
+# Legacy Swift / SPM leftovers
+.build/
 Package.resolved
-.swiftpm/xcode/package.xcworkspace/xcuserdata
-.swiftpm/xcode/xcuserdata
-.swiftpm/**/*.xcuserstate
+.swiftpm/
 
 # macOS
 .DS_Store
@@ -47,6 +59,20 @@ docs/*抓包原始*.md
 *.swp
 *.swo
 *~
+*.bak
+scanned_strings.json
+patch_*.py
+fix_*.py
+inject_*.py
+update_*.py
+add_logger.py
+check_har.py
+clean_reports.py
+find_main_js_chinese.py
+parse_events.py
+process_html_full.py
+scan_strings.py
+replace_script.cjs
 test_*.swift
 *_debug.swift
 

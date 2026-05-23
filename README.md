@@ -1,197 +1,265 @@
 # FileSyncMonitor
 
 [English](README_en.md) | [中文](README.md)
-FileSyncMonitor 是一款 macOS 文件变动监控与同步确认工具。它可以监控指定目录的文件变化，记录新增、修改、删除、重命名事件，并通过主窗口、菜单栏角标和系统通知提醒用户处理待同步文件。
 
-当前版本使用 SwiftUI + SwiftData 构建，底层监控基于 macOS FSEvents，支持本地报告导出、手动/自动同步、开机启动、忽略规则、引导式新手教程，以及基于扫码登录的腾讯 IMA 知识库同步。
+FileSyncMonitor 是一款跨平台桌面文件变动监控与同步确认工具。当前版本已经从早期 SwiftUI 单端实现升级为 **Tauri 2 + Rust 后端 + 原生 HTML/CSS/JS 前端** 的双端架构，可面向 macOS 与 Windows 扩展。
 
-## 🖥️ 界面预览
+它可以监控指定目录的新增、修改、删除、重命名事件，将记录保存到本地 SQLite，并通过主窗口、系统托盘和同步任务提醒用户处理待同步文件。应用还集成了基于扫码登录的腾讯 IMA 知识库同步能力，支持本地到云端、云端到本地以及双向同步。
 
-### 📊 核心看板与同步流
-| 首页 (Dashboard) | 待同步 (Pending Sync) |
+## 界面预览
+
+### 核心看板与同步流
+
+| 首页 | 待同步 |
 | --- | --- |
 | ![首页](docs/screenshot/首页.png) | ![待同步](docs/screenshot/待同步.png) |
 
-### 📈 记录明细与统计分析
-| 全部记录 (All Records) | 统计报告 (Reports) |
+### 记录明细与统计分析
+
+| 全部记录 | 报告 |
 | --- | --- |
 | ![全部记录](docs/screenshot/全部记录.png) | ![报告](docs/screenshot/报告.png) |
 
-### ⚙️ 系统设置与同步规则
-| 常规设置 (Settings) | 规则与云端配置 (Settings 2) |
+### 系统设置与同步规则
+
+| 设置 | 规则与云端配置 |
 | --- | --- |
 | ![设置](docs/screenshot/设置.png) | ![设置2](docs/screenshot/设置2.png) |
 
-### ❓ 新手指引与帮助关于
-| 帮助与关于 (FAQ & About) | 新手指引 - 第一步 (Onboarding 1) | 新手指引 - 第二步 (Onboarding 2) |
+### 新手指引与帮助关于
+
+| 帮助与关于 | 新手指引 1 | 新手指引 2 |
 | --- | --- | --- |
 | ![帮助与关于](docs/screenshot/帮助与关于.png) | ![引导1](docs/screenshot/引导1.png) | ![引导2](docs/screenshot/引导2.png) |
 
 ## 功能特性
 
-- **目录监控**：支持添加多个目录，递归监控文件和文件夹变动，并保留本地相对路径层级。
-- **事件记录**：记录路径、类型、时间、同步状态等信息，并持久化到本地 SwiftData。
-- **待同步确认**：新事件默认进入待同步状态，可逐条或批量标记完成。
-- **手动/自动同步**：默认手动同步；开启自动同步后，稳定等待一段时间再上传，避免正在编辑的文件被重复处理。
-- **云端路径映射**：每个监控目录可以绑定一个 IMA 知识库，本地子目录会按层级映射到云端文件夹。
-- **云端反向同步**：支持从 IMA 读取创建、更新、删除、重命名等变动，并同步回本地。
-- **菜单栏入口**：常驻菜单栏，显示待同步数量，并提供快速打开和退出入口。
-- **报告导出**：按时间范围统计记录，支持导出 CSV 和 JSON。
-- **IMA 云端集成**：支持微信扫码登录腾讯 IMA，凭据保存到系统 Keychain，可上传到指定知识库。
-- **忽略规则**：默认过滤 `.DS_Store`、临时文件、系统目录、构建缓存等噪声文件，也支持在设置页自定义文件名、后缀和目录名。
-- **帮助与新手引导**：内置功能说明、同步逻辑表、IMA API Key 获取步骤和一次性新手引导。
-- **现代桌面界面**：采用 FileSync 首页、极窄图标栏、二级列表侧栏和浅色氛围背景。
+- **跨平台桌面架构**：Tauri 2 负责桌面壳、系统托盘、窗口、打包与前后端 IPC。
+- **Rust 文件监控核心**：使用 `notify` 递归监控目录，支持 2 秒防抖与事件合并。
+- **本地 SQLite 存储**：文件事件和应用配置写入本机 SQLite 数据库。
+- **事件记录**：记录路径、旧路径、事件类型、时间、同步状态、目录标记和远端 ID。
+- **待同步处理**：新变动默认进入待同步，可逐条、按目录或批量标记完成/同步。
+- **手动/自动同步**：手动同步由用户触发；自动同步在检测到变动后尝试执行绑定目录同步。
+- **IMA 知识库同步**：支持微信扫码登录、知识库列表、目录绑定、文件上传、云端拉取、文件夹创建、重命名和删除接口适配。
+- **云端路径映射**：本地监控目录可绑定到指定 IMA 知识库，本地子目录会映射到云端文件夹。
+- **忽略规则**：默认过滤系统文件、临时文件、构建目录、缓存目录，并支持自定义文件名、后缀和目录名。
+- **系统托盘**：提供打开主窗口、立即同步所有目录、退出应用入口。
+- **请求日志**：最近 IMA HTTP 请求和响应保存在内存中，便于排查接口、凭据和网络问题。
+- **CSV/JSON 导出**：前端可将已同步历史记录导出为 CSV 或 JSON。
+- **双语界面**：内置简体中文和英文界面文案。
 
-## 系统要求
+## 技术架构
 
-- macOS 14.0 Sonoma 或更高版本
-- Swift 5.9+
-- Xcode 15+ 或 Swift Package Manager
+```text
+                    ┌──────────────────────────────────────┐
+                    │ desktop-portal Web UI                │
+                    │ HTML / CSS / Vanilla JS              │
+                    │ state, rendering, settings, i18n     │
+                    └──────────────────┬───────────────────┘
+                                       │ Tauri invoke/listen
+                    ┌──────────────────▼───────────────────┐
+                    │ sync-kernel Rust Backend              │
+                    │ commands, SQLite, notify, tray, IMA   │
+                    └──────┬────────────┬────────────┬──────┘
+                           │            │            │
+                     SQLite DB     OS file events   IMA Web APIs
+```
+
+### 前端
+
+- `desktop-portal/index.html`：单页应用结构。
+- `desktop-portal/main.js`：应用状态、Tauri command 调用、事件监听、渲染逻辑。
+- `desktop-portal/styles.css`：桌面 UI 样式、主题变量和布局。
+- `desktop-portal/i18n.js`：英文翻译字典。
+
+### 后端
+
+- `sync-kernel/src/lib.rs`：Tauri 初始化、命令注册、同步编排、登录窗口、静默刷新。
+- `sync-kernel/src/db.rs`：SQLite 表结构、事件和配置 CRUD。
+- `sync-kernel/src/monitor.rs`：目录监听、忽略规则、2 秒防抖合并、事件入库。
+- `sync-kernel/src/ima_sync.rs`：IMA 接口客户端、知识库、上传下载、文件夹、删除、重命名。
+- `sync-kernel/src/credentials.rs`：IMA 凭据读取、保存和清除。
+- `sync-kernel/src/tray.rs`：系统托盘菜单和点击行为。
 
 ## 快速开始
 
-```bash
-swift build
-swift run
-```
+### 环境要求
 
-运行后：
+- Node.js 18+
+- Rust stable
+- Tauri 2 支持的桌面环境
+- macOS 或 Windows
 
-1. 打开主窗口或菜单栏应用。
-2. 在首页或设置页添加需要监控的目录。
-3. 按需在设置页登录 IMA，并为监控目录选择知识库。
-4. 修改、创建、删除或重命名目录中的文件。
-5. 在“待同步”页面确认事件，并按需标记完成、同步到 IMA 或导出记录。
-
-## 开发命令
+### 安装依赖
 
 ```bash
-# 调试构建
-swift build
-
-# 运行应用
-swift run
-
-# 运行测试
-swift test
-
-# 发布构建
-swift build -c release
+npm install
 ```
 
-> 当前测试目标已配置，但项目暂未补充自动化测试用例。
+### 开发运行
+
+```bash
+npm run dev
+```
+
+该命令会进入 `sync-kernel` 并启动 `tauri dev`。
+
+### 构建应用
+
+```bash
+npm run build
+```
+
+### 检查 Rust 后端
+
+```bash
+cd sync-kernel
+cargo check
+```
+
+## GitHub 自动化打包
+
+仓库内置 GitHub Actions workflow：
+
+```text
+.github/workflows/release-tauri.yml
+```
+
+触发方式：
+
+- 推送版本 tag，例如 `v1.2.0`。
+- 在 GitHub Actions 页面手动运行 `Release Tauri App`。
+
+构建目标：
+
+- macOS Apple Silicon：`aarch64-apple-darwin`
+- macOS Intel：`x86_64-apple-darwin`
+- Windows x64
+
+workflow 会使用 Tauri 官方 `tauri-apps/tauri-action` 构建安装包，并创建/更新 GitHub Release 草稿。发布前可在 GitHub Release 页面检查产物和说明后再正式发布。
+
+示例：
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+## 数据与配置
+
+- 文件事件保存在 Tauri app data 目录下的 SQLite 数据库 `file_sync_monitor.db`。
+- 配置写入 SQLite `app_config` 表，部分前端偏好也会镜像在 `localStorage`。
+- IMA 凭据当前保存为 Tauri app data 目录下的 `ima_credentials.json`，并会尝试迁移旧版临时目录凭据文件。
+- HTTP 请求日志只保存在内存中，最多保留最近 100 条。
+- 导出文件由浏览器前端生成下载。
+
+## 事件处理流程
+
+1. 前端读取已保存的监控目录。
+2. 前端调用 `start_file_monitor`。
+3. Rust 后端使用 `notify` 递归监听目录。
+4. 原始事件先经过忽略规则过滤。
+5. 事件进入 2 秒防抖合并窗口。
+6. 合并后的事件写入 SQLite。
+7. 后端通过 `file-change-events` 通知前端刷新。
+8. 前端更新首页、待同步、全部记录和详情面板。
+
+## 同步处理流程
+
+1. 用户为监控目录绑定 IMA 知识库。
+2. 用户触发手动同步，或自动同步条件满足。
+3. 后端暂停文件监听，避免同步写入触发反馈循环。
+4. 拉取阶段读取云端知识库文件树，创建本地目录并下载文件。
+5. 上传阶段扫描本地待同步事件，创建云端文件夹或上传文件。
+6. 成功后记录 `remote_id` 并标记为已同步。
+7. 后端恢复文件监听并通知前端同步进度。
 
 ## 忽略规则
-
-忽略规则在事件入库前执行。被忽略的文件不会生成记录、不会触发通知，也不会增加菜单栏角标。
 
 默认忽略项包括：
 
 - 文件名：`.DS_Store`、`Icon\r`、`.localized`、`Thumbs.db`、`desktop.ini`
-- 临时文件：`~$*`、`.tmp`、`.temp`、`.swp`、`.swo`、`.part`、`.download`、`.crdownload`
+- 临时文件前缀：`~$`、`._`、`~wrl`、`~df`、`~rf`
+- 临时后缀：`asd`、`lck`、`lock`、`tmp`、`temp`、`swp`、`swo`、`part`、`download`、`crdownload`
 - 系统目录：`.Trashes`、`.Spotlight-V100`、`.fseventsd`、`.TemporaryItems`
 - 开发目录：`.git`、`.svn`、`.hg`、`node_modules`、`.next`、`.nuxt`、`dist`、`build`、`.build`、`DerivedData`
 - IDE 与缓存目录：`.idea`、`.vscode`、`.swiftpm`、`.cache`
 
-可以在“设置 > 忽略规则”中：
+设置页可以开启/关闭默认规则，并自定义忽略文件名、扩展名和目录名。
 
-- 开启或关闭默认忽略规则。
-- 添加自定义忽略文件名，例如 `debug.log`。
-- 添加自定义忽略后缀，例如 `.log`、`.tmp`。
-- 添加自定义忽略目录名，例如 `node_modules`、`DerivedData`。
-- 恢复默认配置。
+## IMA 云端同步
 
-## IMA 云端同步使用
+应用通过内嵌 Tauri WebView 打开腾讯 IMA 登录页，并注入登录响应捕获逻辑来保存必要凭据。同步接口基于 IMA Web/H5 请求适配，支持：
 
-在“设置 > IMA 云端”中点击**微信登录**，系统会弹出官方登录扫码窗口。扫码登录成功后，应用会把必要登录凭据保存到 macOS Keychain，并在后续同步请求中自动使用。
+- 获取用户信息和空间容量。
+- 获取知识库列表。
+- 获取知识库文件树。
+- 创建云端文件夹。
+- 上传本地文件到知识库目录。
+- 下载云端文件或笔记内容到本地。
+- 尝试远端重命名和删除。
+- Token 失效时尝试静默刷新。
 
-- 测试云端连接与存储配额。
-- 在设置页中为各个监控目录关联指定 IMA 知识库。
-- 手动同步时，用户在详情页或首页主动触发上传。
-- 自动同步时，应用会等待文件稳定后再上传，减少 Word、Excel 等应用产生的临时文件干扰。
-- 新增或修改文件会上传到对应云端目录；遇到同名文件时，使用带时间戳的文件名保留历史版本。
-- 云端删除、重命名和文件夹层级变动会在拉取同步时映射回本地。
-
-> IMA 云端功能依赖非官方接口，接口参数和行为可能随服务端变化而失效。项目中的抓包资料已经整理为脱敏文档：[docs/IMA抓包接口总结.md](docs/IMA抓包接口总结.md)，原始请求响应文件不再提交到仓库。
+> IMA 云端功能依赖非官方接口，接口参数和行为可能随服务端变化而失效。抓包资料整理见 [docs/IMA抓包接口总结.md](docs/IMA抓包接口总结.md)。
 
 ## 项目结构
 
 ```text
 .
-├── Package.swift
-├── Sources/FileSyncMonitor
-│   ├── FileSyncMonitorApp.swift
-│   ├── Models
-│   │   └── FileEvent.swift
-│   ├── Services
-│   │   ├── FileMonitorService.swift
-│   │   ├── PersistenceController.swift
-│   │   ├── NotificationManager.swift
-│   │   ├── ExportService.swift
-│   │   ├── IMASyncService.swift
-│   │   ├── IMACredentialsManager.swift
-│   │   ├── IMALogService.swift
-│   │   └── KeychainHelper.swift
-│   ├── UI
-│   │   ├── MainView.swift
-│   │   ├── SettingsView.swift
-│   │   ├── ReportsView.swift
-│   │   ├── HelpView.swift
-│   │   ├── IMALoginWebView.swift
-│   │   ├── MenuBarManager.swift
-│   │   └── Theme.swift
-│   └── Resources
-│       └── Localizable.xcstrings
-├── Tests
-└── docs
+├── package.json
+├── package-lock.json
+├── desktop-portal/
+│   ├── index.html
+│   ├── main.js
+│   ├── styles.css
+│   ├── i18n.js
+│   └── assets/
+├── sync-kernel/
+│   ├── Cargo.toml
+│   ├── Cargo.lock
+│   ├── tauri.conf.json
+│   ├── build.rs
+│   ├── capabilities/
+│   ├── permissions/
+│   ├── icons/
+│   └── src/
+│       ├── main.rs
+│       ├── lib.rs
+│       ├── db.rs
+│       ├── monitor.rs
+│       ├── ima_sync.rs
+│       ├── credentials.rs
+│       └── tray.rs
+├── docs/
+└── scripts/
 ```
-
-## 数据与隐私
-
-- 文件事件记录保存在本机 SwiftData/SQLite 数据库中。
-- IMA 登录凭据保存在系统 Keychain；本仓库不保存真实 token、cookie、用户 ID 或抓包原文。
-- 应用不会自动同步文件内容，除非用户主动触发同步或开启自动同步。
-- 导出文件由用户通过保存面板选择位置。
-- 监控目录权限通过 Security-Scoped Bookmarks 持久化。
-- 原始抓包目录、临时日志、`.DS_Store`、调试脚本等已加入 `.gitignore`，避免误提交无关文件或敏感材料。
 
 ## 已知限制
 
-- 当前不做文件内容 diff，只记录文件系统事件。
-- FSEvents 会合并短时间内的高频事件，事件粒度取决于系统回调。
+- 当前没有自动化测试覆盖，发布前建议结合真实目录和真实知识库手动验证。
+- IMA 同步基于非官方接口，稳定性取决于腾讯服务端行为。
+- 凭据当前为本地 JSON 文件保存，尚未切换到跨平台 Keyring/系统凭据管理器。
+- 系统托盘暂未显示动态待同步数字角标。
+- 事件只记录文件系统变动，不做文件内容 diff。
+- `notify` 和底层系统事件可能合并高频变动，最终事件粒度受系统行为影响。
 - 已入库的历史记录不会因后续新增忽略规则而自动删除。
-- IMA 云端同步基于非官方接口，若服务端接口调整，需要重新适配。
-- 当前自动化测试覆盖有限，发布前仍建议结合真实目录和 IMA 知识库做手动验证。
 
-## 💖 捐赠与支持
+## 捐赠与支持
 
-FileSyncMonitor 是一款完全开源且自愿使用的工具。如果它为您节省了时间，提升了工作效率，欢迎通过扫码进行捐赠支持，您的支持将是维护本项目持续更新的最佳动力！
+FileSyncMonitor 是一款开源工具。如果它为你节省了时间，欢迎通过扫码捐赠支持后续维护。
 
-**⚠️ 捐赠前必读（免责声明补充）：**
-- 捐赠完全基于无偿赞助和自愿赠予性质，用于支持作者学习和进行开源软件维护。
-- **捐赠行为不构成任何买卖、雇佣、代理或服务契约关系**。
-- 请在充分理解下方 [⚠️ 免责声明](#-免责声明) 的前提下进行捐赠。即使您进行了捐赠，也无法免除您使用非官方接口时自身所需承担的法律与封号风险。
-
-| 微信捐赠 (WeChat Pay) | 支付宝捐赠 (Alipay) |
+| 微信捐赠 | 支付宝捐赠 |
 | --- | --- |
 | <img src="docs/pay/wechat.jpg" width="260" alt="微信" /> | <img src="docs/pay/alipay.jpg" width="260" alt="支付宝" /> |
 
-> 💡 捐赠完全自愿，所有功能均无限制提供。感谢您的支持！
+捐赠完全自愿，不影响任何功能使用。
 
-## ⚠️ 免责声明 (Disclaimer)
+## 免责声明
 
-**请仔细阅读以下条款，使用本软件即代表您同意并接受本声明的所有内容：**
+本软件及源码仅供学习、研究和个人技术交流使用。腾讯 IMA 云端同步功能基于非官方接口适配，软件作者与腾讯控股有限公司或其关联公司无任何关联。接口可能随时失效，使用者需自行承担账号、数据、接口变化和法律合规风险。
 
-1. **学习与交流用途**：本软件（FileSyncMonitor）及其全部源代码仅供**学术研究与个人技术学习交流**之用，严禁将本软件用于任何商业用途或非法活动。
-2. **非官方接口声明**：本软件集成的腾讯 IMA 云端同步功能，其底层接口是通过**非官方抓包/反向工程**分析而来的。软件作者与腾讯控股有限公司（或其任何关联公司）无任何关联。接口可能会因为服务提供商的更新调整而随时失效或报错。
-3. **法律风险与责任自负**：
-   - 抓包接口的使用存在一定的法律和封号风险。用户在使用云端同步服务时，需自行承担由于使用非官方接口可能导致的账号封禁、数据丢失、网络拥堵等一切后果。
-   - 软件作者不为因使用本软件或其云端功能而导致的任何直接、间接、附带或惩罚性损害（包括但不限于商业利润损失、数据丢失、商誉损害等）承担任何法律责任。
-4. **关于捐赠**：
-   - 本软件提供的“捐赠与支持”通道完全属于**无偿赞助和赠予性质**，用于支持作者学习和进行开源软件维护。
-   - **捐赠行为不构成任何买卖、雇佣、代理或服务契约关系**。即使进行了捐赠，也绝对无法免除用户自身的法律风险，亦不代表作者会对由于本软件接口引起的任何法律纠纷、知识产权问题或数据纠纷承担连带责任。
-5. **无担保声明**：本软件按“原样”（AS IS）提供，不提供任何明示或暗示的担保，包括但不限于对适销性、特定用途适用性和非侵权性的担保。
+软件按“原样”提供，不承诺任何明示或暗示担保。因使用本软件或云端功能产生的任何直接或间接损失，作者不承担责任。
 
-## 📄 开源协议 (License)
+## 开源协议
 
-本项目采用 [GPL-3.0](LICENSE) 协议开源。详细内容请参阅 `LICENSE` 文件。
+本项目采用 [GPL-3.0](LICENSE) 协议开源。

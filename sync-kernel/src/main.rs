@@ -4,4 +4,3 @@
 fn main() {
     file_sync_monitor_lib::run()
 }
-
