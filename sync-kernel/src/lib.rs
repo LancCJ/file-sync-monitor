@@ -17,6 +17,11 @@ use db::FileEvent;
 use ima_sync::{IMASyncClient, KnowledgeBase, KnowledgeInfo};
 use monitor::{DirectoryMonitor, IgnoreRules};
 
+#[cfg(target_os = "macos")]
+const WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+#[cfg(not(target_os = "macos"))]
+const WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HttpLogEntry {
     pub id: String,
@@ -1451,7 +1456,7 @@ pub async fn refresh_ima_credentials_silently(
     app.run_on_main_thread(move || {
         let builder = tauri::WebviewWindowBuilder::new(&app_clone, "ima_silent_refresh", tauri::WebviewUrl::External(url))
             .visible(false)
-            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .user_agent(WEBVIEW_USER_AGENT)
             .initialization_script(js_injection)
             .on_navigation(move |url| {
                 let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
@@ -1764,8 +1769,7 @@ fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
             .inner_size(350.0, 410.0)
             .resizable(false)
             .decorations(false)
-
-            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .user_agent(WEBVIEW_USER_AGENT)
             .initialization_script(js_injection)
             .on_navigation(move |url| {
                 let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
