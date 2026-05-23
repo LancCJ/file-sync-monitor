@@ -65,8 +65,8 @@ jobs:
         with:
           projectPath: sync-kernel
           tauriScript: ${{ matrix.tauri_script }}
-          tagName: "v__VERSION__"
-          releaseName: "FileSyncMonitor v__VERSION__"
+          tagName: ${{ github.ref_name }}
+          releaseName: "FileSyncMonitor ${{ github.ref_name }}"
           releaseBody: "See the assets below to download and install FileSyncMonitor."
           releaseDraft: false
           prerelease: false
