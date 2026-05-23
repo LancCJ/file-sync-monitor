@@ -1666,7 +1666,7 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     let login_url = {
-        let url = tauri::Url::parse("https://ima.qq.com/login#/weixin-login")
+        let url = tauri::Url::parse("https://ima.qq.com/login/")
             .map_err(|e| e.to_string())?;
         tauri::WebviewUrl::External(url)
     };
