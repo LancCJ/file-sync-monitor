@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use credentials::CachedCredentials;
 use db::FileEvent;
@@ -1885,18 +1885,8 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
         // Make it modal relative to main window
 
 
-        if let Ok(win) = builder.center().build() {
-            if let Some(main_window) = app_clone2.get_webview_window("main") {
-                if let (Ok(main_pos), Ok(main_size), Ok(login_size)) = (
-                    main_window.outer_position(),
-                    main_window.outer_size(),
-                    win.outer_size(),
-                ) {
-                    let x = main_pos.x + ((main_size.width as i32 - login_size.width as i32) / 2);
-                    let y = main_pos.y + ((main_size.height as i32 - login_size.height as i32) / 2);
-                    let _ = win.set_position(PhysicalPosition::new(x, y));
-                }
-            }
+        if let Ok(_win) = builder.center().build() {
+            // Successfully created and centered on primary screen
         } else if let Some(win) = app_clone2.get_webview_window("ima_login") {
             let _ = win.set_focus();
         }
