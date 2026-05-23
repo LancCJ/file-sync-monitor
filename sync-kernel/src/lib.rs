@@ -1424,10 +1424,10 @@ pub async fn refresh_ima_credentials_silently(
                 bridge("login-success", creds);
             }
 
-            const originalFetch = window.fetch;
+            const originalFetch = window.fetch.bind(window);
             window.fetch = async function(...args) {
                 const url = requestUrl(args[0]);
-                const response = await originalFetch.apply(this, args);
+                const response = await originalFetch(...args);
                 if (isLoginResponseUrl(url)) {
                     response.clone().text()
                         .then(text => submitLogin(text, "fetch"))
@@ -1666,10 +1666,10 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
                 bridge("login-success", creds);
             }
 
-            const originalFetch = window.fetch;
+            const originalFetch = window.fetch.bind(window);
             window.fetch = async function(...args) {
                 const url = requestUrl(args[0]);
-                const response = await originalFetch.apply(this, args);
+                const response = await originalFetch(...args);
                 if (isLoginResponseUrl(url)) {
                     response.clone().text()
                         .then(text => submitLogin(text, "fetch"))
