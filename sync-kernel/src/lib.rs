@@ -851,19 +851,19 @@ async fn sync_single_event(
 }
 
 #[tauri::command]
-fn clear_all_events(state: State<'_, AppState>) -> Result<(), String> {
+async fn clear_all_events(state: State<'_, AppState>) -> Result<(), String> {
     let conn = state.db_conn.lock().unwrap();
     db::clear_all_events(&conn).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn get_config_value(state: State<'_, AppState>, key: String) -> Result<Option<String>, String> {
+async fn get_config_value(state: State<'_, AppState>, key: String) -> Result<Option<String>, String> {
     let conn = state.db_conn.lock().unwrap();
     db::get_config(&conn, &key).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn set_config_value(state: State<'_, AppState>, key: String, value: String) -> Result<(), String> {
+async fn set_config_value(state: State<'_, AppState>, key: String, value: String) -> Result<(), String> {
     let conn = state.db_conn.lock().unwrap();
     db::save_config(&conn, &key, &value).map_err(|e| e.to_string())
 }
@@ -1050,7 +1050,7 @@ async fn get_ima_space_quota(
 }
 
 #[tauri::command]
-fn start_file_monitor(
+async fn start_file_monitor(
     state: State<'_, AppState>,
     paths: Vec<String>,
     app_handle: AppHandle,
@@ -1094,22 +1094,35 @@ fn start_file_monitor(
 
 #[tauri::command]
 async fn select_directory(app_handle: AppHandle) -> Result<Option<String>, String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app_handle
-        .run_on_main_thread(move || {
+    #[cfg(target_os = "macos")]
+    {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        app_handle
+            .run_on_main_thread(move || {
+                let folder = rfd::FileDialog::new().pick_folder();
+                let res = folder.map(|path| path.to_string_lossy().to_string());
+                let _ = tx.send(res);
+            })
+            .map_err(|e| e.to_string())?;
+        rx.await.map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let res = tokio::task::spawn_blocking(move || {
             let folder = rfd::FileDialog::new().pick_folder();
-            let res = folder.map(|path| path.to_string_lossy().to_string());
-            let _ = tx.send(res);
+            folder.map(|path| path.to_string_lossy().to_string())
         })
+        .await
         .map_err(|e| e.to_string())?;
-
-    rx.await.map_err(|e| e.to_string())
+        Ok(res)
+    }
 }
 
 #[tauri::command]
-fn stop_file_monitor(state: State<'_, AppState>) {
+async fn stop_file_monitor(state: State<'_, AppState>) -> Result<(), String> {
     let mut monitor = state.monitor.lock().unwrap();
     monitor.stop();
+    Ok(())
 }
 
 #[tauri::command]
@@ -1118,7 +1131,7 @@ fn exit_app(app_handle: AppHandle) {
 }
 
 #[tauri::command]
-fn show_main_window(app: tauri::AppHandle) {
+async fn show_main_window(app: tauri::AppHandle) {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
@@ -1560,7 +1573,7 @@ pub async fn refresh_ima_credentials_silently(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[tauri::command]
-fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
+async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
 
     if let Some(win) = app.get_webview_window("ima_login") {
