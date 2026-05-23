@@ -4,6 +4,7 @@ mod ima_sync;
 mod monitor;
 mod tray;
 
+use base64::Engine;
 use rusqlite::params;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -37,6 +38,20 @@ pub struct HttpLogEntry {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+struct WeChatLoginSession {
+    uuid: String,
+    qr_url: String,
+    qr_data_url: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct WeChatLoginPollResult {
+    status: String,
+    redirect_url: Option<String>,
+    message: Option<String>,
+}
+
 pub static HTTP_LOGS: std::sync::OnceLock<Mutex<Vec<HttpLogEntry>>> = std::sync::OnceLock::new();
 pub static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 static LOG_ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -45,6 +60,146 @@ pub fn generate_log_id() -> String {
     LOG_ID_COUNTER
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         .to_string()
+}
+
+pub fn sanitize_http_log_text(input: &str) -> String {
+    let mut out = input.to_string();
+    let sensitive_keys = [
+        "token",
+        "refresh_token",
+        "refreshToken",
+        "IMA-TOKEN",
+        "IMA-REFRESH-TOKEN",
+        "x-ima-cookie",
+        "cookie",
+        "Cookie",
+        "code",
+        "wx_code",
+    ];
+
+    for key in sensitive_keys {
+        out = mask_json_like_value(&out, key);
+        out = mask_query_like_value(&out, key);
+        out = mask_header_like_value(&out, key);
+    }
+
+    if out.len() > 20_000 {
+        out.truncate(20_000);
+        out.push_str("\n...[truncated]");
+    }
+    out
+}
+
+fn mask_json_like_value(input: &str, key: &str) -> String {
+    let quoted = format!("\"{}\"", key);
+    let mut result = String::with_capacity(input.len());
+    let mut rest = input;
+
+    while let Some(key_pos) = rest.find(&quoted) {
+        let (before, after_key) = rest.split_at(key_pos + quoted.len());
+        result.push_str(before);
+
+        let Some(colon_rel) = after_key.find(':') else {
+            rest = after_key;
+            break;
+        };
+        let (between, after_colon) = after_key.split_at(colon_rel + 1);
+        result.push_str(between);
+
+        let leading_ws_len = after_colon
+            .char_indices()
+            .find(|(_, ch)| !ch.is_whitespace())
+            .map(|(idx, _)| idx)
+            .unwrap_or(after_colon.len());
+        let (leading_ws, value_part) = after_colon.split_at(leading_ws_len);
+        result.push_str(leading_ws);
+
+        if let Some(stripped) = value_part.strip_prefix('"') {
+            if let Some(end) = stripped.find('"') {
+                result.push_str("\"***\"");
+                rest = &stripped[end + 1..];
+            } else {
+                result.push_str("\"***\"");
+                rest = "";
+            }
+        } else {
+            let end = value_part
+                .char_indices()
+                .find(|(_, ch)| [',', '}', '\n', '\r'].contains(ch))
+                .map(|(idx, _)| idx)
+                .unwrap_or(value_part.len());
+            result.push_str("***");
+            rest = &value_part[end..];
+        }
+    }
+
+    result.push_str(rest);
+    result
+}
+
+fn mask_query_like_value(input: &str, key: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut rest = input;
+    let patterns = [format!("{}=", key), format!("{}%3D", key)];
+
+    loop {
+        let next = patterns
+            .iter()
+            .filter_map(|pattern| rest.find(pattern).map(|idx| (idx, pattern.len())))
+            .min_by_key(|(idx, _)| *idx);
+        let Some((idx, pattern_len)) = next else {
+            result.push_str(rest);
+            break;
+        };
+
+        let (before, after_before) = rest.split_at(idx + pattern_len);
+        result.push_str(before);
+        let end = after_before
+            .char_indices()
+            .find(|(_, ch)| ['&', '#', ' ', '\n', '\r', '"', '\''].contains(ch))
+            .map(|(i, _)| i)
+            .unwrap_or(after_before.len());
+        result.push_str("***");
+        rest = &after_before[end..];
+    }
+
+    result
+}
+
+fn mask_header_like_value(input: &str, key: &str) -> String {
+    input
+        .lines()
+        .map(|line| {
+            let lower = line.to_ascii_lowercase();
+            if lower.starts_with(&format!("{}:", key.to_ascii_lowercase())) {
+                format!("{}: ***", line.split(':').next().unwrap_or(key))
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn add_logged_http_request(
+    method: &str,
+    url: &str,
+    headers: Option<String>,
+    body: Option<String>,
+) -> String {
+    let log_id = generate_log_id();
+    add_http_log(HttpLogEntry {
+        id: log_id.clone(),
+        timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        method: method.to_string(),
+        url: sanitize_http_log_text(url),
+        request_headers: headers.map(|h| sanitize_http_log_text(&h)),
+        request_body: body.map(|b| sanitize_http_log_text(&b)),
+        response_code: None,
+        response_body: None,
+        error: None,
+    });
+    log_id
 }
 
 pub fn get_http_logs_mutex() -> &'static Mutex<Vec<HttpLogEntry>> {
@@ -64,7 +219,7 @@ pub fn update_http_log_response(id: &str, code: u16, body: &str) {
     if let Ok(mut logs) = get_http_logs_mutex().lock() {
         if let Some(log) = logs.iter_mut().find(|l| l.id == id) {
             log.response_code = Some(code);
-            log.response_body = Some(body.to_string());
+            log.response_body = Some(sanitize_http_log_text(body));
         }
     }
 }
@@ -1161,8 +1316,8 @@ fn app_window_icon() -> Option<tauri::image::Image<'static>> {
     tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png")).ok()
 }
 
-fn ima_wechat_qr_login_url() -> Result<tauri::WebviewUrl, String> {
-    let url = format!(
+fn ima_wechat_qr_login_url_string() -> String {
+    format!(
         "https://open.weixin.qq.com/connect/qrconnect?appid={}&scope=snsapi_login&redirect_uri={}&state=fsm-native-login&login_type=jssdk&styletype=&sizetype=&bgcolor=&rst=&stylelite=1&fast_login=1&lang=cn&ts={}",
         IMA_WECHAT_APP_ID,
         IMA_WECHAT_REDIRECT_URI,
@@ -1170,10 +1325,202 @@ fn ima_wechat_qr_login_url() -> Result<tauri::WebviewUrl, String> {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis())
             .unwrap_or_default()
-    );
+    )
+}
+
+#[cfg(not(target_os = "windows"))]
+fn ima_wechat_qr_login_url() -> Result<tauri::WebviewUrl, String> {
+    let url = ima_wechat_qr_login_url_string();
     tauri::Url::parse(&url)
         .map(tauri::WebviewUrl::External)
         .map_err(|e| e.to_string())
+}
+
+fn extract_between<'a>(text: &'a str, start_marker: &str, end_markers: &[char]) -> Option<&'a str> {
+    let start = text.find(start_marker)? + start_marker.len();
+    let rest = &text[start..];
+    let end = rest
+        .char_indices()
+        .find(|(_, ch)| end_markers.contains(ch))
+        .map(|(idx, _)| idx)
+        .unwrap_or(rest.len());
+    Some(&rest[..end])
+}
+
+fn extract_wechat_qr_uuid(html: &str) -> Option<String> {
+    extract_between(
+        html,
+        "/connect/qrcode/",
+        &['"', '\'', '<', '>', '?', '&', ' '],
+    )
+    .map(str::trim)
+    .filter(|uuid| !uuid.is_empty())
+    .map(ToString::to_string)
+}
+
+fn extract_wechat_js_var(script: &str, name: &str) -> Option<String> {
+    let pattern = format!("{}=", name);
+    let value = extract_between(script, &pattern, &[';', '\n', '\r'])?.trim();
+    Some(
+        value
+            .trim_matches('"')
+            .trim_matches('\'')
+            .trim()
+            .to_string(),
+    )
+}
+
+#[tauri::command]
+async fn create_wechat_login_session() -> Result<WeChatLoginSession, String> {
+    let login_url = ima_wechat_qr_login_url_string();
+    let client = reqwest::Client::builder()
+        .user_agent(WEBVIEW_USER_AGENT)
+        .build()
+        .map_err(|e| e.to_string())?;
+    let headers_str = format!("User-Agent: {}", WEBVIEW_USER_AGENT);
+    let page_log_id = add_logged_http_request("GET", &login_url, Some(headers_str.clone()), None);
+    let page_res = client.get(&login_url).send().await.map_err(|e| {
+        let err = format!("Failed to request WeChat login page: {}", e);
+        update_http_log_error(&page_log_id, &err);
+        err
+    })?;
+    let page_status = page_res.status();
+    let html = page_res.text().await.map_err(|e| {
+        let err = format!("Failed to read WeChat login page: {}", e);
+        update_http_log_error(&page_log_id, &err);
+        err
+    })?;
+    update_http_log_response(&page_log_id, page_status.as_u16(), &html);
+
+    let uuid = extract_wechat_qr_uuid(&html)
+        .ok_or_else(|| "Failed to locate WeChat QR code in login page".to_string())?;
+    let qr_url = format!("https://open.weixin.qq.com/connect/qrcode/{}", uuid);
+    let qr_log_id = add_logged_http_request("GET", &qr_url, Some(headers_str), None);
+    let qr_res = client.get(&qr_url).send().await.map_err(|e| {
+        let err = format!("Failed to request WeChat QR image: {}", e);
+        update_http_log_error(&qr_log_id, &err);
+        err
+    })?;
+    let qr_status = qr_res.status();
+    let qr_content_type = qr_res
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("image/jpeg")
+        .to_string();
+    let qr_bytes = qr_res.bytes().await.map_err(|e| {
+        let err = format!("Failed to read WeChat QR image: {}", e);
+        update_http_log_error(&qr_log_id, &err);
+        err
+    })?;
+    update_http_log_response(
+        &qr_log_id,
+        qr_status.as_u16(),
+        &format!(
+            "[binary {} image, {} bytes]",
+            qr_content_type,
+            qr_bytes.len()
+        ),
+    );
+    if !qr_status.is_success() {
+        let err = format!("WeChat QR image returned HTTP {}", qr_status);
+        update_http_log_error(&qr_log_id, &err);
+        return Err(err);
+    }
+
+    let qr_base64 = base64::engine::general_purpose::STANDARD.encode(qr_bytes);
+    Ok(WeChatLoginSession {
+        qr_data_url: format!("data:{};base64,{}", qr_content_type, qr_base64),
+        qr_url,
+        uuid,
+    })
+}
+
+#[tauri::command]
+async fn poll_wechat_qr_status(uuid: String) -> Result<WeChatLoginPollResult, String> {
+    if uuid.trim().is_empty() {
+        return Err("Missing WeChat QR uuid".to_string());
+    }
+
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
+    let poll_url = format!(
+        "https://long.open.weixin.qq.com/connect/l/qrconnect?uuid={}&_={}",
+        uuid, ts
+    );
+    let referer = ima_wechat_qr_login_url_string();
+    let client = reqwest::Client::builder()
+        .user_agent(WEBVIEW_USER_AGENT)
+        .build()
+        .map_err(|e| e.to_string())?;
+    let headers_str = format!("User-Agent: {}\nReferer: {}", WEBVIEW_USER_AGENT, referer);
+    let poll_log_id = add_logged_http_request("GET", &poll_url, Some(headers_str), None);
+    let poll_res = client
+        .get(&poll_url)
+        .header(reqwest::header::REFERER, referer)
+        .send()
+        .await
+        .map_err(|e| {
+            let err = format!("Failed to poll WeChat QR status: {}", e);
+            update_http_log_error(&poll_log_id, &err);
+            err
+        })?;
+    let poll_status = poll_res.status();
+    let script = poll_res.text().await.map_err(|e| {
+        let err = format!("Failed to read WeChat QR status: {}", e);
+        update_http_log_error(&poll_log_id, &err);
+        err
+    })?;
+    update_http_log_response(&poll_log_id, poll_status.as_u16(), &script);
+    if !poll_status.is_success() {
+        let err = format!("WeChat QR status poll returned HTTP {}", poll_status);
+        update_http_log_error(&poll_log_id, &err);
+        return Err(err);
+    }
+
+    let errcode = extract_wechat_js_var(&script, "window.wx_errcode")
+        .or_else(|| extract_wechat_js_var(&script, "wx_errcode"))
+        .unwrap_or_default();
+
+    let result = match errcode.as_str() {
+        "405" => {
+            let code = extract_wechat_js_var(&script, "window.wx_code")
+                .or_else(|| extract_wechat_js_var(&script, "wx_code"))
+                .ok_or_else(|| "WeChat confirmed login but did not return code".to_string())?;
+            WeChatLoginPollResult {
+                status: "success".to_string(),
+                redirect_url: Some(format!(
+                    "https://ima.qq.com/login#/weixin-login?code={}&state=fsm-native-login",
+                    code
+                )),
+                message: None,
+            }
+        }
+        "404" => WeChatLoginPollResult {
+            status: "scanned".to_string(),
+            redirect_url: None,
+            message: Some("Scanned, waiting for confirmation".to_string()),
+        },
+        "403" => WeChatLoginPollResult {
+            status: "cancelled".to_string(),
+            redirect_url: None,
+            message: Some("Login cancelled in WeChat".to_string()),
+        },
+        "402" => WeChatLoginPollResult {
+            status: "expired".to_string(),
+            redirect_url: None,
+            message: Some("QR code expired".to_string()),
+        },
+        _ => WeChatLoginPollResult {
+            status: "pending".to_string(),
+            redirect_url: None,
+            message: None,
+        },
+    };
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1248,8 +1595,6 @@ async fn refresh_credentials_via_api(
         url
     );
 
-    let log_id = generate_log_id();
-    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let headers_str = headers
         .iter()
         .map(|(key, val)| format!("{}: {:?}", key, val))
@@ -1257,17 +1602,7 @@ async fn refresh_credentials_via_api(
         .join("\n");
     let req_body_str = serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
 
-    add_http_log(HttpLogEntry {
-        id: log_id.clone(),
-        timestamp,
-        method: "POST".to_string(),
-        url: url.to_string(),
-        request_headers: Some(headers_str),
-        request_body: Some(req_body_str),
-        response_code: None,
-        response_body: None,
-        error: None,
-    });
+    let log_id = add_logged_http_request("POST", url, Some(headers_str), Some(req_body_str));
 
     let res = client
         .post(url)
@@ -1686,6 +2021,9 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
+    #[cfg(target_os = "windows")]
+    let login_url = tauri::WebviewUrl::App("wechat-login.html".into());
+    #[cfg(not(target_os = "windows"))]
     let login_url = ima_wechat_qr_login_url()?;
 
     let js_injection = r##"
@@ -2051,6 +2389,9 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
         let builder = builder.on_navigation(move |url| {
             println!("[IMALogin Navigation] {}", url);
             let scheme = url.scheme();
+            if scheme == "tauri" || scheme == "asset" {
+                return true;
+            }
             if scheme != "http" && scheme != "https" {
                 use tauri_plugin_opener::OpenerExt;
                 let url_str = url.to_string();
@@ -2228,6 +2569,8 @@ pub fn run() {
             get_ima_knowledge_bases,
             get_ima_user_profile,
             get_ima_space_quota,
+            create_wechat_login_session,
+            poll_wechat_qr_status,
             open_login_window,
             start_file_monitor,
             stop_file_monitor,

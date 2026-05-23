@@ -846,8 +846,6 @@ impl IMASyncClient {
         let headers = self.build_headers(creds);
 
         // Capture request details
-        let log_id = crate::generate_log_id();
-        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let headers_str = headers
             .iter()
             .map(|(key, val)| format!("{}: {:?}", key, val))
@@ -855,17 +853,8 @@ impl IMASyncClient {
             .join("\n");
         let req_body_str = serde_json::to_string_pretty(&body).unwrap_or_else(|_| body.to_string());
 
-        crate::add_http_log(crate::HttpLogEntry {
-            id: log_id.clone(),
-            timestamp,
-            method: "POST".to_string(),
-            url: url.clone(),
-            request_headers: Some(headers_str),
-            request_body: Some(req_body_str),
-            response_code: None,
-            response_body: None,
-            error: None,
-        });
+        let log_id =
+            crate::add_logged_http_request("POST", &url, Some(headers_str), Some(req_body_str));
 
         println!("[IMA Client] === REQUEST START ===");
         println!("[IMA Client] URL: {}", url);
@@ -933,9 +922,6 @@ impl IMASyncClient {
                         let url = format!("{}/{}", self.base_url, path);
                         let headers = self.build_headers(&new_creds);
 
-                        let retry_log_id = crate::generate_log_id();
-                        let retry_timestamp =
-                            chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
                         let retry_headers_str = headers
                             .iter()
                             .map(|(key, val)| format!("{}: {:?}", key, val))
@@ -944,17 +930,12 @@ impl IMASyncClient {
                         let retry_req_body_str = serde_json::to_string_pretty(&body)
                             .unwrap_or_else(|_| body.to_string());
 
-                        crate::add_http_log(crate::HttpLogEntry {
-                            id: retry_log_id.clone(),
-                            timestamp: retry_timestamp,
-                            method: "POST".to_string(),
-                            url: url.clone(),
-                            request_headers: Some(retry_headers_str),
-                            request_body: Some(retry_req_body_str),
-                            response_code: None,
-                            response_body: None,
-                            error: None,
-                        });
+                        let retry_log_id = crate::add_logged_http_request(
+                            "POST",
+                            &url,
+                            Some(retry_headers_str),
+                            Some(retry_req_body_str),
+                        );
 
                         let res = self
                             .client

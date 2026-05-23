@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>微信扫码登录</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --mint: #00ad6f;
+      --mint-strong: #00a66b;
+      --text: #1d1f22;
+      --muted: #6f7885;
+      --border: rgba(0, 173, 111, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #f7fffb 0%, #ffffff 58%, #f2fbf7 100%);
+      color: var(--text);
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+    }
+
+    .login-card {
+      width: 332px;
+      min-height: 432px;
+      padding: 32px 24px 28px;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 24px 60px rgba(28, 43, 34, 0.16);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.2;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .qr-frame {
+      width: 248px;
+      height: 248px;
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .qr-frame img {
+      width: 224px;
+      height: 224px;
+      display: block;
+    }
+
+    .loader {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 3px solid rgba(0, 173, 111, 0.16);
+      border-top-color: var(--mint);
+      animation: spin 0.9s linear infinite;
+    }
+
+    .status {
+      min-height: 20px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .retry-btn {
+      margin-top: 12px;
+      width: 180px;
+      height: 40px;
+      border: 0;
+      border-radius: 12px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #06c985 0%, var(--mint-strong) 100%);
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 12px 24px rgba(0, 173, 111, 0.22);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="login-card">
+    <h1>微信授权登录</h1>
+    <p class="subtitle">使用微信扫描二维码，授权后自动返回 FileSyncMonitor</p>
+    <div class="qr-frame" id="qr-frame">
+      <div class="loader" id="loader"></div>
+      <img class="hidden" id="qr-img" alt="微信登录二维码" />
+    </div>
+    <div class="status" id="status">正在获取登录二维码...</div>
+    <button class="retry-btn hidden" id="retry-btn" type="button">重新获取二维码</button>
+  </main>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const qrImg = document.getElementById("qr-img");
+    const loader = document.getElementById("loader");
+    const statusEl = document.getElementById("status");
+    const retryBtn = document.getElementById("retry-btn");
+
+    let pollTimer = null;
+    let stopped = false;
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function showRetry(text) {
+      stopped = true;
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      loader.classList.add("hidden");
+      retryBtn.classList.remove("hidden");
+      setStatus(text);
+    }
+
+    async function poll(uuid) {
+      if (stopped) return;
+      try {
+        const result = await invoke("poll_wechat_qr_status", { uuid });
+        if (result.status === "success" && result.redirect_url) {
+          stopped = true;
+          setStatus("授权成功，正在连接 IMA...");
+          window.location.href = result.redirect_url;
+          return;
+        }
+        if (result.status === "scanned") {
+          setStatus("已扫码，请在微信中确认授权。");
+        } else if (result.status === "cancelled") {
+          showRetry("你已取消授权，请重新获取二维码。");
+          return;
+        } else if (result.status === "expired") {
+          showRetry("二维码已过期，请重新获取。");
+          return;
+        } else {
+          setStatus("请使用微信扫描二维码登录。");
+        }
+      } catch (error) {
+        console.error(error);
+        setStatus("正在等待微信响应...");
+      }
+      pollTimer = setTimeout(() => poll(uuid), 1800);
+    }
+
+    async function start() {
+      stopped = false;
+      if (pollTimer) clearTimeout(pollTimer);
+      retryBtn.classList.add("hidden");
+      qrImg.classList.add("hidden");
+      loader.classList.remove("hidden");
+      setStatus("正在获取登录二维码...");
+
+      try {
+        const session = await invoke("create_wechat_login_session");
+        qrImg.onload = () => {
+          loader.classList.add("hidden");
+          qrImg.classList.remove("hidden");
+          setStatus("请使用微信扫描二维码登录。");
+        };
+        qrImg.onerror = () => showRetry("二维码加载失败，请重新获取。");
+        qrImg.src = session.qr_data_url || session.qr_url;
+        poll(session.uuid);
+      } catch (error) {
+        console.error(error);
+        showRetry("二维码获取失败，请检查网络后重试。");
+      }
+    }
+
+    retryBtn.addEventListener("click", start);
+    start();
+  </script>
+</body>
+</html>

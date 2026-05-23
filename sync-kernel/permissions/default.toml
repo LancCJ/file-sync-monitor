@@ -14,6 +14,8 @@ commands.allow = [
   "clear_ima_credentials",
   "get_ima_knowledge_bases",
   "get_ima_user_profile",
+  "create_wechat_login_session",
+  "poll_wechat_qr_status",
   "open_login_window",
   "start_file_monitor",
   "stop_file_monitor",
