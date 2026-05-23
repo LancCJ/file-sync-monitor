@@ -866,6 +866,11 @@ body, html {
   color: var(--app-amber);
 }
 
+.home-metric-badge.cloud {
+  background-color: rgba(0, 168, 204, 0.12);
+  color: var(--app-blue);
+}
+
 @media (prefers-color-scheme: dark) {
   .home-metric-badge {
     background-color: rgba(255, 255, 255, 0.06);
@@ -895,6 +900,66 @@ body, html {
   font-weight: 600;
   color: var(--text-secondary);
   margin-top: 3px;
+}
+
+.home-quota-card {
+  align-items: stretch;
+}
+
+.home-quota-details {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+.home-quota-topline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.home-quota-used {
+  color: var(--app-blue);
+  font-size: 1.42rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.home-quota-percent {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-quota-progress {
+  width: 100%;
+  height: 5px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: rgba(0, 168, 204, 0.1);
+  overflow: hidden;
+}
+
+.home-quota-progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--app-blue), var(--app-mint));
+  transition: width var(--transition-normal);
+}
+
+.home-quota-subtext {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Status Summary Panel */

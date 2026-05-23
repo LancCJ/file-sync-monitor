@@ -135,7 +135,8 @@ let state = {
   selectedPendingEventId: null,
   selectedPendingNode: null,
   isMarkingAllPending: false,
-  syncButtonHtmls: null
+  syncButtonHtmls: null,
+  cloudQuota: null
 };
 
 // Default gender-neutral SVG avatar data URI (Cute Panda Theme)
@@ -2144,6 +2145,8 @@ async function checkAuthState() {
         showAuthorizedUI(ensureHttps(state.credentials?.avatar || cachedAvatar), fallbackName);
       }
 
+      fetchAndRenderSpaceQuota(creds).catch(console.error);
+
     } else {
       showUnapprovedUI();
     }
@@ -2202,21 +2205,11 @@ async function fetchAndRenderSpaceQuota(creds) {
       guid: creds.guid
     });
 
-    let fillEl = document.getElementById("quota-fill");
-    let textEl = document.getElementById("quota-text");
-    if (!fillEl || !textEl) return;
-
-    if (quota) {
-      let total = quota.total_quota || 0;
-      let used = quota.used_quota || 0;
-      let pct = total > 0 ? (used / total) * 100 : 0;
-      pct = Math.min(100, Math.max(0, pct));
-
-      fillEl.style.width = pct.toFixed(1) + "%";
-      textEl.textContent = formatBytes(used) + " / " + formatBytes(total);
-    }
+    state.cloudQuota = quota || null;
+    renderSpaceQuota();
   } catch (err) {
     console.error("Failed to fetch space quota:", err);
+    renderSpaceQuotaError();
   }
 }
 
@@ -2227,6 +2220,81 @@ function formatBytes(bytes) {
     return (mb / 1024).toFixed(1) + " GB";
   }
   return mb.toFixed(1) + " MB";
+}
+
+function formatQuotaText(quota) {
+  if (!quota) return "-- / --";
+  const total = Number(quota.total_quota || 0);
+  const used = Number(quota.used_quota || 0);
+  if (total <= 0) return "-- / --";
+  return `${formatBytes(used)} / ${formatBytes(total)}`;
+}
+
+function renderSpaceQuota() {
+  const quota = state.cloudQuota;
+  const total = Number(quota?.total_quota || 0);
+  const used = Number(quota?.used_quota || 0);
+  const pct = total > 0 ? Math.min(100, Math.max(0, (used / total) * 100)) : 0;
+  const quotaText = formatQuotaText(quota);
+  const hasQuota = total > 0;
+  const usedText = hasQuota ? formatBytes(used) : "--";
+  const totalText = hasQuota ? formatBytes(total) : "--";
+  const pctText = hasQuota ? `${pct.toFixed(pct < 10 ? 1 : 0)}%` : "--";
+
+  const homeQuotaText = document.getElementById("home-cloud-quota-text");
+  if (homeQuotaText) {
+    homeQuotaText.textContent = usedText;
+    homeQuotaText.title = quotaText;
+  }
+
+  const homeQuotaPercent = document.getElementById("home-cloud-quota-percent");
+  if (homeQuotaPercent) homeQuotaPercent.textContent = pctText;
+
+  const homeQuotaFill = document.getElementById("home-cloud-quota-fill");
+  if (homeQuotaFill) homeQuotaFill.style.width = pct.toFixed(1) + "%";
+
+  const homeQuotaSubtext = document.getElementById("home-cloud-quota-subtext");
+  if (homeQuotaSubtext) {
+    homeQuotaSubtext.textContent = hasQuota ? `${t("总量")} ${totalText}` : "-- / --";
+    homeQuotaSubtext.title = quotaText;
+  }
+
+  const fillEl = document.getElementById("quota-fill");
+  if (fillEl) fillEl.style.width = pct.toFixed(1) + "%";
+
+  const textEl = document.getElementById("quota-text");
+  if (textEl) textEl.textContent = quotaText === "-- / --" ? t("暂未获取") : quotaText;
+}
+
+function resetSpaceQuota() {
+  state.cloudQuota = null;
+  renderSpaceQuota();
+}
+
+function renderSpaceQuotaError() {
+  const homeQuotaText = document.getElementById("home-cloud-quota-text");
+  if (homeQuotaText) {
+    homeQuotaText.textContent = t("获取失败");
+    homeQuotaText.title = t("获取失败");
+  }
+
+  const homeQuotaPercent = document.getElementById("home-cloud-quota-percent");
+  if (homeQuotaPercent) homeQuotaPercent.textContent = "--";
+
+  const homeQuotaFill = document.getElementById("home-cloud-quota-fill");
+  if (homeQuotaFill) homeQuotaFill.style.width = "0%";
+
+  const homeQuotaSubtext = document.getElementById("home-cloud-quota-subtext");
+  if (homeQuotaSubtext) {
+    homeQuotaSubtext.textContent = t("获取失败");
+    homeQuotaSubtext.title = t("获取失败");
+  }
+
+  const fillEl = document.getElementById("quota-fill");
+  if (fillEl) fillEl.style.width = "0%";
+
+  const textEl = document.getElementById("quota-text");
+  if (textEl) textEl.textContent = t("获取失败");
 }
 
 // Show authorized state in settings UI
@@ -2263,6 +2331,7 @@ function showAuthorizedUI(avatar, nickname) {
   }
   if (connDesc) connDesc.innerText = t("Tencent IMA 正常连接中");
   if (refBtn) refBtn.disabled = false;
+  renderSpaceQuota();
 }
  
 // Show unauthorized state in settings UI
@@ -2287,6 +2356,7 @@ function showUnapprovedUI() {
   if (sUnauth) sUnauth.classList.remove("hidden");
   if (sAuth) sAuth.classList.add("hidden");
   if (sQuota) sQuota.classList.add("hidden");
+  resetSpaceQuota();
 
   if (connPill) {
       connPill.classList.remove("connected");

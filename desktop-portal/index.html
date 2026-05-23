@@ -242,13 +242,20 @@
               </div>
 
               <!-- Modern Cloud Quota / Connection Card -->
-              <div class="home-metric-card" id="home-card-quota" style="cursor: pointer; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px;">
-                <div class="home-metric-badge" style="background-color: rgba(0, 168, 204, 0.12); color: var(--app-blue);">
+              <div class="home-metric-card home-quota-card" id="home-card-quota" style="cursor: pointer;">
+                <div class="home-metric-badge cloud">
                   <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="currentColor"/></svg>
                 </div>
-                <div class="home-metric-details">
-                  <span class="home-metric-val" id="home-cloud-quota-text" style="color: var(--app-blue); font-size: 1.1rem; font-weight: 700; margin-top: 2px;">-- / --</span>
-                  <span class="home-metric-label" data-i18n="云端空间">云端空间</span>
+                <div class="home-metric-details home-quota-details">
+                  <div class="home-quota-topline">
+                    <span class="home-metric-val home-quota-used" id="home-cloud-quota-text">--</span>
+                    <span class="home-quota-percent" id="home-cloud-quota-percent">--</span>
+                  </div>
+                  <span class="home-metric-label" id="home-cloud-quota-label" data-i18n="云端空间">云端空间</span>
+                  <div class="home-quota-progress" aria-hidden="true">
+                    <div class="home-quota-progress-fill" id="home-cloud-quota-fill"></div>
+                  </div>
+                  <span class="home-quota-subtext" id="home-cloud-quota-subtext">-- / --</span>
                 </div>
               </div>
             </div>

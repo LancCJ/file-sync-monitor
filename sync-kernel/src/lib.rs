@@ -1163,7 +1163,7 @@ fn app_window_icon() -> Option<tauri::image::Image<'static>> {
 
 fn ima_wechat_qr_login_url() -> Result<tauri::WebviewUrl, String> {
     let url = format!(
-        "https://open.weixin.qq.com/connect/qrconnect?appid={}&scope=snsapi_login&redirect_uri={}&state=fsm-native-login&login_type=jssdk&self_redirect=true&styletype=&sizetype=&bgcolor=&rst=&stylelite=1&fast_login=1&lang=cn&ts={}",
+        "https://open.weixin.qq.com/connect/qrconnect?appid={}&scope=snsapi_login&redirect_uri={}&state=fsm-native-login&login_type=jssdk&styletype=&sizetype=&bgcolor=&rst=&stylelite=1&fast_login=1&lang=cn&ts={}",
         IMA_WECHAT_APP_ID,
         IMA_WECHAT_REDIRECT_URI,
         SystemTime::now()
@@ -1713,6 +1713,177 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
                     setTimeout(() => iframe.remove(), 3000);
                 } catch (_) {}
             }
+
+            function installLoginPolish() {
+                try {
+                    if (document.getElementById("fsm-login-polish")) return;
+                    const style = document.createElement("style");
+                    style.id = "fsm-login-polish";
+                    style.textContent = `
+                        html, body {
+                            width: 100% !important;
+                            min-width: 0 !important;
+                            min-height: 0 !important;
+                            margin: 0 !important;
+                            overflow: hidden !important;
+                            background: linear-gradient(180deg, #f7fffb 0%, #ffffff 58%, #f2fbf7 100%) !important;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+                        }
+                        * {
+                            box-sizing: border-box !important;
+                        }
+                        *::-webkit-scrollbar {
+                            width: 8px !important;
+                            height: 8px !important;
+                        }
+                        *::-webkit-scrollbar-track {
+                            background: transparent !important;
+                        }
+                        *::-webkit-scrollbar-thumb {
+                            border-radius: 999px !important;
+                            background: rgba(0, 173, 111, 0.32) !important;
+                            border: 2px solid transparent !important;
+                            background-clip: content-box !important;
+                        }
+                        *::-webkit-scrollbar-thumb:hover {
+                            background: rgba(0, 173, 111, 0.48) !important;
+                            background-clip: content-box !important;
+                        }
+                        .web_qrcode_area,
+                        body.web_qrcode_type_page_self {
+                            min-width: 0 !important;
+                            min-height: 0 !important;
+                            width: 100% !important;
+                            height: 100vh !important;
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            background: transparent !important;
+                            overflow: hidden !important;
+                            padding: 0 !important;
+                        }
+                        .web_qrcode_wrp {
+                            position: relative !important;
+                            top: auto !important;
+                            left: auto !important;
+                            transform: none !important;
+                            display: flex !important;
+                            flex-direction: column !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            width: 332px !important;
+                            min-height: 432px !important;
+                            margin: 0 auto !important;
+                            padding: 32px 24px 28px !important;
+                            box-sizing: border-box !important;
+                            border-radius: 22px !important;
+                            border: 1px solid rgba(0, 173, 111, 0.16) !important;
+                            background: rgba(255, 255, 255, 0.94) !important;
+                            box-shadow: 0 24px 60px rgba(28, 43, 34, 0.16) !important;
+                        }
+                        .web_qrcode_wrp::before {
+                            content: "微信授权登录";
+                            display: block;
+                            margin: 0 0 8px;
+                            color: #1d1f22;
+                            font-size: 24px;
+                            font-weight: 800;
+                            line-height: 1.2;
+                            letter-spacing: 0;
+                            text-align: center;
+                        }
+                        .web_qrcode_wrp::after {
+                            content: "扫码或快捷授权后自动返回 FileSyncMonitor";
+                            display: block;
+                            margin: 18px 0 0;
+                            color: #6f7885;
+                            font-size: 13px;
+                            font-weight: 600;
+                            line-height: 1.35;
+                            text-align: center;
+                        }
+                        .web_qrcode_app_wrp,
+                        .web_qrcode_tips_logo,
+                        .web_qrcode_tips {
+                            display: none !important;
+                        }
+                        .web_qrcode_img_wrp {
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            width: 248px !important;
+                            height: 248px !important;
+                            margin: 0 auto !important;
+                            border-radius: 18px !important;
+                            background: #ffffff !important;
+                            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06) !important;
+                        }
+                        .web_qrcode_img {
+                            width: 224px !important;
+                            height: 224px !important;
+                            margin: 0 !important;
+                        }
+                        .web_qrcode_refresh_btn {
+                            border-radius: 14px !important;
+                        }
+                        .qlogin_mod {
+                            display: flex !important;
+                            flex-direction: column !important;
+                            align-items: center !important;
+                            gap: 14px !important;
+                            padding: 8px 0 0 !important;
+                        }
+                        .qlogin_user_avatar {
+                            width: 96px !important;
+                            height: 96px !important;
+                            border-radius: 18px !important;
+                            box-shadow: 0 12px 30px rgba(28, 43, 34, 0.14) !important;
+                        }
+                        .qlogin_user_nickname {
+                            color: #1d1f22 !important;
+                            font-size: 20px !important;
+                            font-weight: 800 !important;
+                            line-height: 1.2 !important;
+                            margin: 2px 0 0 !important;
+                        }
+                        .qlogin_btn,
+                        .weui-btn_primary {
+                            width: 236px !important;
+                            height: 48px !important;
+                            border: 0 !important;
+                            border-radius: 14px !important;
+                            background: linear-gradient(135deg, #06c985 0%, #00a96b 100%) !important;
+                            color: #ffffff !important;
+                            font-size: 17px !important;
+                            font-weight: 800 !important;
+                            box-shadow: 0 14px 28px rgba(0, 173, 111, 0.24) !important;
+                        }
+                        .web_qrcode_switch,
+                        .weui-link {
+                            color: #00a96b !important;
+                            font-size: 14px !important;
+                            font-weight: 700 !important;
+                            text-decoration: none !important;
+                        }
+                        .web_qrcode_msg,
+                        .web_qrcode_msg_icon_success,
+                        .web_qrcode_msg_icon_error {
+                            color: #1d1f22 !important;
+                        }
+                    `;
+                    (document.head || document.documentElement).appendChild(style);
+                    log("Login polish installed");
+                } catch (e) {
+                    log(`Login polish error: ${e}`);
+                }
+            }
+
+            installLoginPolish();
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", installLoginPolish, { once: true });
+            }
+            setTimeout(installLoginPolish, 500);
+            setTimeout(installLoginPolish, 1500);
 
             function requestUrl(input) {
                 try {
