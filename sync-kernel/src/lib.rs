@@ -1350,8 +1350,12 @@ pub async fn refresh_ima_credentials_silently(
             let hasSubmitted = false;
 
             function bridge(action, params = {}) {
-                const query = new URLSearchParams(params).toString();
-                window.location.href = `https://fsmsync.localhost/${action}${query ? `?${query}` : ""}`;
+                try {
+                    const query = new URLSearchParams(params).toString();
+                    window.location.href = `https://fsmsync.localhost/${action}${query ? `?${query}` : ""}`;
+                } catch (e) {
+                    log(`bridge error: ${e}`);
+                }
             }
 
             function log(message) {
@@ -1365,13 +1369,18 @@ pub async fn refresh_ima_credentials_silently(
             }
 
             function requestUrl(input) {
-                if (typeof input === "string") return input;
-                if (input instanceof URL) return input.href;
-                if (input && typeof input.url === "string") return input.url;
-                return String(input || "");
+                try {
+                    if (typeof input === "string") return input;
+                    if (input instanceof URL) return input.href;
+                    if (input && typeof input.url === "string") return input.url;
+                    return String(input || "");
+                } catch (e) {
+                    return "";
+                }
             }
 
             function isLoginResponseUrl(url) {
+                if (!url) return false;
                 return url.includes("/cgi-bin/auth_login/login") ||
                     (url.includes("auth_login") && url.includes("login")) ||
                     (url.includes("login") && url.includes("auth"));
@@ -1387,74 +1396,108 @@ pub async fn refresh_ima_credentials_silently(
             }
 
             function normalizeLoginData(data) {
-                data = parsePossibleJson(data);
-                if (!data || typeof data !== "object") return null;
+                try {
+                    data = parsePossibleJson(data);
+                    if (!data || typeof data !== "object") return null;
 
-                const candidates = [data, parsePossibleJson(data.data), data.result, data.payload]
-                    .filter(item => item && typeof item === "object");
+                    const candidates = [data, parsePossibleJson(data.data), data.result, data.payload]
+                        .filter(item => item && typeof item === "object");
 
-                for (const item of candidates) {
-                    const token = item.token || item.ima_token || item["IMA-TOKEN"];
-                    const refreshToken = item.refresh_token || item.refreshToken || item["IMA-REFRESH-TOKEN"] || token || "";
-                    const uid = item.user_id || item.uid || item.userId || item.user_info?.open_info?.uid || "";
-                    const guid = item.guid || item.user_info?.open_info?.guid || item.client_info?.guid || "";
-                    const avatar = item.avatar || item.avatar_url || item.user_info?.open_info?.avatar_url || item.user_info?.open_info?.avatarUrl || "";
-                    const nickname = item.nickname || item.user_info?.open_info?.nickname || "";
-                    if (token && uid) {
-                        return {
-                            token: String(token),
-                            refresh_token: String(refreshToken),
-                            uid: String(uid),
-                            guid: String(guid),
-                            avatar: String(avatar),
-                            nickname: String(nickname)
-                        };
+                    for (const item of candidates) {
+                        const token = item.token || item.ima_token || item["IMA-TOKEN"];
+                        const refreshToken = item.refresh_token || item.refreshToken || item["IMA-REFRESH-TOKEN"] || token || "";
+                        const uid = item.user_id || item.uid || item.userId || item.user_info?.open_info?.uid || "";
+                        const guid = item.guid || item.user_info?.open_info?.guid || item.client_info?.guid || "";
+                        const avatar = item.avatar || item.avatar_url || item.user_info?.open_info?.avatar_url || item.user_info?.open_info?.avatarUrl || "";
+                        const nickname = item.nickname || item.user_info?.open_info?.nickname || "";
+                        if (token && uid) {
+                            return {
+                                token: String(token),
+                                refresh_token: String(refreshToken),
+                                uid: String(uid),
+                                guid: String(guid),
+                                avatar: String(avatar),
+                                nickname: String(nickname)
+                            };
+                        }
                     }
+                } catch (e) {
+                    log(`normalize error: ${e}`);
                 }
-
                 return null;
             }
 
             function submitLogin(data, source) {
-                if (hasSubmitted) return;
-                const creds = normalizeLoginData(data);
-                if (!creds || !creds.token || !creds.uid || creds.token === "guest") return;
-                hasSubmitted = true;
-                log(`Login credentials captured via ${source}; uid=${creds.uid}`);
-                bridge("login-success", creds);
+                try {
+                    if (hasSubmitted) return;
+                    const creds = normalizeLoginData(data);
+                    if (!creds || !creds.token || !creds.uid || creds.token === "guest") return;
+                    hasSubmitted = true;
+                    log(`Login credentials captured via ${source}; uid=${creds.uid}`);
+                    bridge("login-success", creds);
+                } catch (e) {
+                    log(`submitLogin error: ${e}`);
+                }
             }
 
-            const originalFetch = window.fetch.bind(window);
-            window.fetch = async function(...args) {
-                const url = requestUrl(args[0]);
-                const response = await originalFetch(...args);
-                if (isLoginResponseUrl(url)) {
-                    response.clone().text()
-                        .then(text => submitLogin(text, "fetch"))
-                        .catch(error => log(`Fetch login parse error: ${error}`));
-                }
-                return response;
-            };
-
-            const originalOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
-            if (originalOpen) {
-                window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                    this.__fsmLoginUrl = requestUrl(url);
-                    return originalOpen.call(this, method, url, ...rest);
-                };
-
-                const originalSend = window.XMLHttpRequest.prototype.send;
-                window.XMLHttpRequest.prototype.send = function(...args) {
-                    this.addEventListener("loadend", function() {
-                        if (!isLoginResponseUrl(this.__fsmLoginUrl || "")) return;
+            try {
+                if (window.fetch) {
+                    const originalFetch = window.fetch.bind(window);
+                    window.fetch = async function(...args) {
                         try {
-                            submitLogin(this.responseText || this.response, "xhr");
-                        } catch (error) {
-                            log(`XHR login parse error: ${error}`);
+                            const url = requestUrl(args[0]);
+                            const response = await originalFetch(...args);
+                            try {
+                                if (isLoginResponseUrl(url)) {
+                                    response.clone().text()
+                                        .then(text => submitLogin(text, "fetch"))
+                                        .catch(error => log(`Fetch login parse error: ${error}`));
+                                }
+                            } catch (e) {
+                                log(`Fetch response check error: ${e}`);
+                            }
+                            return response;
+                        } catch (err) {
+                            log(`Fetch execution error: ${err}`);
+                            return originalFetch(...args);
                         }
-                    });
-                    return originalSend.apply(this, args);
-                };
+                    };
+                }
+            } catch (e) {
+                log(`Fetch hook setup error: ${e}`);
+            }
+
+            try {
+                const originalOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
+                if (originalOpen) {
+                    window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                        try {
+                            this.__fsmLoginUrl = requestUrl(url);
+                        } catch (e) {
+                            log(`XHR open hook error: ${e}`);
+                        }
+                        return originalOpen.apply(this, [method, url, ...rest]);
+                    };
+
+                    const originalSend = window.XMLHttpRequest.prototype.send;
+                    window.XMLHttpRequest.prototype.send = function(...args) {
+                        try {
+                            this.addEventListener("loadend", function() {
+                                try {
+                                    if (!isLoginResponseUrl(this.__fsmLoginUrl || "")) return;
+                                    submitLogin(this.responseText || this.response, "xhr");
+                                } catch (error) {
+                                    log(`XHR login parse error: ${error}`);
+                                }
+                            });
+                        } catch (e) {
+                            log(`XHR send hook setup error: ${e}`);
+                        }
+                        return originalSend.apply(this, args);
+                    };
+                }
+            } catch (e) {
+                log(`XHR hook setup error: ${e}`);
             }
 
             log("Login capture hooks installed");
@@ -1463,15 +1506,26 @@ pub async fn refresh_ima_credentials_silently(
 
     let app_clone = app.clone();
     let app_clone_for_nav = app.clone();
+    let app_for_silent_nav = app.clone();
     let tx_clone = Arc::clone(&tx);
     let tx_clone_for_nav = Arc::clone(&tx);
 
     app.run_on_main_thread(move || {
         let builder = tauri::WebviewWindowBuilder::new(&app_clone, "ima_silent_refresh", tauri::WebviewUrl::External(url))
             .visible(false)
+            .devtools(true)
             .user_agent(WEBVIEW_USER_AGENT)
             .initialization_script(js_injection)
             .on_navigation(move |url| {
+                let scheme = url.scheme();
+                if scheme != "http" && scheme != "https" {
+                    use tauri_plugin_opener::OpenerExt;
+                    let url_str = url.to_string();
+                    println!("[SilentRefresh Navigation] Custom scheme intercepted: {}. Opening via OS...", url_str);
+                    let _ = app_for_silent_nav.opener().open_path(&url_str, None::<&str>);
+                    return false;
+                }
+
                 let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
 
                 if !is_login_bridge {
@@ -1592,8 +1646,12 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
             let hasSubmitted = false;
 
             function bridge(action, params = {}) {
-                const query = new URLSearchParams(params).toString();
-                window.location.href = `https://fsmsync.localhost/${action}${query ? `?${query}` : ""}`;
+                try {
+                    const query = new URLSearchParams(params).toString();
+                    window.location.href = `https://fsmsync.localhost/${action}${query ? `?${query}` : ""}`;
+                } catch (e) {
+                    log(`bridge error: ${e}`);
+                }
             }
 
             function log(message) {
@@ -1607,13 +1665,18 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
             }
 
             function requestUrl(input) {
-                if (typeof input === "string") return input;
-                if (input instanceof URL) return input.href;
-                if (input && typeof input.url === "string") return input.url;
-                return String(input || "");
+                try {
+                    if (typeof input === "string") return input;
+                    if (input instanceof URL) return input.href;
+                    if (input && typeof input.url === "string") return input.url;
+                    return String(input || "");
+                } catch (e) {
+                    return "";
+                }
             }
 
             function isLoginResponseUrl(url) {
+                if (!url) return false;
                 return url.includes("/cgi-bin/auth_login/login") ||
                     (url.includes("auth_login") && url.includes("login")) ||
                     (url.includes("login") && url.includes("auth"));
@@ -1629,162 +1692,137 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
             }
 
             function normalizeLoginData(data) {
-                data = parsePossibleJson(data);
-                if (!data || typeof data !== "object") return null;
+                try {
+                    data = parsePossibleJson(data);
+                    if (!data || typeof data !== "object") return null;
 
-                const candidates = [data, parsePossibleJson(data.data), data.result, data.payload]
-                    .filter(item => item && typeof item === "object");
+                    const candidates = [data, parsePossibleJson(data.data), data.result, data.payload]
+                        .filter(item => item && typeof item === "object");
 
-                for (const item of candidates) {
-                    const token = item.token || item.ima_token || item["IMA-TOKEN"];
-                    const refreshToken = item.refresh_token || item.refreshToken || item["IMA-REFRESH-TOKEN"] || token || "";
-                    const uid = item.user_id || item.uid || item.userId || item.user_info?.open_info?.uid || "";
-                    const guid = item.guid || item.user_info?.open_info?.guid || item.client_info?.guid || "";
-                    const avatar = item.avatar || item.avatar_url || item.user_info?.open_info?.avatar_url || item.user_info?.open_info?.avatarUrl || "";
-                    const nickname = item.nickname || item.user_info?.open_info?.nickname || "";
-                    if (token && uid) {
-                        return {
-                            token: String(token),
-                            refresh_token: String(refreshToken),
-                            uid: String(uid),
-                            guid: String(guid),
-                            avatar: String(avatar),
-                            nickname: String(nickname)
-                        };
+                    for (const item of candidates) {
+                        const token = item.token || item.ima_token || item["IMA-TOKEN"];
+                        const refreshToken = item.refresh_token || item.refreshToken || item["IMA-REFRESH-TOKEN"] || token || "";
+                        const uid = item.user_id || item.uid || item.userId || item.user_info?.open_info?.uid || "";
+                        const guid = item.guid || item.user_info?.open_info?.guid || item.client_info?.guid || "";
+                        const avatar = item.avatar || item.avatar_url || item.user_info?.open_info?.avatar_url || item.user_info?.open_info?.avatarUrl || "";
+                        const nickname = item.nickname || item.user_info?.open_info?.nickname || "";
+                        if (token && uid) {
+                            return {
+                                token: String(token),
+                                refresh_token: String(refreshToken),
+                                uid: String(uid),
+                                guid: String(guid),
+                                avatar: String(avatar),
+                                nickname: String(nickname)
+                            };
+                        }
                     }
+                } catch (e) {
+                    log(`normalize error: ${e}`);
                 }
-
                 return null;
             }
 
             function submitLogin(data, source) {
-                if (hasSubmitted) return;
-                const creds = normalizeLoginData(data);
-                if (!creds || !creds.token || !creds.uid || creds.token === "guest") return;
-                hasSubmitted = true;
-                log(`Login credentials captured via ${source}; uid=${creds.uid}`);
-                bridge("login-success", creds);
+                try {
+                    if (hasSubmitted) return;
+                    const creds = normalizeLoginData(data);
+                    if (!creds || !creds.token || !creds.uid || creds.token === "guest") return;
+                    hasSubmitted = true;
+                    log(`Login credentials captured via ${source}; uid=${creds.uid}`);
+                    bridge("login-success", creds);
+                } catch (e) {
+                    log(`submitLogin error: ${e}`);
+                }
             }
 
-            const originalFetch = window.fetch.bind(window);
-            window.fetch = async function(...args) {
-                const url = requestUrl(args[0]);
-                const response = await originalFetch(...args);
-                if (isLoginResponseUrl(url)) {
-                    response.clone().text()
-                        .then(text => submitLogin(text, "fetch"))
-                        .catch(error => log(`Fetch login parse error: ${error}`));
-                }
-                return response;
-            };
-
-            const originalOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
-            if (originalOpen) {
-                window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                    this.__fsmLoginUrl = requestUrl(url);
-                    return originalOpen.call(this, method, url, ...rest);
-                };
-
-                const originalSend = window.XMLHttpRequest.prototype.send;
-                window.XMLHttpRequest.prototype.send = function(...args) {
-                    this.addEventListener("loadend", function() {
-                        if (!isLoginResponseUrl(this.__fsmLoginUrl || "")) return;
+            try {
+                if (window.fetch) {
+                    const originalFetch = window.fetch.bind(window);
+                    window.fetch = async function(...args) {
                         try {
-                            submitLogin(this.responseText || this.response, "xhr");
-                        } catch (error) {
-                            log(`XHR login parse error: ${error}`);
+                            const url = requestUrl(args[0]);
+                            const response = await originalFetch(...args);
+                            try {
+                                if (isLoginResponseUrl(url)) {
+                                    response.clone().text()
+                                        .then(text => submitLogin(text, "fetch"))
+                                        .catch(error => log(`Fetch login parse error: ${error}`));
+                                }
+                            } catch (e) {
+                                log(`Fetch response check error: ${e}`);
+                            }
+                            return response;
+                        } catch (err) {
+                            log(`Fetch execution error: ${err}`);
+                            return originalFetch(...args);
                         }
-                    });
-                    return originalSend.apply(this, args);
-                };
+                    };
+                }
+            } catch (e) {
+                log(`Fetch hook setup error: ${e}`);
+            }
+
+            try {
+                const originalOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
+                if (originalOpen) {
+                    window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                        try {
+                            this.__fsmLoginUrl = requestUrl(url);
+                        } catch (e) {
+                            log(`XHR open hook error: ${e}`);
+                        }
+                        return originalOpen.apply(this, [method, url, ...rest]);
+                    };
+
+                    const originalSend = window.XMLHttpRequest.prototype.send;
+                    window.XMLHttpRequest.prototype.send = function(...args) {
+                        try {
+                            this.addEventListener("loadend", function() {
+                                try {
+                                    if (!isLoginResponseUrl(this.__fsmLoginUrl || "")) return;
+                                    submitLogin(this.responseText || this.response, "xhr");
+                                } catch (error) {
+                                    log(`XHR login parse error: ${error}`);
+                                }
+                            });
+                        } catch (e) {
+                            log(`XHR send hook setup error: ${e}`);
+                        }
+                        return originalSend.apply(this, args);
+                    };
+                }
+            } catch (e) {
+                log(`XHR hook setup error: ${e}`);
             }
 
             log("Login capture hooks installed");
         })();
-
-        function installLoginChrome() {
-            if (!document.body || document.getElementById('custom-close-btn')) return;
-
-            let style = document.createElement('style');
-            style.innerHTML = `
-                html, body, #app, .login-page, .main-container, .login-container, .login-box, .login-card {
-                    background: transparent !important;
-                    background-color: transparent !important;
-                    overflow: hidden !important;
-                }
-                body {
-                    border-radius: 20px !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    border: 1px solid rgba(255,255,255,0.1) !important;
-                }
-                .header, .footer, .nav-bar, .login-footer, .logo-container {
-                    display: none !important;
-                }
-                .login-box, .login-container {
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    position: absolute !important;
-                    top: 50% !important;
-                    left: 50% !important;
-                    transform: translate(-50%, -50%) !important;
-                }
-            `;
-            document.head.appendChild(style);
-
-            let uiOverlay = document.createElement('div');
-            uiOverlay.innerHTML = `
-                <div style="position: absolute; top: 0; left: 0; right: 0; height: 50px; background: rgba(255,255,255,0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 9999; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid rgba(0,0,0,0.1); user-select: none;">
-                    <div style="font-size: 14px; font-weight: bold; color: #333; display: flex; align-items: center; gap: 6px;">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect><rect x="14" y="14" width="3" height="3"></rect></svg>
-                        微信扫码登录
-                    </div>
-                    <div style="display: flex; gap: 16px;">
-                        <div id="custom-refresh-btn" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12px; color: #666;">
-                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                            刷新
-                        </div>
-                        <div id="custom-close-btn" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12px; color: #ef4444;">
-                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            取消
-                        </div>
-                    </div>
-                </div>
-                <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: rgba(255,255,255,0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 9999; display: flex; align-items: center; justify-content: center; border-top: 1px solid rgba(0,0,0,0.1); user-select: none;">
-                    <div style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: #999;">
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
-                        微信凭证已安全加密托管至原生 Keychain
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(uiOverlay);
-
-            document.getElementById('custom-refresh-btn').onclick = () => window.location.reload();
-            document.getElementById('custom-close-btn').onclick = () => {
-                window.location.href = "https://fsmsync.localhost/login-cancel";
-            };
-        }
-
-        if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", installLoginChrome, { once: true });
-        } else {
-            installLoginChrome();
-        }
-
     "##;
 
     let app_clone = app.clone();
     let app_clone2 = app.clone();
 
     app.run_on_main_thread(move || {
+        let app_for_nav = app_clone2.clone();
         let builder = tauri::WebviewWindowBuilder::new(&app_clone2, "ima_login", tauri::WebviewUrl::External(url))
             .title("微信扫码登录")
-            .inner_size(350.0, 410.0)
+            .inner_size(380.0, 540.0)
             .resizable(false)
-            .decorations(false)
+            .decorations(true)
+            .devtools(true)
             .user_agent(WEBVIEW_USER_AGENT)
             .initialization_script(js_injection)
             .on_navigation(move |url| {
+                let scheme = url.scheme();
+                if scheme != "http" && scheme != "https" {
+                    use tauri_plugin_opener::OpenerExt;
+                    let url_str = url.to_string();
+                    println!("[WebView Navigation] Custom scheme intercepted: {}. Opening via OS...", url_str);
+                    let _ = app_for_nav.opener().open_path(&url_str, None::<&str>);
+                    return false;
+                }
+
                 let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
 
                 if !is_login_bridge {
