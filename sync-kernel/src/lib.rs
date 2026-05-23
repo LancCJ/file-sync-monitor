@@ -21,6 +21,8 @@ use monitor::{DirectoryMonitor, IgnoreRules};
 const WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 #[cfg(not(target_os = "macos"))]
 const WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const IMA_WECHAT_APP_ID: &str = "wx0d63f5de059f1d52";
+const IMA_WECHAT_REDIRECT_URI: &str = "https%3A%2F%2Fima.qq.com%2Flogin%23%2Fweixin-login";
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct HttpLogEntry {
@@ -1159,6 +1161,21 @@ fn app_window_icon() -> Option<tauri::image::Image<'static>> {
     tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png")).ok()
 }
 
+fn ima_wechat_qr_login_url() -> Result<tauri::WebviewUrl, String> {
+    let url = format!(
+        "https://open.weixin.qq.com/connect/qrconnect?appid={}&scope=snsapi_login&redirect_uri={}&state=fsm-native-login&login_type=jssdk&self_redirect=true&styletype=&sizetype=&bgcolor=&rst=&stylelite=1&fast_login=1&lang=cn&ts={}",
+        IMA_WECHAT_APP_ID,
+        IMA_WECHAT_REDIRECT_URI,
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or_default()
+    );
+    tauri::Url::parse(&url)
+        .map(tauri::WebviewUrl::External)
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn set_window_theme(window: tauri::Window, theme: String) -> Result<(), String> {
     let tauri_theme = match theme.as_str() {
@@ -1669,11 +1686,7 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let login_url = {
-        let url = tauri::Url::parse("https://ima.qq.com/login/")
-            .map_err(|e| e.to_string())?;
-        tauri::WebviewUrl::External(url)
-    };
+    let login_url = ima_wechat_qr_login_url()?;
 
     let js_injection = r##"
         (() => {
@@ -1865,6 +1878,7 @@ async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
             builder
         };
         let builder = builder.on_navigation(move |url| {
+            println!("[IMALogin Navigation] {}", url);
             let scheme = url.scheme();
             if scheme != "http" && scheme != "https" {
                 use tauri_plugin_opener::OpenerExt;
