@@ -55,6 +55,7 @@ docs/*抓包原始*.md
 
 
 # Temporary
+.codex-tools/
 *.tmp
 *.swp
 *.swo

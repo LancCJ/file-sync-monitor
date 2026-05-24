@@ -1575,6 +1575,41 @@
         </div>
       </div>
 
+      <!-- Overlay 4: WeChat Login -->
+      <div class="custom-modal-overlay hidden" id="overlay-wechat-login">
+        <div class="custom-login-card">
+          <div class="custom-login-header">
+            <div class="custom-login-title-wrap">
+              <div class="custom-login-mark">
+                <svg viewBox="0 0 24 24"><path d="M9.5 4C5.36 4 2 6.72 2 10.08c0 1.93 1.11 3.65 2.84 4.77L4.25 17l2.52-1.26c.84.26 1.76.4 2.73.4.15 0 .3 0 .45-.01A5.76 5.76 0 0 1 9.5 14c0-3.13 2.91-5.67 6.5-5.67.27 0 .54.02.8.05C15.89 5.82 12.96 4 9.5 4Zm-2.8 5.5a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Zm5.1 0a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8ZM22 14c0-2.49-2.47-4.5-5.5-4.5S11 11.51 11 14s2.47 4.5 5.5 4.5c.62 0 1.22-.08 1.78-.24L20.5 19l-.52-1.68C21.2 16.5 22 15.31 22 14Zm-7.45-.74a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Zm3.9 0a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5Z" fill="currentColor"/></svg>
+              </div>
+              <div>
+                <h3 data-i18n="微信登录">微信登录</h3>
+                <p data-i18n="绑定腾讯 IMA 后即可同步文件到云端">绑定腾讯 IMA 后即可同步文件到云端</p>
+              </div>
+            </div>
+            <button class="flat-icon-btn" id="btn-close-wechat-login" type="button" data-i18n-title="关闭" title="关闭" aria-label="关闭">
+              <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg>
+            </button>
+          </div>
+          <div class="wechat-qr-stage">
+            <div class="wechat-qr-wrapper">
+              <img id="wechat-login-qr-image" alt="WeChat QR Code" />
+            </div>
+            <button class="wechat-refresh-icon-btn" id="btn-retry-wechat-login" type="button" data-i18n-title="刷新二维码" title="刷新二维码" aria-label="刷新二维码">
+              <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.45 5.08h-2.12A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h8V3l-3.35 3.35Z" fill="currentColor"/></svg>
+            </button>
+          </div>
+          <div class="wechat-quick-login-area hidden" id="wechat-quick-login-area">
+            <button class="wechat-quick-login-btn" id="btn-quick-wechat-login" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 10-13h-7l0-7Z" fill="currentColor"/></svg>
+              <span data-i18n="一键快捷登录">一键快捷登录</span>
+            </button>
+          </div>
+          <div class="wechat-login-status" id="wechat-login-status" data-i18n="正在获取二维码...">正在获取二维码...</div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ONBOARDING TOUR OVERLAY -->

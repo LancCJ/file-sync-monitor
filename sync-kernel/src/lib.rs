@@ -52,6 +52,14 @@ struct WeChatLoginPollResult {
     message: Option<String>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+struct WeChatLoginProfile {
+    uid: String,
+    guid: String,
+    avatar: String,
+    nickname: String,
+}
+
 pub static HTTP_LOGS: std::sync::OnceLock<Mutex<Vec<HttpLogEntry>>> = std::sync::OnceLock::new();
 pub static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 static LOG_ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -1257,7 +1265,7 @@ async fn start_file_monitor(
 }
 
 #[tauri::command]
-async fn select_directory(app_handle: AppHandle) -> Result<Option<String>, String> {
+async fn select_directory(_app_handle: AppHandle) -> Result<Option<String>, String> {
     #[cfg(target_os = "macos")]
     {
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -1328,14 +1336,6 @@ fn ima_wechat_qr_login_url_string() -> String {
     )
 }
 
-#[cfg(not(target_os = "windows"))]
-fn ima_wechat_qr_login_url() -> Result<tauri::WebviewUrl, String> {
-    let url = ima_wechat_qr_login_url_string();
-    tauri::Url::parse(&url)
-        .map(tauri::WebviewUrl::External)
-        .map_err(|e| e.to_string())
-}
-
 fn extract_between<'a>(text: &'a str, start_marker: &str, end_markers: &[char]) -> Option<&'a str> {
     let start = text.find(start_marker)? + start_marker.len();
     let rest = &text[start..];
@@ -1348,14 +1348,30 @@ fn extract_between<'a>(text: &'a str, start_marker: &str, end_markers: &[char]) 
 }
 
 fn extract_wechat_qr_uuid(html: &str) -> Option<String> {
-    extract_between(
-        html,
+    let candidates = [
         "/connect/qrcode/",
-        &['"', '\'', '<', '>', '?', '&', ' '],
-    )
-    .map(str::trim)
-    .filter(|uuid| !uuid.is_empty())
-    .map(ToString::to_string)
+        "connect/qrcode/",
+        "qrcode/",
+        "uuid=",
+        "uuid:",
+        "uuid =",
+    ];
+
+    for marker in candidates {
+        if let Some(uuid) = extract_between(
+            html,
+            marker,
+            &['"', '\'', '<', '>', '?', '&', ' ', ',', ';', ')'],
+        )
+        .map(str::trim)
+        .map(|uuid| uuid.trim_matches('"').trim_matches('\''))
+        .filter(|uuid| uuid.len() >= 8 && !uuid.contains('/'))
+        {
+            return Some(uuid.to_string());
+        }
+    }
+
+    None
 }
 
 fn extract_wechat_js_var(script: &str, name: &str) -> Option<String> {
@@ -1370,11 +1386,122 @@ fn extract_wechat_js_var(script: &str, name: &str) -> Option<String> {
     )
 }
 
+fn json_value_to_string(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(v) => Some(v.trim().to_string()),
+        serde_json::Value::Number(v) => Some(v.to_string()),
+        serde_json::Value::Bool(v) => Some(v.to_string()),
+        _ => None,
+    }
+}
+
+fn json_get_path_string(root: &serde_json::Value, path: &[&str]) -> Option<String> {
+    let mut cursor = root;
+    for segment in path {
+        cursor = cursor.get(*segment)?;
+    }
+    json_value_to_string(cursor).filter(|v| !v.is_empty())
+}
+
+fn parse_wechat_login_profile(payload: &serde_json::Value) -> Option<(CachedCredentials, WeChatLoginProfile)> {
+    let mut candidates = vec![payload.clone()];
+    for key in ["data", "result", "payload"] {
+        if let Some(value) = payload.get(key) {
+            candidates.push(value.clone());
+            if let Some(raw) = value.as_str() {
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(raw) {
+                    candidates.push(parsed);
+                }
+            }
+        }
+    }
+
+    for candidate in candidates {
+        let token = json_get_path_string(&candidate, &["token"])
+            .or_else(|| json_get_path_string(&candidate, &["ima_token"]))
+            .or_else(|| json_get_path_string(&candidate, &["IMA-TOKEN"]))
+            .unwrap_or_default();
+        let refresh_token = json_get_path_string(&candidate, &["refresh_token"])
+            .or_else(|| json_get_path_string(&candidate, &["refreshToken"]))
+            .or_else(|| json_get_path_string(&candidate, &["IMA-REFRESH-TOKEN"]))
+            .unwrap_or_else(|| token.clone());
+        let uid = json_get_path_string(&candidate, &["user_id"])
+            .or_else(|| json_get_path_string(&candidate, &["uid"]))
+            .or_else(|| json_get_path_string(&candidate, &["userId"]))
+            .or_else(|| json_get_path_string(&candidate, &["user_info", "open_info", "uid"]))
+            .unwrap_or_default();
+        let guid = json_get_path_string(&candidate, &["guid"])
+            .or_else(|| json_get_path_string(&candidate, &["user_info", "open_info", "guid"]))
+            .or_else(|| json_get_path_string(&candidate, &["client_info", "guid"]))
+            .unwrap_or_default();
+        let avatar = json_get_path_string(&candidate, &["avatar"])
+            .or_else(|| json_get_path_string(&candidate, &["avatar_url"]))
+            .or_else(|| json_get_path_string(&candidate, &["user_info", "open_info", "avatar_url"]))
+            .or_else(|| json_get_path_string(&candidate, &["user_info", "open_info", "avatarUrl"]))
+            .unwrap_or_default();
+        let nickname = json_get_path_string(&candidate, &["nickname"])
+            .or_else(|| json_get_path_string(&candidate, &["user_info", "open_info", "nickname"]))
+            .unwrap_or_default();
+
+        if !token.is_empty() && !uid.is_empty() {
+            let profile = WeChatLoginProfile {
+                uid: uid.clone(),
+                guid: guid.clone(),
+                avatar,
+                nickname,
+            };
+            let creds = CachedCredentials {
+                token,
+                refresh_token,
+                uid,
+                guid,
+            };
+            return Some((creds, profile));
+        }
+    }
+
+    None
+}
+
+fn profile_from_query_map(
+    params: &std::collections::HashMap<String, String>,
+) -> Option<(CachedCredentials, WeChatLoginProfile)> {
+    let token = params.get("token").cloned().unwrap_or_default();
+    let refresh_token = params
+        .get("refresh_token")
+        .cloned()
+        .unwrap_or_else(|| token.clone());
+    let uid = params.get("uid").cloned().unwrap_or_default();
+    let guid = params.get("guid").cloned().unwrap_or_default();
+    let avatar = params.get("avatar").cloned().unwrap_or_default();
+    let nickname = params.get("nickname").cloned().unwrap_or_default();
+
+    if token.is_empty() || uid.is_empty() {
+        return None;
+    }
+
+    let creds = CachedCredentials {
+        token,
+        refresh_token,
+        uid: uid.clone(),
+        guid: guid.clone(),
+    };
+    let profile = WeChatLoginProfile {
+        uid,
+        guid,
+        avatar,
+        nickname,
+    };
+    Some((creds, profile))
+}
+
 #[tauri::command]
 async fn create_wechat_login_session() -> Result<WeChatLoginSession, String> {
     let login_url = ima_wechat_qr_login_url_string();
+    println!("[IMALogin] Creating WeChat QR session: {}", login_url);
     let client = reqwest::Client::builder()
         .user_agent(WEBVIEW_USER_AGENT)
+        .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| e.to_string())?;
     let headers_str = format!("User-Agent: {}", WEBVIEW_USER_AGENT);
@@ -1390,47 +1517,71 @@ async fn create_wechat_login_session() -> Result<WeChatLoginSession, String> {
         update_http_log_error(&page_log_id, &err);
         err
     })?;
+    println!(
+        "[IMALogin] WeChat login page returned HTTP {}, {} bytes",
+        page_status,
+        html.len()
+    );
     update_http_log_response(&page_log_id, page_status.as_u16(), &html);
 
     let uuid = extract_wechat_qr_uuid(&html)
         .ok_or_else(|| "Failed to locate WeChat QR code in login page".to_string())?;
     let qr_url = format!("https://open.weixin.qq.com/connect/qrcode/{}", uuid);
+    println!("[IMALogin] WeChat QR uuid resolved: {}", uuid);
     let qr_log_id = add_logged_http_request("GET", &qr_url, Some(headers_str), None);
-    let qr_res = client.get(&qr_url).send().await.map_err(|e| {
-        let err = format!("Failed to request WeChat QR image: {}", e);
-        update_http_log_error(&qr_log_id, &err);
-        err
-    })?;
-    let qr_status = qr_res.status();
-    let qr_content_type = qr_res
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("image/jpeg")
-        .to_string();
-    let qr_bytes = qr_res.bytes().await.map_err(|e| {
-        let err = format!("Failed to read WeChat QR image: {}", e);
-        update_http_log_error(&qr_log_id, &err);
-        err
-    })?;
-    update_http_log_response(
-        &qr_log_id,
-        qr_status.as_u16(),
-        &format!(
-            "[binary {} image, {} bytes]",
-            qr_content_type,
-            qr_bytes.len()
-        ),
+    let qr_data_url = match client.get(&qr_url).send().await {
+        Ok(qr_res) => {
+            let qr_status = qr_res.status();
+            let qr_content_type = qr_res
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("image/jpeg")
+                .to_string();
+            match qr_res.bytes().await {
+                Ok(qr_bytes) if qr_status.is_success() => {
+                    update_http_log_response(
+                        &qr_log_id,
+                        qr_status.as_u16(),
+                        &format!(
+                            "[binary {} image, {} bytes]",
+                            qr_content_type,
+                            qr_bytes.len()
+                        ),
+                    );
+                    let qr_base64 = base64::engine::general_purpose::STANDARD.encode(qr_bytes);
+                    format!("data:{};base64,{}", qr_content_type, qr_base64)
+                }
+                Ok(qr_bytes) => {
+                    let err = format!(
+                        "WeChat QR image returned HTTP {}, {} bytes. Falling back to direct QR URL.",
+                        qr_status,
+                        qr_bytes.len()
+                    );
+                    update_http_log_error(&qr_log_id, &err);
+                    String::new()
+                }
+                Err(e) => {
+                    let err = format!("Failed to read WeChat QR image: {}. Falling back to direct QR URL.", e);
+                    update_http_log_error(&qr_log_id, &err);
+                    String::new()
+                }
+            }
+        }
+        Err(e) => {
+            let err = format!("Failed to request WeChat QR image: {}. Falling back to direct QR URL.", e);
+            update_http_log_error(&qr_log_id, &err);
+            String::new()
+        }
+    };
+    println!(
+        "[IMALogin] WeChat QR session ready. data_url={}, qr_url={}",
+        if qr_data_url.is_empty() { "no" } else { "yes" },
+        qr_url
     );
-    if !qr_status.is_success() {
-        let err = format!("WeChat QR image returned HTTP {}", qr_status);
-        update_http_log_error(&qr_log_id, &err);
-        return Err(err);
-    }
 
-    let qr_base64 = base64::engine::general_purpose::STANDARD.encode(qr_bytes);
     Ok(WeChatLoginSession {
-        qr_data_url: format!("data:{};base64,{}", qr_content_type, qr_base64),
+        qr_data_url,
         qr_url,
         uuid,
     })
@@ -1521,6 +1672,866 @@ async fn poll_wechat_qr_status(uuid: String) -> Result<WeChatLoginPollResult, St
     };
 
     Ok(result)
+}
+
+async fn complete_wechat_login_with_hidden_webview(
+    app: &tauri::AppHandle,
+    redirect_url: &str,
+) -> Result<WeChatLoginProfile, String> {
+    if let Some(win) = app.get_webview_window("ima_code_exchange") {
+        let _ = win.close();
+    }
+
+    let target = tauri::Url::parse(redirect_url).map_err(|e| e.to_string())?;
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<WeChatLoginProfile, String>>();
+    let tx = Arc::new(Mutex::new(Some(tx)));
+    let tx_for_build = Arc::clone(&tx);
+    let tx_for_nav = Arc::clone(&tx);
+    let app_for_build = app.clone();
+    let app_for_nav = app.clone();
+    let app_for_scheme = app.clone();
+
+    let js_injection = r##"
+        (() => {
+            if (window.__fsmLoginCaptureInstalled) return;
+            window.__fsmLoginCaptureInstalled = true;
+            let hasSubmitted = false;
+
+            function bridge(action, params = {}) {
+                try {
+                    const query = new URLSearchParams(params).toString();
+                    window.location.href = `https://fsmsync.localhost/${action}${query ? `?${query}` : ""}`;
+                } catch (_) {}
+            }
+
+            function requestUrl(input) {
+                try {
+                    if (typeof input === "string") return input;
+                    if (input instanceof URL) return input.href;
+                    if (input && typeof input.url === "string") return input.url;
+                    return String(input || "");
+                } catch (_) {
+                    return "";
+                }
+            }
+
+            function isLoginResponseUrl(url) {
+                if (!url) return false;
+                return url.includes("/cgi-bin/auth_login/login") ||
+                    (url.includes("auth_login") && url.includes("login")) ||
+                    (url.includes("login") && url.includes("auth"));
+            }
+
+            function parsePossibleJson(value) {
+                if (typeof value !== "string") return value;
+                try {
+                    return JSON.parse(value);
+                } catch (_) {
+                    return value;
+                }
+            }
+
+            function normalizeLoginData(data) {
+                try {
+                    data = parsePossibleJson(data);
+                    if (!data || typeof data !== "object") return null;
+                    const candidates = [data, parsePossibleJson(data.data), data.result, data.payload]
+                        .filter(item => item && typeof item === "object");
+                    for (const item of candidates) {
+                        const token = item.token || item.ima_token || item["IMA-TOKEN"];
+                        const refreshToken = item.refresh_token || item.refreshToken || item["IMA-REFRESH-TOKEN"] || token || "";
+                        const uid = item.user_id || item.uid || item.userId || item.user_info?.open_info?.uid || "";
+                        const guid = item.guid || item.user_info?.open_info?.guid || item.client_info?.guid || "";
+                        const avatar = item.avatar || item.avatar_url || item.user_info?.open_info?.avatar_url || item.user_info?.open_info?.avatarUrl || "";
+                        const nickname = item.nickname || item.user_info?.open_info?.nickname || "";
+                        if (token && uid) {
+                            return {
+                                token: String(token),
+                                refresh_token: String(refreshToken),
+                                uid: String(uid),
+                                guid: String(guid),
+                                avatar: String(avatar),
+                                nickname: String(nickname)
+                            };
+                        }
+                    }
+                } catch (_) {}
+                return null;
+            }
+
+            function submitLogin(data) {
+                if (hasSubmitted) return;
+                const creds = normalizeLoginData(data);
+                if (!creds || !creds.token || !creds.uid || creds.token === "guest") return;
+                hasSubmitted = true;
+                bridge("login-success", creds);
+            }
+
+            try {
+                if (window.fetch) {
+                    const originalFetch = window.fetch.bind(window);
+                    window.fetch = async function(...args) {
+                        const url = requestUrl(args[0]);
+                        const response = await originalFetch(...args);
+                        try {
+                            if (isLoginResponseUrl(url)) {
+                                response.clone().text().then(text => submitLogin(text)).catch(() => {});
+                            }
+                        } catch (_) {}
+                        return response;
+                    };
+                }
+            } catch (_) {}
+
+            try {
+                const originalOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
+                if (originalOpen) {
+                    window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                        this.__fsmLoginUrl = requestUrl(url);
+                        return originalOpen.apply(this, [method, url, ...rest]);
+                    };
+                    const originalSend = window.XMLHttpRequest.prototype.send;
+                    window.XMLHttpRequest.prototype.send = function(...args) {
+                        try {
+                            this.addEventListener("loadend", function() {
+                                try {
+                                    if (!isLoginResponseUrl(this.__fsmLoginUrl || "")) return;
+                                    submitLogin(this.responseText || this.response);
+                                } catch (_) {}
+                            });
+                        } catch (_) {}
+                        return originalSend.apply(this, args);
+                    };
+                }
+            } catch (_) {}
+        })();
+    "##;
+
+    app.run_on_main_thread(move || {
+        let builder = tauri::WebviewWindowBuilder::new(
+            &app_for_build,
+            "ima_code_exchange",
+            tauri::WebviewUrl::External(target),
+        )
+        .visible(false)
+        .devtools(true)
+        .user_agent(WEBVIEW_USER_AGENT)
+        .initialization_script(js_injection)
+        .on_navigation(move |url| {
+            let scheme = url.scheme();
+            if scheme != "http" && scheme != "https" {
+                use tauri_plugin_opener::OpenerExt;
+                let _ = app_for_scheme
+                    .opener()
+                    .open_path(&url.to_string(), None::<&str>);
+                return false;
+            }
+
+            if url.host_str() != Some("fsmsync.localhost") {
+                return true;
+            }
+
+            let action = url.path().trim_start_matches('/').to_string();
+            let parsed_query: std::collections::HashMap<_, _> =
+                url.query_pairs().into_owned().collect();
+
+            if action == "login-success" {
+                if let Some((creds, profile)) = profile_from_query_map(&parsed_query) {
+                    let save_result = credentials::save_credentials(&creds);
+                    if save_result.is_ok() {
+                        let _ = app_for_nav.emit(
+                            "login_success",
+                            serde_json::json!({
+                                "avatar": profile.avatar,
+                                "nickname": profile.nickname,
+                                "uid": profile.uid,
+                            }),
+                        );
+                    }
+
+                    if let Some(win) = app_for_nav.get_webview_window("ima_code_exchange") {
+                        let _ = win.close();
+                    }
+
+                    let mut guard = tx_for_nav.lock().unwrap();
+                    if let Some(sender) = guard.take() {
+                        let _ = match save_result {
+                            Ok(_) => sender.send(Ok(profile)),
+                            Err(e) => sender.send(Err(e)),
+                        };
+                    }
+                }
+            }
+
+            false
+        });
+
+        if let Err(e) = builder.build() {
+            let mut guard = tx_for_build.lock().unwrap();
+            if let Some(sender) = guard.take() {
+                let _ = sender.send(Err(format!(
+                    "Failed to create hidden login exchange window: {}",
+                    e
+                )));
+            }
+        }
+    })
+    .map_err(|e| e.to_string())?;
+
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(15));
+    tokio::pin!(timeout);
+
+    tokio::select! {
+        res = rx => {
+            match res {
+                Ok(Ok(profile)) => Ok(profile),
+                Ok(Err(err)) => Err(err),
+                Err(_) => Err("Hidden login exchange channel dropped".to_string()),
+            }
+        }
+        _ = &mut timeout => {
+            let app_clone = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Some(win) = app_clone.get_webview_window("ima_code_exchange") {
+                    let _ = win.close();
+                }
+            });
+            Err("Timed out waiting for login exchange result".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn check_wechat_quick_login_available(app: tauri::AppHandle) -> Result<bool, String> {
+    if let Some(win) = app.get_webview_window("ima_quick_probe") {
+        let _ = win.close();
+    }
+
+    let login_url = tauri::Url::parse(&ima_wechat_qr_login_url_string()).map_err(|e| e.to_string())?;
+    let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
+    let tx = Arc::new(Mutex::new(Some(tx)));
+    let tx_for_build = Arc::clone(&tx);
+    let tx_for_nav = Arc::clone(&tx);
+    let app_for_build = app.clone();
+    let app_for_nav = app.clone();
+
+    let js_injection = r##"
+        (() => {
+            if (window.__fsmQuickProbeInstalled) return;
+            window.__fsmQuickProbeInstalled = true;
+            let attempts = 0;
+            let finished = false;
+
+            function bridge(action) {
+                if (finished) return;
+                finished = true;
+                try {
+                    window.location.href = `https://fsmsync.localhost/${action}`;
+                } catch (_) {}
+            }
+
+            function isVisible(el) {
+                try {
+                    const style = window.getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    return style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        style.opacity !== "0" &&
+                        rect.width > 0 &&
+                        rect.height > 0;
+                } catch (_) {
+                    return false;
+                }
+            }
+
+            function hasQuickLoginEntry() {
+                const selectors = [
+                    ".qlogin_btn",
+                    ".web_qrcode_switch",
+                    ".js_qlogin_btn",
+                    ".js_fast_login",
+                    "[role='button']",
+                    "button",
+                    "a"
+                ];
+                const nodes = Array.from(document.querySelectorAll(selectors.join(",")));
+                return nodes.some((node) => {
+                    if (!isVisible(node)) return false;
+                    const text = `${node.innerText || ""} ${node.textContent || ""} ${node.title || ""} ${node.className || ""}`.trim();
+                    return /快捷|一键|电脑微信|已登录|qlogin|fast/i.test(text);
+                });
+            }
+
+            function probe() {
+                attempts += 1;
+                if (hasQuickLoginEntry()) {
+                    bridge("quick-available");
+                    return;
+                }
+                if (attempts >= 12) {
+                    bridge("quick-unavailable");
+                    return;
+                }
+                setTimeout(probe, 450);
+            }
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", () => setTimeout(probe, 250), { once: true });
+            } else {
+                setTimeout(probe, 250);
+            }
+        })();
+    "##;
+
+    app.run_on_main_thread(move || {
+        let builder = tauri::WebviewWindowBuilder::new(
+            &app_for_build,
+            "ima_quick_probe",
+            tauri::WebviewUrl::External(login_url),
+        )
+        .visible(false)
+        .devtools(false)
+        .user_agent(WEBVIEW_USER_AGENT)
+        .initialization_script(js_injection)
+        .on_navigation(move |url| {
+            if url.host_str() != Some("fsmsync.localhost") {
+                return true;
+            }
+
+            let action = url.path().trim_start_matches('/');
+            let is_available = action == "quick-available";
+            if let Some(win) = app_for_nav.get_webview_window("ima_quick_probe") {
+                let _ = win.close();
+            }
+            let mut guard = tx_for_nav.lock().unwrap();
+            if let Some(sender) = guard.take() {
+                let _ = sender.send(is_available);
+            }
+            false
+        });
+
+        if let Err(e) = builder.build() {
+            println!("[IMAQuickProbe] Failed to create probe window: {}", e);
+            let mut guard = tx_for_build.lock().unwrap();
+            if let Some(sender) = guard.take() {
+                let _ = sender.send(false);
+            }
+        }
+    })
+    .map_err(|e| e.to_string())?;
+
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(7));
+    tokio::pin!(timeout);
+
+    let available = tokio::select! {
+        res = rx => res.unwrap_or(false),
+        _ = &mut timeout => false,
+    };
+
+    let app_clone = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(win) = app_clone.get_webview_window("ima_quick_probe") {
+            let _ = win.close();
+        }
+    });
+
+    Ok(available)
+}
+
+#[tauri::command]
+async fn start_wechat_quick_login(app: tauri::AppHandle) -> Result<WeChatLoginProfile, String> {
+    if let Some(win) = app.get_webview_window("ima_quick_login") {
+        let _ = win.close();
+    }
+
+    let login_url = tauri::Url::parse(&ima_wechat_qr_login_url_string()).map_err(|e| e.to_string())?;
+    let (tx, rx) = tokio::sync::oneshot::channel::<Result<WeChatLoginProfile, String>>();
+    let tx = Arc::new(Mutex::new(Some(tx)));
+    let tx_for_build = Arc::clone(&tx);
+    let tx_for_nav = Arc::clone(&tx);
+    let app_for_build = app.clone();
+    let app_for_nav = app.clone();
+    let app_for_scheme = app.clone();
+
+    let js_injection = r##"
+        (() => {
+            if (window.__fsmQuickLoginInstalled) return;
+            window.__fsmQuickLoginInstalled = true;
+            let hasSubmitted = false;
+            let clickAttempts = 0;
+
+            function bridge(action, params = {}) {
+                try {
+                    const query = new URLSearchParams(params).toString();
+                    window.location.href = `https://fsmsync.localhost/${action}${query ? `?${query}` : ""}`;
+                } catch (_) {}
+            }
+
+            function log(message) {
+                try {
+                    const iframe = document.createElement("iframe");
+                    iframe.style.display = "none";
+                    iframe.src = `https://fsmsync.localhost/log?msg=${encodeURIComponent(message)}`;
+                    (document.documentElement || document).appendChild(iframe);
+                    setTimeout(() => iframe.remove(), 3000);
+                } catch (_) {}
+            }
+
+            function requestUrl(input) {
+                try {
+                    if (typeof input === "string") return input;
+                    if (input instanceof URL) return input.href;
+                    if (input && typeof input.url === "string") return input.url;
+                    return String(input || "");
+                } catch (_) {
+                    return "";
+                }
+            }
+
+            function isLoginResponseUrl(url) {
+                if (!url) return false;
+                return url.includes("/cgi-bin/auth_login/login") ||
+                    (url.includes("auth_login") && url.includes("login")) ||
+                    (url.includes("login") && url.includes("auth"));
+            }
+
+            function parsePossibleJson(value) {
+                if (typeof value !== "string") return value;
+                try {
+                    return JSON.parse(value);
+                } catch (_) {
+                    return value;
+                }
+            }
+
+            function normalizeLoginData(data) {
+                try {
+                    data = parsePossibleJson(data);
+                    if (!data || typeof data !== "object") return null;
+                    const candidates = [data, parsePossibleJson(data.data), data.result, data.payload]
+                        .filter(item => item && typeof item === "object");
+                    for (const item of candidates) {
+                        const token = item.token || item.ima_token || item["IMA-TOKEN"];
+                        const refreshToken = item.refresh_token || item.refreshToken || item["IMA-REFRESH-TOKEN"] || token || "";
+                        const uid = item.user_id || item.uid || item.userId || item.user_info?.open_info?.uid || "";
+                        const guid = item.guid || item.user_info?.open_info?.guid || item.client_info?.guid || "";
+                        const avatar = item.avatar || item.avatar_url || item.user_info?.open_info?.avatar_url || item.user_info?.open_info?.avatarUrl || "";
+                        const nickname = item.nickname || item.user_info?.open_info?.nickname || "";
+                        if (token && uid) {
+                            return {
+                                token: String(token),
+                                refresh_token: String(refreshToken),
+                                uid: String(uid),
+                                guid: String(guid),
+                                avatar: String(avatar),
+                                nickname: String(nickname)
+                            };
+                        }
+                    }
+                } catch (e) {
+                    log(`normalize error: ${e}`);
+                }
+                return null;
+            }
+
+            function submitLogin(data, source) {
+                if (hasSubmitted) return;
+                const creds = normalizeLoginData(data);
+                if (!creds || !creds.token || !creds.uid || creds.token === "guest") return;
+                hasSubmitted = true;
+                log(`quick login credentials captured via ${source}; uid=${creds.uid}`);
+                bridge("login-success", creds);
+            }
+
+            function installHooks() {
+                try {
+                    if (window.fetch && !window.__fsmQuickFetchHooked) {
+                        window.__fsmQuickFetchHooked = true;
+                        const originalFetch = window.fetch.bind(window);
+                        window.fetch = async function(...args) {
+                            const url = requestUrl(args[0]);
+                            const response = await originalFetch(...args);
+                            try {
+                                if (isLoginResponseUrl(url)) {
+                                    response.clone().text().then(text => submitLogin(text, "fetch")).catch(() => {});
+                                }
+                            } catch (_) {}
+                            return response;
+                        };
+                    }
+                } catch (e) {
+                    log(`fetch hook error: ${e}`);
+                }
+
+                try {
+                    if (window.XMLHttpRequest && !window.__fsmQuickXhrHooked) {
+                        window.__fsmQuickXhrHooked = true;
+                        const originalOpen = window.XMLHttpRequest.prototype.open;
+                        window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                            this.__fsmLoginUrl = requestUrl(url);
+                            return originalOpen.apply(this, [method, url, ...rest]);
+                        };
+                        const originalSend = window.XMLHttpRequest.prototype.send;
+                        window.XMLHttpRequest.prototype.send = function(...args) {
+                            try {
+                                this.addEventListener("loadend", function() {
+                                    try {
+                                        if (!isLoginResponseUrl(this.__fsmLoginUrl || "")) return;
+                                        submitLogin(this.responseText || this.response, "xhr");
+                                    } catch (_) {}
+                                });
+                            } catch (_) {}
+                            return originalSend.apply(this, args);
+                        };
+                    }
+                } catch (e) {
+                    log(`xhr hook error: ${e}`);
+                }
+            }
+
+            function isVisible(el) {
+                try {
+                    const style = window.getComputedStyle(el);
+                    const rect = el.getBoundingClientRect();
+                    return style.display !== "none" &&
+                        style.visibility !== "hidden" &&
+                        style.opacity !== "0" &&
+                        rect.width > 0 &&
+                        rect.height > 0;
+                } catch (_) {
+                    return false;
+                }
+            }
+
+            function tryClickQuickLogin() {
+                installHooks();
+                clickAttempts += 1;
+                const selectors = [
+                    ".qlogin_btn",
+                    ".web_qrcode_switch",
+                    ".js_qlogin_btn",
+                    ".js_fast_login",
+                    "button",
+                    "a",
+                    "[role='button']"
+                ];
+                const nodes = Array.from(document.querySelectorAll(selectors.join(",")));
+                const matched = nodes.find((node) => {
+                    if (!isVisible(node)) return false;
+                    const text = `${node.innerText || ""} ${node.textContent || ""} ${node.title || ""} ${node.className || ""}`.trim();
+                    return /快捷|一键|电脑微信|已登录|授权|登录|确认|qlogin|fast/i.test(text);
+                });
+                if (matched) {
+                    log(`clicking quick login candidate: ${(matched.innerText || matched.textContent || matched.className || "").toString().slice(0, 80)}`);
+                    matched.click();
+                    return true;
+                }
+                if (clickAttempts <= 10) {
+                    setTimeout(tryClickQuickLogin, 600);
+                } else {
+                    log("no quick login candidate found");
+                }
+                return false;
+            }
+
+            installHooks();
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", () => setTimeout(tryClickQuickLogin, 300), { once: true });
+            } else {
+                setTimeout(tryClickQuickLogin, 300);
+            }
+            setTimeout(tryClickQuickLogin, 1400);
+            setTimeout(tryClickQuickLogin, 3000);
+        })();
+    "##;
+
+    app.run_on_main_thread(move || {
+        let builder = tauri::WebviewWindowBuilder::new(
+            &app_for_build,
+            "ima_quick_login",
+            tauri::WebviewUrl::External(login_url),
+        )
+        .visible(false)
+        .devtools(true)
+        .user_agent(WEBVIEW_USER_AGENT)
+        .initialization_script(js_injection)
+        .on_navigation(move |url| {
+            println!("[IMAQuickLogin Navigation] {}", url);
+
+            if let Some(code) = url
+                .fragment()
+                .and_then(|fragment| fragment.split('?').nth(1))
+                .and_then(|query| {
+                    query.split('&').find_map(|pair| {
+                        let (key, value) = pair.split_once('=')?;
+                        if key == "code" {
+                            Some(value.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                })
+            {
+                let app_clone = app_for_nav.clone();
+                let tx_clone = Arc::clone(&tx_for_nav);
+                tauri::async_runtime::spawn(async move {
+                    let result = complete_wechat_login_from_code(app_clone.clone(), code).await;
+                    if let Some(win) = app_clone.get_webview_window("ima_quick_login") {
+                        let _ = win.close();
+                    }
+                    let mut guard = tx_clone.lock().unwrap();
+                    if let Some(sender) = guard.take() {
+                        let _ = sender.send(result);
+                    }
+                });
+                return false;
+            }
+
+            let scheme = url.scheme();
+            if scheme != "http" && scheme != "https" {
+                use tauri_plugin_opener::OpenerExt;
+                println!("[IMAQuickLogin] Opening custom scheme via OS: {}", url);
+                let _ = app_for_scheme
+                    .opener()
+                    .open_path(&url.to_string(), None::<&str>);
+                return false;
+            }
+
+            if url.host_str() != Some("fsmsync.localhost") {
+                return true;
+            }
+
+            let action = url.path().trim_start_matches('/').to_string();
+            let parsed_query: std::collections::HashMap<_, _> =
+                url.query_pairs().into_owned().collect();
+
+            match action.as_str() {
+                "log" => {
+                    if let Some(msg) = parsed_query.get("msg") {
+                        println!("[IMAQuickLogin Log] {}", msg);
+                    }
+                }
+                "login-success" => {
+                    if let Some((creds, profile)) = profile_from_query_map(&parsed_query) {
+                        let save_result = credentials::save_credentials(&creds);
+                        if save_result.is_ok() {
+                            let _ = app_for_nav.emit(
+                                "login_success",
+                                serde_json::json!({
+                                    "avatar": profile.avatar,
+                                    "nickname": profile.nickname,
+                                    "uid": profile.uid,
+                                }),
+                            );
+                        }
+                        if let Some(win) = app_for_nav.get_webview_window("ima_quick_login") {
+                            let _ = win.close();
+                        }
+                        let mut guard = tx_for_nav.lock().unwrap();
+                        if let Some(sender) = guard.take() {
+                            let _ = match save_result {
+                                Ok(_) => sender.send(Ok(profile)),
+                                Err(e) => sender.send(Err(e)),
+                            };
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            false
+        });
+
+        if let Err(e) = builder.build() {
+            let mut guard = tx_for_build.lock().unwrap();
+            if let Some(sender) = guard.take() {
+                let _ = sender.send(Err(format!("Failed to create quick login window: {}", e)));
+            }
+        }
+    })
+    .map_err(|e| e.to_string())?;
+
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(30));
+    tokio::pin!(timeout);
+
+    tokio::select! {
+        res = rx => {
+            match res {
+                Ok(Ok(profile)) => Ok(profile),
+                Ok(Err(err)) => Err(err),
+                Err(_) => Err("Quick login channel dropped".to_string()),
+            }
+        }
+        _ = &mut timeout => {
+            let app_clone = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Some(win) = app_clone.get_webview_window("ima_quick_login") {
+                    let _ = win.close();
+                }
+            });
+            Err("未检测到可用的电脑微信快捷授权，请确认电脑微信已登录，或继续使用二维码扫码登录。".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+async fn complete_wechat_login_from_code(
+    app: tauri::AppHandle,
+    code: String,
+) -> Result<WeChatLoginProfile, String> {
+    let code = code.trim();
+    if code.is_empty() {
+        return Err("Missing WeChat login authorization code".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent(WEBVIEW_USER_AGENT)
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let endpoints = [
+        "https://ima.qq.com/auth/login_login",
+        "https://ima.qq.com/cgi-bin/auth_login/login",
+    ];
+    let body_candidates = vec![
+        serde_json::json!({
+            "code": code,
+            "token_type": 14,
+            "state": "fsm-native-login"
+        }),
+        serde_json::json!({
+            "code": code,
+            "token_type": 14
+        }),
+        serde_json::json!({
+            "code": code
+        }),
+        serde_json::json!({
+            "wx_code": code,
+            "token_type": 14,
+            "state": "fsm-native-login"
+        }),
+    ];
+
+    let headers_text = format!(
+        "User-Agent: {}\nOrigin: https://ima.qq.com\nReferer: https://ima.qq.com/login/\nfrom_browser_ima: 1\nLAUNCH_CHANNELID: 900000",
+        WEBVIEW_USER_AGENT
+    );
+    let mut last_error = String::new();
+
+    for endpoint in endpoints {
+        for body in &body_candidates {
+            let body_text = body.to_string();
+            let log_id = add_logged_http_request(
+                "POST",
+                endpoint,
+                Some(headers_text.clone()),
+                Some(body_text.clone()),
+            );
+
+            let response = match client
+                .post(endpoint)
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .header(reqwest::header::ORIGIN, "https://ima.qq.com")
+                .header(reqwest::header::REFERER, "https://ima.qq.com/login/")
+                .header("from_browser_ima", "1")
+                .header("LAUNCH_CHANNELID", "900000")
+                .json(body)
+                .send()
+                .await
+            {
+                Ok(res) => res,
+                Err(err) => {
+                    let err_text = format!("Request failed: {}", err);
+                    update_http_log_error(&log_id, &err_text);
+                    last_error = format!("{} [{}]", endpoint, err_text);
+                    continue;
+                }
+            };
+
+            let status = response.status();
+            let body_raw = match response.text().await {
+                Ok(text) => text,
+                Err(err) => {
+                    let err_text = format!("Failed to read response body: {}", err);
+                    update_http_log_error(&log_id, &err_text);
+                    last_error = format!("{} [{}]", endpoint, err_text);
+                    continue;
+                }
+            };
+            update_http_log_response(&log_id, status.as_u16(), &body_raw);
+
+            if !status.is_success() {
+                let err_text = format!("HTTP {}", status);
+                update_http_log_error(&log_id, &err_text);
+                last_error = format!("{} returned {}", endpoint, status);
+                continue;
+            }
+
+            let json: serde_json::Value = match serde_json::from_str(&body_raw) {
+                Ok(value) => value,
+                Err(err) => {
+                    let err_text = format!("Invalid JSON response: {}", err);
+                    update_http_log_error(&log_id, &err_text);
+                    last_error = format!("{} returned non-JSON body", endpoint);
+                    continue;
+                }
+            };
+
+            if let Some((creds, profile)) = parse_wechat_login_profile(&json) {
+                credentials::save_credentials(&creds)?;
+                let _ = app.emit(
+                    "login_success",
+                    serde_json::json!({
+                        "avatar": profile.avatar,
+                        "nickname": profile.nickname,
+                        "uid": profile.uid,
+                    }),
+                );
+                return Ok(profile);
+            }
+
+            let api_code = json_get_path_string(&json, &["code"])
+                .or_else(|| json_get_path_string(&json, &["ret_code"]))
+                .and_then(|v| v.parse::<i64>().ok());
+            let api_msg = json_get_path_string(&json, &["msg"])
+                .or_else(|| json_get_path_string(&json, &["message"]))
+                .unwrap_or_else(|| "unknown error".to_string());
+
+            last_error = if let Some(api_code) = api_code {
+                format!(
+                    "{} did not return credentials (code={}, msg={})",
+                    endpoint, api_code, api_msg
+                )
+            } else {
+                format!(
+                    "{} did not return credentials (msg={})",
+                    endpoint, api_msg
+                )
+            };
+        }
+    }
+
+    if last_error.is_empty() {
+        last_error = "Failed to finalize WeChat login via direct API".to_string();
+    }
+
+    let redirect_url = format!(
+        "https://ima.qq.com/login#/weixin-login?code={}&state=fsm-native-login",
+        code
+    );
+    println!(
+        "[IMALogin] Direct code exchange failed ({}). Falling back to hidden WebView flow...",
+        last_error
+    );
+    match complete_wechat_login_with_hidden_webview(&app, &redirect_url).await {
+        Ok(profile) => Ok(profile),
+        Err(fallback_err) => Err(format!(
+            "Direct API and hidden WebView login exchange both failed. direct_error={}, fallback_error={}",
+            last_error, fallback_err
+        )),
+    }
 }
 
 #[tauri::command]
@@ -2011,497 +3022,6 @@ pub async fn refresh_ima_credentials_silently(
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-#[tauri::command]
-async fn open_login_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-
-    if let Some(win) = app.get_webview_window("ima_login") {
-        win.set_focus().map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-
-    #[cfg(target_os = "windows")]
-    let login_url = tauri::WebviewUrl::App("wechat-login.html".into());
-    #[cfg(not(target_os = "windows"))]
-    let login_url = ima_wechat_qr_login_url()?;
-
-    let js_injection = r##"
-        (() => {
-            if (window.__fsmLoginCaptureInstalled) return;
-            window.__fsmLoginCaptureInstalled = true;
-
-            let hasSubmitted = false;
-
-            function bridge(action, params = {}) {
-                try {
-                    const query = new URLSearchParams(params).toString();
-                    window.location.href = `https://fsmsync.localhost/${action}${query ? `?${query}` : ""}`;
-                } catch (e) {
-                    log(`bridge error: ${e}`);
-                }
-            }
-
-            function log(message) {
-                try {
-                    const iframe = document.createElement("iframe");
-                    iframe.style.display = "none";
-                    iframe.src = `https://fsmsync.localhost/log?msg=${encodeURIComponent(message)}`;
-                    (document.documentElement || document).appendChild(iframe);
-                    setTimeout(() => iframe.remove(), 3000);
-                } catch (_) {}
-            }
-
-            function installLoginPolish() {
-                try {
-                    if (document.getElementById("fsm-login-polish")) return;
-                    const style = document.createElement("style");
-                    style.id = "fsm-login-polish";
-                    style.textContent = `
-                        html, body {
-                            width: 100% !important;
-                            min-width: 0 !important;
-                            min-height: 0 !important;
-                            margin: 0 !important;
-                            overflow: hidden !important;
-                            background: linear-gradient(180deg, #f7fffb 0%, #ffffff 58%, #f2fbf7 100%) !important;
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-                        }
-                        * {
-                            box-sizing: border-box !important;
-                        }
-                        *::-webkit-scrollbar {
-                            width: 8px !important;
-                            height: 8px !important;
-                        }
-                        *::-webkit-scrollbar-track {
-                            background: transparent !important;
-                        }
-                        *::-webkit-scrollbar-thumb {
-                            border-radius: 999px !important;
-                            background: rgba(0, 173, 111, 0.32) !important;
-                            border: 2px solid transparent !important;
-                            background-clip: content-box !important;
-                        }
-                        *::-webkit-scrollbar-thumb:hover {
-                            background: rgba(0, 173, 111, 0.48) !important;
-                            background-clip: content-box !important;
-                        }
-                        .web_qrcode_area,
-                        body.web_qrcode_type_page_self {
-                            min-width: 0 !important;
-                            min-height: 0 !important;
-                            width: 100% !important;
-                            height: 100vh !important;
-                            display: flex !important;
-                            align-items: center !important;
-                            justify-content: center !important;
-                            background: transparent !important;
-                            overflow: hidden !important;
-                            padding: 0 !important;
-                        }
-                        .web_qrcode_wrp {
-                            position: relative !important;
-                            top: auto !important;
-                            left: auto !important;
-                            transform: none !important;
-                            display: flex !important;
-                            flex-direction: column !important;
-                            align-items: center !important;
-                            justify-content: center !important;
-                            width: 332px !important;
-                            min-height: 432px !important;
-                            margin: 0 auto !important;
-                            padding: 32px 24px 28px !important;
-                            box-sizing: border-box !important;
-                            border-radius: 22px !important;
-                            border: 1px solid rgba(0, 173, 111, 0.16) !important;
-                            background: rgba(255, 255, 255, 0.94) !important;
-                            box-shadow: 0 24px 60px rgba(28, 43, 34, 0.16) !important;
-                        }
-                        .web_qrcode_wrp::before {
-                            content: "微信授权登录";
-                            display: block;
-                            margin: 0 0 8px;
-                            color: #1d1f22;
-                            font-size: 24px;
-                            font-weight: 800;
-                            line-height: 1.2;
-                            letter-spacing: 0;
-                            text-align: center;
-                        }
-                        .web_qrcode_wrp::after {
-                            content: "扫码或快捷授权后自动返回 FileSyncMonitor";
-                            display: block;
-                            margin: 18px 0 0;
-                            color: #6f7885;
-                            font-size: 13px;
-                            font-weight: 600;
-                            line-height: 1.35;
-                            text-align: center;
-                        }
-                        .web_qrcode_app_wrp,
-                        .web_qrcode_tips_logo,
-                        .web_qrcode_tips {
-                            display: none !important;
-                        }
-                        .web_qrcode_img_wrp {
-                            display: flex !important;
-                            align-items: center !important;
-                            justify-content: center !important;
-                            width: 248px !important;
-                            height: 248px !important;
-                            margin: 0 auto !important;
-                            border-radius: 18px !important;
-                            background: #ffffff !important;
-                            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06) !important;
-                        }
-                        .web_qrcode_img {
-                            width: 224px !important;
-                            height: 224px !important;
-                            margin: 0 !important;
-                        }
-                        .web_qrcode_refresh_btn {
-                            border-radius: 14px !important;
-                        }
-                        .qlogin_mod {
-                            display: flex !important;
-                            flex-direction: column !important;
-                            align-items: center !important;
-                            gap: 14px !important;
-                            padding: 8px 0 0 !important;
-                        }
-                        .qlogin_user_avatar {
-                            width: 96px !important;
-                            height: 96px !important;
-                            border-radius: 18px !important;
-                            box-shadow: 0 12px 30px rgba(28, 43, 34, 0.14) !important;
-                        }
-                        .qlogin_user_nickname {
-                            color: #1d1f22 !important;
-                            font-size: 20px !important;
-                            font-weight: 800 !important;
-                            line-height: 1.2 !important;
-                            margin: 2px 0 0 !important;
-                        }
-                        .qlogin_btn,
-                        .weui-btn_primary {
-                            width: 236px !important;
-                            height: 48px !important;
-                            border: 0 !important;
-                            border-radius: 14px !important;
-                            background: linear-gradient(135deg, #06c985 0%, #00a96b 100%) !important;
-                            color: #ffffff !important;
-                            font-size: 17px !important;
-                            font-weight: 800 !important;
-                            box-shadow: 0 14px 28px rgba(0, 173, 111, 0.24) !important;
-                        }
-                        .web_qrcode_switch,
-                        .weui-link {
-                            color: #00a96b !important;
-                            font-size: 14px !important;
-                            font-weight: 700 !important;
-                            text-decoration: none !important;
-                        }
-                        .web_qrcode_msg,
-                        .web_qrcode_msg_icon_success,
-                        .web_qrcode_msg_icon_error {
-                            color: #1d1f22 !important;
-                        }
-                    `;
-                    (document.head || document.documentElement).appendChild(style);
-                    log("Login polish installed");
-                } catch (e) {
-                    log(`Login polish error: ${e}`);
-                }
-            }
-
-            installLoginPolish();
-            if (document.readyState === "loading") {
-                document.addEventListener("DOMContentLoaded", installLoginPolish, { once: true });
-            }
-            setTimeout(installLoginPolish, 500);
-            setTimeout(installLoginPolish, 1500);
-
-            function requestUrl(input) {
-                try {
-                    if (typeof input === "string") return input;
-                    if (input instanceof URL) return input.href;
-                    if (input && typeof input.url === "string") return input.url;
-                    return String(input || "");
-                } catch (e) {
-                    return "";
-                }
-            }
-
-            function isLoginResponseUrl(url) {
-                if (!url) return false;
-                return url.includes("/cgi-bin/auth_login/login") ||
-                    (url.includes("auth_login") && url.includes("login")) ||
-                    (url.includes("login") && url.includes("auth"));
-            }
-
-            function parsePossibleJson(value) {
-                if (typeof value !== "string") return value;
-                try {
-                    return JSON.parse(value);
-                } catch (_) {
-                    return value;
-                }
-            }
-
-            function normalizeLoginData(data) {
-                try {
-                    data = parsePossibleJson(data);
-                    if (!data || typeof data !== "object") return null;
-
-                    const candidates = [data, parsePossibleJson(data.data), data.result, data.payload]
-                        .filter(item => item && typeof item === "object");
-
-                    for (const item of candidates) {
-                        const token = item.token || item.ima_token || item["IMA-TOKEN"];
-                        const refreshToken = item.refresh_token || item.refreshToken || item["IMA-REFRESH-TOKEN"] || token || "";
-                        const uid = item.user_id || item.uid || item.userId || item.user_info?.open_info?.uid || "";
-                        const guid = item.guid || item.user_info?.open_info?.guid || item.client_info?.guid || "";
-                        const avatar = item.avatar || item.avatar_url || item.user_info?.open_info?.avatar_url || item.user_info?.open_info?.avatarUrl || "";
-                        const nickname = item.nickname || item.user_info?.open_info?.nickname || "";
-                        if (token && uid) {
-                            return {
-                                token: String(token),
-                                refresh_token: String(refreshToken),
-                                uid: String(uid),
-                                guid: String(guid),
-                                avatar: String(avatar),
-                                nickname: String(nickname)
-                            };
-                        }
-                    }
-                } catch (e) {
-                    log(`normalize error: ${e}`);
-                }
-                return null;
-            }
-
-            function submitLogin(data, source) {
-                try {
-                    if (hasSubmitted) return;
-                    const creds = normalizeLoginData(data);
-                    if (!creds || !creds.token || !creds.uid || creds.token === "guest") return;
-                    hasSubmitted = true;
-                    log(`Login credentials captured via ${source}; uid=${creds.uid}`);
-                    bridge("login-success", creds);
-                } catch (e) {
-                    log(`submitLogin error: ${e}`);
-                }
-            }
-
-            try {
-                if (window.fetch) {
-                    const originalFetch = window.fetch.bind(window);
-                    window.fetch = async function(...args) {
-                        try {
-                            const url = requestUrl(args[0]);
-                            const response = await originalFetch(...args);
-                            try {
-                                if (isLoginResponseUrl(url)) {
-                                    response.clone().text()
-                                        .then(text => submitLogin(text, "fetch"))
-                                        .catch(error => log(`Fetch login parse error: ${error}`));
-                                }
-                            } catch (e) {
-                                log(`Fetch response check error: ${e}`);
-                            }
-                            return response;
-                        } catch (err) {
-                            log(`Fetch execution error: ${err}`);
-                            return originalFetch(...args);
-                        }
-                    };
-                }
-            } catch (e) {
-                log(`Fetch hook setup error: ${e}`);
-            }
-
-            try {
-                const originalOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
-                if (originalOpen) {
-                    window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                        try {
-                            this.__fsmLoginUrl = requestUrl(url);
-                        } catch (e) {
-                            log(`XHR open hook error: ${e}`);
-                        }
-                        return originalOpen.apply(this, [method, url, ...rest]);
-                    };
-
-                    const originalSend = window.XMLHttpRequest.prototype.send;
-                    window.XMLHttpRequest.prototype.send = function(...args) {
-                        try {
-                            this.addEventListener("loadend", function() {
-                                try {
-                                    if (!isLoginResponseUrl(this.__fsmLoginUrl || "")) return;
-                                    submitLogin(this.responseText || this.response, "xhr");
-                                } catch (error) {
-                                    log(`XHR login parse error: ${error}`);
-                                }
-                            });
-                        } catch (e) {
-                            log(`XHR send hook setup error: ${e}`);
-                        }
-                        return originalSend.apply(this, args);
-                    };
-                }
-            } catch (e) {
-                log(`XHR hook setup error: ${e}`);
-            }
-
-            log("Login capture hooks installed");
-        })();
-    "##;
-
-    let app_clone = app.clone();
-    let app_clone2 = app.clone();
-    let (build_result_tx, build_result_rx) = std::sync::mpsc::channel::<Result<(), String>>();
-
-    app.run_on_main_thread(move || {
-        let app_for_nav = app_clone2.clone();
-        let builder = tauri::WebviewWindowBuilder::new(&app_clone2, "ima_login", login_url)
-            .title("微信扫码登录")
-            .inner_size(380.0, 540.0)
-            .resizable(false)
-            .decorations(true)
-            .devtools(true)
-            .user_agent(WEBVIEW_USER_AGENT)
-            .initialization_script(js_injection);
-        let builder = if let Some(icon) = app_window_icon() {
-            match builder.icon(icon) {
-                Ok(builder) => builder,
-                Err(err) => {
-                    let message = format!("Failed to set IMA login window icon: {}", err);
-                    println!("[IMALogin] {}", message);
-                    let _ = build_result_tx.send(Err(message));
-                    return;
-                }
-            }
-        } else {
-            builder
-        };
-        let builder = builder.on_navigation(move |url| {
-            println!("[IMALogin Navigation] {}", url);
-            let scheme = url.scheme();
-            if scheme == "tauri" || scheme == "asset" {
-                return true;
-            }
-            if scheme != "http" && scheme != "https" {
-                use tauri_plugin_opener::OpenerExt;
-                let url_str = url.to_string();
-                println!(
-                    "[WebView Navigation] Custom scheme intercepted: {}. Opening via OS...",
-                    url_str
-                );
-                let _ = app_for_nav.opener().open_path(&url_str, None::<&str>);
-                return false;
-            }
-
-            let is_login_bridge = url.host_str() == Some("fsmsync.localhost");
-
-            if !is_login_bridge {
-                return true;
-            }
-
-            let action = url
-                .query_pairs()
-                .find(|(key, _)| key == "action")
-                .map(|(_, value)| value.into_owned())
-                .unwrap_or_else(|| url.path().trim_start_matches('/').to_string());
-            let parsed_query: std::collections::HashMap<_, _> =
-                url.query_pairs().into_owned().collect();
-
-            match action.as_str() {
-                "log" => {
-                    if let Some(msg) = parsed_query.get("msg") {
-                        println!("[WebView Log] {}", msg);
-                    }
-                    false
-                }
-                "login-cancel" => {
-                    if let Some(win) = app_clone.get_webview_window("ima_login") {
-                        let _ = win.close();
-                    }
-                    false
-                }
-                "login-success" => {
-                    let token = parsed_query.get("token").cloned().unwrap_or_default();
-                    let refresh_token = parsed_query
-                        .get("refresh_token")
-                        .cloned()
-                        .unwrap_or_default();
-                    let uid = parsed_query.get("uid").cloned().unwrap_or_default();
-                    let guid = parsed_query.get("guid").cloned().unwrap_or_default();
-                    let avatar = parsed_query.get("avatar").cloned().unwrap_or_default();
-                    let nickname = parsed_query.get("nickname").cloned().unwrap_or_default();
-
-                    if !token.is_empty() {
-                        println!("[IMALogin] Captured Credentials! UID: {}", uid);
-                        let creds = CachedCredentials {
-                            token,
-                            refresh_token,
-                            uid: uid.clone(),
-                            guid,
-                        };
-                        if let Err(e) = credentials::save_credentials(&creds) {
-                            println!("[IMALogin] Failed to save credentials to Keyring: {:?}", e);
-                        } else {
-                            println!("[IMALogin] Credentials saved successfully.");
-                        }
-                        let _ = app_clone.emit(
-                            "login_success",
-                            serde_json::json!({
-                                "avatar": avatar,
-                                "nickname": nickname,
-                                "uid": uid,
-                            }),
-                        );
-
-                        if let Some(win) = app_clone.get_webview_window("ima_login") {
-                            let _ = win.close();
-                        }
-                    }
-                    false
-                }
-                _ => false,
-            }
-        });
-
-        // Make it modal relative to main window
-
-        let build_result = match builder.center().build() {
-            Ok(win) => {
-                let _ = win.set_focus();
-                Ok(())
-            }
-            Err(err) => {
-                if let Some(win) = app_clone2.get_webview_window("ima_login") {
-                    let _ = win.set_focus();
-                    Ok(())
-                } else {
-                    let message = format!("Failed to create IMA login window: {}", err);
-                    println!("[IMALogin] {}", message);
-                    Err(message)
-                }
-            }
-        };
-        let _ = build_result_tx.send(build_result);
-    })
-    .map_err(|e| e.to_string())?;
-
-    build_result_rx
-        .recv_timeout(std::time::Duration::from_secs(5))
-        .map_err(|e| format!("Timed out waiting for IMA login window: {}", e))??;
-
-    Ok(())
-}
-
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -2510,19 +3030,34 @@ pub fn run() {
             let _ = APP_HANDLE.set(app.handle().clone());
 
             // Locate user data directory for SQLite database
-            let app_dir = app
+            let mut app_dir = app
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| PathBuf::from("./"));
 
             // Ensure app directory exists
-            std::fs::create_dir_all(&app_dir).unwrap_or_default();
+            let _ = std::fs::create_dir_all(&app_dir);
 
-            // Initalize credentials module with the correct sandbox data directory
+            let mut db_path = app_dir.join("file_sync_monitor.db");
+            let conn = match db::init_db(&db_path) {
+                Ok(conn) => conn,
+                Err(primary_err) => {
+                    let fallback_dir = std::env::temp_dir().join("file-sync-monitor");
+                    std::fs::create_dir_all(&fallback_dir)
+                        .expect("Failed to create fallback app data directory");
+                    let fallback_db_path = fallback_dir.join("file_sync_monitor.db");
+                    println!(
+                        "[AppData] Failed to open SQLite database at {:?}: {}. Falling back to {:?}",
+                        db_path, primary_err, fallback_db_path
+                    );
+                    app_dir = fallback_dir;
+                    db_path = fallback_db_path;
+                    db::init_db(&db_path).expect("Failed to initialize fallback SQLite database")
+                }
+            };
+
+            // Initalize credentials module with the resolved sandbox data directory
             let _ = credentials::APP_DATA_DIR.set(app_dir.clone());
-
-            let db_path = app_dir.join("file_sync_monitor.db");
-            let conn = db::init_db(&db_path).expect("Failed to initialize SQLite database");
 
             let monitor = DirectoryMonitor::new(IgnoreRules::new(true, vec![], vec![], vec![]));
 
@@ -2571,7 +3106,9 @@ pub fn run() {
             get_ima_space_quota,
             create_wechat_login_session,
             poll_wechat_qr_status,
-            open_login_window,
+            complete_wechat_login_from_code,
+            check_wechat_quick_login_available,
+            start_wechat_quick_login,
             start_file_monitor,
             stop_file_monitor,
             select_directory,

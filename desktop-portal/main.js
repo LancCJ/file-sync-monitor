@@ -176,6 +176,10 @@ let dom = {};
 let themedPageScrollbar = null;
 let logModalScrollbar = null;
 let dropdownCloseHandlerInstalled = false;
+let wechatLoginPollTimer = null;
+let wechatLoginPollInFlight = false;
+let wechatLoginPollErrorCount = 0;
+let wechatLoginFlowToken = 0;
 
 // Onboarding steps config
 const tourSteps = [
@@ -327,11 +331,18 @@ function cacheDOMElements() {
   dom.overlayClear = document.getElementById("overlay-clear-events");
   dom.overlayReset = document.getElementById("overlay-reset-all");
   dom.overlayHttpLogs = document.getElementById("overlay-http-logs");
+  dom.overlayWeChatLogin = document.getElementById("overlay-wechat-login");
   dom.httpLogsList = document.getElementById("http-logs-list");
   dom.btnShowLogs = document.getElementById("btn-show-logs");
   dom.btnShowLogsDedicated = document.getElementById("btn-show-logs-dedicated");
   dom.btnClearLogs = document.getElementById("btn-clear-logs");
   dom.btnCloseLogs = document.getElementById("btn-close-logs");
+  dom.btnCloseWeChatLogin = document.getElementById("btn-close-wechat-login");
+  dom.btnRetryWeChatLogin = document.getElementById("btn-retry-wechat-login");
+  dom.btnQuickWeChatLogin = document.getElementById("btn-quick-wechat-login");
+  dom.wechatQuickLoginArea = document.getElementById("wechat-quick-login-area");
+  dom.wechatLoginQrImage = document.getElementById("wechat-login-qr-image");
+  dom.wechatLoginStatus = document.getElementById("wechat-login-status");
   
   // Modal buttons
   dom.btnTriggerClear = document.getElementById("btn-trigger-clear-new");
@@ -969,6 +980,32 @@ function setupActionListeners() {
       }
     });
   }
+
+  if (dom.btnCloseWeChatLogin) {
+    dom.btnCloseWeChatLogin.addEventListener("click", () => {
+      closeWeChatLoginModal();
+    });
+  }
+
+  if (dom.overlayWeChatLogin) {
+    dom.overlayWeChatLogin.addEventListener("click", (event) => {
+      if (event.target === dom.overlayWeChatLogin) {
+        closeWeChatLoginModal();
+      }
+    });
+  }
+
+  if (dom.btnRetryWeChatLogin) {
+    dom.btnRetryWeChatLogin.addEventListener("click", () => {
+      startWeChatLoginModalFlow();
+    });
+  }
+
+  if (dom.btnQuickWeChatLogin) {
+    dom.btnQuickWeChatLogin.addEventListener("click", () => {
+      startWeChatQuickLoginFlow();
+    });
+  }
   
   // WeChat Scan Trigger
   if (dom.btnLoginIMA) {
@@ -1088,6 +1125,7 @@ async function initializeApplication() {
   listen("login_success", (event) => {
     console.log("Login success event received from Tauri.");
     const payload = event?.payload || {};
+    closeWeChatLoginModal();
     applyLoginSuccess(payload);
     refreshAppStatus();
   });
@@ -2181,8 +2219,257 @@ async function loadAvailableKnowledgeBases() {
   }
 }
 
+function setWeChatLoginBusy(isBusy) {
+  if (dom.btnRetryWeChatLogin) dom.btnRetryWeChatLogin.disabled = isBusy;
+  if (dom.btnQuickWeChatLogin) dom.btnQuickWeChatLogin.disabled = isBusy;
+}
+
+function setWeChatQuickLoginVisible(isVisible) {
+  if (!dom.wechatQuickLoginArea) return;
+  dom.wechatQuickLoginArea.classList.toggle("hidden", !isVisible);
+}
+
+function setWeChatLoginStatus(message, isError = false, isSuccess = false) {
+  if (!dom.wechatLoginStatus) return;
+  dom.wechatLoginStatus.textContent = message || "";
+  dom.wechatLoginStatus.classList.remove("error", "success");
+  if (isError) {
+    dom.wechatLoginStatus.classList.add("error");
+  } else if (isSuccess) {
+    dom.wechatLoginStatus.classList.add("success");
+  }
+}
+
+function stopWeChatLoginPolling() {
+  if (wechatLoginPollTimer) {
+    clearInterval(wechatLoginPollTimer);
+    wechatLoginPollTimer = null;
+  }
+  wechatLoginPollInFlight = false;
+  wechatLoginPollErrorCount = 0;
+}
+
+function closeWeChatLoginModal() {
+  stopWeChatLoginPolling();
+  wechatLoginFlowToken += 1;
+  setWeChatLoginBusy(false);
+  setWeChatQuickLoginVisible(false);
+  if (dom.overlayWeChatLogin) {
+    dom.overlayWeChatLogin.classList.add("hidden");
+  }
+}
+
+function extractCodeFromRedirectUrl(redirectUrl) {
+  const input = String(redirectUrl || "").trim();
+  if (!input) return "";
+
+  try {
+    const parsed = new URL(input);
+    let code = parsed.searchParams.get("code");
+    if (code) return code;
+
+    const hash = parsed.hash || "";
+    const queryIndex = hash.indexOf("?");
+    if (queryIndex >= 0) {
+      const hashParams = new URLSearchParams(hash.slice(queryIndex + 1));
+      code = hashParams.get("code");
+      if (code) return code;
+    }
+  } catch (_) {}
+
+  const match = input.match(/[?&#]code=([^&#]+)/i);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+async function finalizeWeChatLoginByCode(code, flowToken) {
+  const profile = await invoke("complete_wechat_login_from_code", { code });
+  if (flowToken !== wechatLoginFlowToken) {
+    return;
+  }
+
+  applyLoginSuccess(profile || {});
+  await refreshAppStatus();
+  closeWeChatLoginModal();
+}
+
+async function startWeChatLoginPolling(uuid, flowToken) {
+  stopWeChatLoginPolling();
+  setWeChatLoginStatus(t("请使用微信扫码"), false, false);
+
+  const pollOnce = async () => {
+    if (!dom.overlayWeChatLogin || dom.overlayWeChatLogin.classList.contains("hidden")) {
+      stopWeChatLoginPolling();
+      return;
+    }
+    if (flowToken !== wechatLoginFlowToken || wechatLoginPollInFlight) {
+      return;
+    }
+
+    wechatLoginPollInFlight = true;
+    try {
+      const result = await invoke("poll_wechat_qr_status", { uuid });
+      if (flowToken !== wechatLoginFlowToken) {
+        return;
+      }
+
+      wechatLoginPollErrorCount = 0;
+      const status = String(result?.status || "pending").toLowerCase();
+      if (status === "pending") {
+        setWeChatLoginStatus(t("请使用微信扫码"), false, false);
+        return;
+      }
+
+      if (status === "scanned") {
+        setWeChatLoginStatus(t("已扫码，请在手机上确认"), false, false);
+        return;
+      }
+
+      if (status === "expired") {
+        stopWeChatLoginPolling();
+        setWeChatLoginStatus(t("二维码已过期，请刷新后重试"), true, false);
+        return;
+      }
+
+      if (status === "cancelled") {
+        stopWeChatLoginPolling();
+        setWeChatLoginStatus(t("已在微信中取消登录"), true, false);
+        return;
+      }
+
+      if (status === "success") {
+        stopWeChatLoginPolling();
+        setWeChatLoginBusy(true);
+        setWeChatLoginStatus(t("扫码成功，正在完成登录..."), false, true);
+        try {
+          const code = extractCodeFromRedirectUrl(result?.redirect_url || "");
+          if (!code) {
+            throw new Error(t("未获取到登录授权码"));
+          }
+
+          await finalizeWeChatLoginByCode(code, flowToken);
+        } catch (err) {
+          const errText = err?.message || String(err);
+          setWeChatLoginBusy(false);
+          setWeChatLoginStatus(`${t("登录失败")}: ${errText}`, true, false);
+        }
+        return;
+      }
+
+      setWeChatLoginStatus(t("登录状态处理中..."), false, false);
+    } catch (err) {
+      const errText = err?.message || String(err);
+      wechatLoginPollErrorCount += 1;
+      setWeChatLoginBusy(false);
+      if (wechatLoginPollErrorCount >= 3) {
+        stopWeChatLoginPolling();
+        setWeChatLoginStatus(`${t("登录状态查询失败")}: ${errText}`, true, false);
+      } else {
+        setWeChatLoginStatus(t("网络波动，正在重试..."), false, false);
+      }
+    } finally {
+      wechatLoginPollInFlight = false;
+    }
+  };
+
+  await pollOnce();
+  if (flowToken !== wechatLoginFlowToken || !dom.overlayWeChatLogin || dom.overlayWeChatLogin.classList.contains("hidden")) {
+    return;
+  }
+  wechatLoginPollTimer = setInterval(pollOnce, 1800);
+}
+
+async function startWeChatLoginModalFlow() {
+  if (!dom.overlayWeChatLogin || !dom.wechatLoginQrImage || !dom.wechatLoginStatus) {
+    showGlobalToast(t("登录界面初始化失败，请重启应用后重试"), true);
+    return;
+  }
+
+  const flowToken = ++wechatLoginFlowToken;
+  stopWeChatLoginPolling();
+  setWeChatLoginBusy(true);
+  setWeChatQuickLoginVisible(false);
+  dom.overlayWeChatLogin.classList.remove("hidden");
+  dom.wechatLoginQrImage.removeAttribute("src");
+  setWeChatLoginStatus(t("正在获取二维码..."), false, false);
+
+  try {
+    const session = await invoke("create_wechat_login_session");
+    if (flowToken !== wechatLoginFlowToken) {
+      return;
+    }
+
+    const qrSrc = String(session?.qr_data_url || session?.qr_url || "").trim();
+    const uuid = String(session?.uuid || "").trim();
+    if (!qrSrc || !uuid) {
+      throw new Error(t("二维码会话创建失败"));
+    }
+
+    dom.wechatLoginQrImage.src = qrSrc;
+    setWeChatLoginBusy(false);
+    checkWeChatQuickLoginAvailability(flowToken);
+    await startWeChatLoginPolling(uuid, flowToken);
+  } catch (err) {
+    const errText = err?.message || String(err);
+    setWeChatLoginBusy(false);
+    setWeChatLoginStatus(`${t("获取二维码失败")}: ${errText}`, true, false);
+  }
+}
+
+async function checkWeChatQuickLoginAvailability(flowToken) {
+  if (!dom.wechatQuickLoginArea || !dom.overlayWeChatLogin || dom.overlayWeChatLogin.classList.contains("hidden")) {
+    return;
+  }
+
+  try {
+    const isAvailable = await invoke("check_wechat_quick_login_available");
+    if (flowToken !== wechatLoginFlowToken || !dom.overlayWeChatLogin || dom.overlayWeChatLogin.classList.contains("hidden")) {
+      return;
+    }
+    setWeChatQuickLoginVisible(Boolean(isAvailable));
+  } catch (err) {
+    console.warn("Failed to detect WeChat quick login availability:", err);
+    if (flowToken === wechatLoginFlowToken) {
+      setWeChatQuickLoginVisible(false);
+    }
+  }
+}
+
+async function startWeChatQuickLoginFlow() {
+  if (!dom.overlayWeChatLogin || !dom.wechatLoginStatus) {
+    showGlobalToast(t("登录界面初始化失败，请重启应用后重试"), true);
+    return;
+  }
+
+  const flowToken = ++wechatLoginFlowToken;
+  stopWeChatLoginPolling();
+  setWeChatLoginBusy(true);
+  dom.overlayWeChatLogin.classList.remove("hidden");
+  setWeChatLoginStatus(t("正在唤起电脑微信快捷授权..."), false, false);
+
+  try {
+    const profile = await invoke("start_wechat_quick_login");
+    if (flowToken !== wechatLoginFlowToken) {
+      return;
+    }
+
+    applyLoginSuccess(profile || {});
+    await refreshAppStatus();
+    closeWeChatLoginModal();
+  } catch (err) {
+    const errText = err?.message || String(err);
+    if (flowToken === wechatLoginFlowToken) {
+      setWeChatLoginBusy(false);
+      setWeChatLoginStatus(`${t("快捷登录失败")}: ${errText}`, true, false);
+    }
+  }
+}
+
 function openIMALoginWindow() {
-  invoke("open_login_window").catch(e => alert("Login Window Error: " + e));
+  if (dom.overlayWeChatLogin && dom.wechatLoginQrImage && dom.wechatLoginStatus) {
+    startWeChatLoginModalFlow();
+    return;
+  }
+  showGlobalToast(t("登录界面初始化失败，请重启应用后重试"), true);
 }
 
 function openAccountSettings() {

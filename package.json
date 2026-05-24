@@ -1,12 +1,12 @@
 {
   "name": "tauri-scaffold",
   "private": true,
-  "version": "2.0.4",
+  "version": "2.0.5",
   "type": "module",
   "scripts": {
     "tauri": "tauri",
-    "dev": "cd sync-kernel && tauri dev",
-    "build": "cd sync-kernel && tauri build"
+    "dev": "node scripts/tauri-run.cjs dev",
+    "build": "node scripts/tauri-run.cjs build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

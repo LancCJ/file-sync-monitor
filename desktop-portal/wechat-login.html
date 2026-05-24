@@ -104,7 +104,16 @@
       text-align: center;
     }
 
-    .retry-btn {
+    .login-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .retry-btn,
+    .official-btn {
       margin-top: 12px;
       width: 180px;
       height: 40px;
@@ -116,6 +125,15 @@
       font-weight: 800;
       cursor: pointer;
       box-shadow: 0 12px 24px rgba(0, 173, 111, 0.22);
+    }
+
+    .official-btn {
+      margin-top: 0;
+      width: 220px;
+      color: var(--mint-strong);
+      background: rgba(0, 173, 111, 0.08);
+      border: 1px solid rgba(0, 173, 111, 0.18);
+      box-shadow: none;
     }
 
     .hidden {
@@ -138,7 +156,10 @@
       <img class="hidden" id="qr-img" alt="微信登录二维码" />
     </div>
     <div class="status" id="status">正在获取登录二维码...</div>
-    <button class="retry-btn hidden" id="retry-btn" type="button">重新获取二维码</button>
+    <div class="login-actions">
+      <button class="retry-btn hidden" id="retry-btn" type="button">重新获取二维码</button>
+      <button class="official-btn hidden" id="official-btn" type="button">使用 IMA 官方登录页</button>
+    </div>
   </main>
 
   <script>
@@ -147,12 +168,21 @@
     const loader = document.getElementById("loader");
     const statusEl = document.getElementById("status");
     const retryBtn = document.getElementById("retry-btn");
+    const officialBtn = document.getElementById("official-btn");
 
     let pollTimer = null;
     let stopped = false;
+    let loadGuardTimer = null;
+
+    function log(message) {
+      try {
+        invoke("log_js_message", { level: "IMALogin", msg: String(message) }).catch(() => {});
+      } catch (_) {}
+    }
 
     function setStatus(text) {
       statusEl.textContent = text;
+      log(text);
     }
 
     function showRetry(text) {
@@ -161,9 +191,22 @@
         clearTimeout(pollTimer);
         pollTimer = null;
       }
+      if (loadGuardTimer) {
+        clearTimeout(loadGuardTimer);
+        loadGuardTimer = null;
+      }
       loader.classList.add("hidden");
       retryBtn.classList.remove("hidden");
+      officialBtn.classList.remove("hidden");
       setStatus(text);
+    }
+
+    function openOfficialLogin() {
+      stopped = true;
+      if (pollTimer) clearTimeout(pollTimer);
+      if (loadGuardTimer) clearTimeout(loadGuardTimer);
+      setStatus("正在打开 IMA 官方登录页...");
+      window.location.href = "https://ima.qq.com/login/";
     }
 
     async function poll(uuid) {
@@ -198,27 +241,41 @@
       stopped = false;
       if (pollTimer) clearTimeout(pollTimer);
       retryBtn.classList.add("hidden");
+      officialBtn.classList.add("hidden");
       qrImg.classList.add("hidden");
       loader.classList.remove("hidden");
       setStatus("正在获取登录二维码...");
 
       try {
         const session = await invoke("create_wechat_login_session");
+        log(`登录会话创建成功 uuid=${session.uuid || ""} dataUrl=${session.qr_data_url ? "yes" : "no"} qrUrl=${session.qr_url || ""}`);
         qrImg.onload = () => {
+          if (loadGuardTimer) {
+            clearTimeout(loadGuardTimer);
+            loadGuardTimer = null;
+          }
           loader.classList.add("hidden");
           qrImg.classList.remove("hidden");
+          officialBtn.classList.remove("hidden");
           setStatus("请使用微信扫描二维码登录。");
         };
-        qrImg.onerror = () => showRetry("二维码加载失败，请重新获取。");
+        qrImg.onerror = () => showRetry("二维码图片加载失败，请使用 IMA 官方登录页。");
         qrImg.src = session.qr_data_url || session.qr_url;
+        loadGuardTimer = setTimeout(() => {
+          if (qrImg.classList.contains("hidden")) {
+            showRetry("二维码加载超时，请使用 IMA 官方登录页。");
+          }
+        }, 8000);
         poll(session.uuid);
       } catch (error) {
         console.error(error);
-        showRetry("二维码获取失败，请检查网络后重试。");
+        const message = typeof error === "string" ? error : (error?.message || String(error));
+        showRetry(`二维码获取失败：${message}。请使用 IMA 官方登录页。`);
       }
     }
 
     retryBtn.addEventListener("click", start);
+    officialBtn.addEventListener("click", openOfficialLogin);
     start();
   </script>
 </body>
