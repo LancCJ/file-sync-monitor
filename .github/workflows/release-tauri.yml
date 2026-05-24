@@ -19,11 +19,11 @@ jobs:
         include:
           - name: macOS Apple Silicon
             platform: macos-latest
-            args: "--target aarch64-apple-darwin"
+            args: ""
             tauri_script: "../node_modules/.bin/tauri"
           - name: macOS Intel
-            platform: macos-latest
-            args: "--target x86_64-apple-darwin"
+            platform: macos-13
+            args: ""
             tauri_script: "../node_modules/.bin/tauri"
           - name: Windows x64
             platform: windows-latest
@@ -43,8 +43,10 @@ jobs:
       - name: Setup Rust stable for macOS
         if: matrix.platform == 'macos-latest'
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Setup Rust stable for macOS Intel
+        if: matrix.platform == 'macos-13'
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Setup Rust stable for Windows
         if: matrix.platform == 'windows-latest'

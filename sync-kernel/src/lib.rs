@@ -1265,7 +1265,7 @@ async fn start_file_monitor(
 }
 
 #[tauri::command]
-async fn select_directory(_app_handle: AppHandle) -> Result<Option<String>, String> {
+async fn select_directory(app_handle: AppHandle) -> Result<Option<String>, String> {
     #[cfg(target_os = "macos")]
     {
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -1403,7 +1403,9 @@ fn json_get_path_string(root: &serde_json::Value, path: &[&str]) -> Option<Strin
     json_value_to_string(cursor).filter(|v| !v.is_empty())
 }
 
-fn parse_wechat_login_profile(payload: &serde_json::Value) -> Option<(CachedCredentials, WeChatLoginProfile)> {
+fn parse_wechat_login_profile(
+    payload: &serde_json::Value,
+) -> Option<(CachedCredentials, WeChatLoginProfile)> {
     let mut candidates = vec![payload.clone()];
     for key in ["data", "result", "payload"] {
         if let Some(value) = payload.get(key) {
@@ -1562,14 +1564,20 @@ async fn create_wechat_login_session() -> Result<WeChatLoginSession, String> {
                     String::new()
                 }
                 Err(e) => {
-                    let err = format!("Failed to read WeChat QR image: {}. Falling back to direct QR URL.", e);
+                    let err = format!(
+                        "Failed to read WeChat QR image: {}. Falling back to direct QR URL.",
+                        e
+                    );
                     update_http_log_error(&qr_log_id, &err);
                     String::new()
                 }
             }
         }
         Err(e) => {
-            let err = format!("Failed to request WeChat QR image: {}. Falling back to direct QR URL.", e);
+            let err = format!(
+                "Failed to request WeChat QR image: {}. Falling back to direct QR URL.",
+                e
+            );
             update_http_log_error(&qr_log_id, &err);
             String::new()
         }
@@ -1907,7 +1915,8 @@ async fn check_wechat_quick_login_available(app: tauri::AppHandle) -> Result<boo
         let _ = win.close();
     }
 
-    let login_url = tauri::Url::parse(&ima_wechat_qr_login_url_string()).map_err(|e| e.to_string())?;
+    let login_url =
+        tauri::Url::parse(&ima_wechat_qr_login_url_string()).map_err(|e| e.to_string())?;
     let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
     let tx = Arc::new(Mutex::new(Some(tx)));
     let tx_for_build = Arc::clone(&tx);
@@ -2044,7 +2053,8 @@ async fn start_wechat_quick_login(app: tauri::AppHandle) -> Result<WeChatLoginPr
         let _ = win.close();
     }
 
-    let login_url = tauri::Url::parse(&ima_wechat_qr_login_url_string()).map_err(|e| e.to_string())?;
+    let login_url =
+        tauri::Url::parse(&ima_wechat_qr_login_url_string()).map_err(|e| e.to_string())?;
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<WeChatLoginProfile, String>>();
     let tx = Arc::new(Mutex::new(Some(tx)));
     let tx_for_build = Arc::clone(&tx);
@@ -2505,10 +2515,7 @@ async fn complete_wechat_login_from_code(
                     endpoint, api_code, api_msg
                 )
             } else {
-                format!(
-                    "{} did not return credentials (msg={})",
-                    endpoint, api_msg
-                )
+                format!("{} did not return credentials (msg={})", endpoint, api_msg)
             };
         }
     }
